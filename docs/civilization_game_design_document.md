@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.2.1  
+**Version:** 0.2.2  
 **Date:** October 15, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -31,8 +31,8 @@ Where a system has a clear equivalent in the original game, the default is to **
 
 | Element | Decision |
 |---|---|
-| Players | Single-player against AI and multiplayer, with equal weight |
-| Turn mode | Simultaneous turns |
+| Players | Version 1: single-player against AI. Multiplayer is a future enhancement |
+| Turn mode | Simultaneous turns (the AI acts at the same time as the player) |
 | Scope | Long arc: Stone Age to the Modern era; multi-session campaigns (save/resume required) |
 | Map | Irregular areas (regions). Either a procedurally generated map or a fixed historical map |
 | Player role | The ruling power: direct control over state decisions; discovery, adoption, and figures are indirect |
@@ -441,6 +441,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 | Derived track lengths | Poor starts are already penalized by requirements; shorter rows for good starts penalize them twice. Offered as a setup option only |
 | Deterministic combat | Uncertainty comes from figures, discovery timing, and calamities instead |
 | No diplomacy | Diplomats act only on market reach and knowledge spread |
+| Weak AI during tuning | The AI stays minimal until development Phase 7, so balance numbers set earlier are tuned against a weak opponent and need a retuning pass |
 | Long-arc content | The emergent discovery model needs a large authored set of advances, each with conditions, counters, and adoption effects |
 
 ## 17. Open questions
@@ -470,6 +471,8 @@ These are choices made knowingly, or risks to watch in playtesting.
 
 ## 18. Recommended next steps
 
+See the [development plan](development_plan.md) for build phases.
+
 1. **Author a vertical slice of content:** the Stone and Bronze eras, with roughly 20 advances (conditions, counters, adoption effects), a handful of resources, and the first calamities.
 2. **Paper or spreadsheet prototype** of the core loop (population, settlements, manpower, support, instability) to test the settlement pyramid's economics before building software.
 3. **Tune the pyramid.** The tier ROI tension (§16) is the most likely early balance problem.
@@ -479,6 +482,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 
 ## Change log
 
+- **0.2.2 (October 15, 2026):** Version 1 is single-player; multiplayer moved to a future enhancement. Added weak-AI tuning risk. Linked the development plan.
 - **0.2.1 (October 15, 2026):** Manpower designed: replaces resource slots; tier base plus advance bonuses; assignments to production, Bureaucracy, High Learning, Artists, and wonders. Currency-funded specialists and player-built projects removed. Culture points added to scoring.
 - **0.2 (October 14, 2026):** Design interview. Decided game frame, setup options, turn structure and resolution order, map and population, settlement pyramid, resources and currency, market trade, discovery lifecycle mechanics, institutions and wonders, instability and collapse, conflict, calamities, historical figures, AST extension, and victory. Recorded trade-offs and remaining open items.
 - **0.1 (October 4, 2026):** Initial draft of vision, principles, candidate systems, and open questions.
