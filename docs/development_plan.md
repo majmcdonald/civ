@@ -1,6 +1,6 @@
 # Development Plan
 
-**Version:** 0.3  
+**Version:** 0.5  
 **Date:** October 15, 2026  
 **Status:** Working draft
 
@@ -14,7 +14,7 @@
 | Platform | Web browser; a desktop wrapper (Tauri or Electron) remains possible later |
 | Language | TypeScript |
 | Version 1 scope | Single-player against AI. Multiplayer is a future enhancement |
-| Tooling | npm, TypeScript (strict), Vitest. Vite is added with the first screens (Phase 2) |
+| Tooling | npm, TypeScript (strict), Vitest, Vite, React (`src/ui/`, the only code with browser types) |
 | Layout | `src/engine/` (rules engine; compiled without browser types), `src/content/` (game data), `tests/`, `sim/` (economy simulation) |
 
 ## 2. Architecture
@@ -48,7 +48,7 @@ What the architecture enables:
 | **5. Stone Age content** | First wonders and historical figures; era art and audio; **re-run the economy simulation with Stone Age discoveries, calamities, and figures**; **playtest and design review** |
 | **6. Remaining eras** | Repeat Phases 4–5 for each era (Bronze → Modern), with a playtest and design review after each; historical map |
 | **7. AI enhancement** | Strategic depth and difficulty levels; retune balance numbers set against the minimal AI |
-| **8. Polish and release** | Tutorial; broader testing (scenario tests, replay regression); performance optimization; final cleanup; distribution |
+| **8. Polish and release** | Tutorial; broader testing (scenario tests, replay regression); performance optimization, starting with map rendering (§6); final cleanup; distribution |
 
 ### Milestones
 
@@ -65,9 +65,9 @@ A **playtest and design review** follows every era. Each review:
 | Tuning | The economy simulation (`sim/phase0/sim.ts`) is re-run whenever economy-affecting rules change, until headless batch runs of the real engine replace it (Phase 3). Batch runs and downloadable game logs are analyzed after runs |
 | AI | Minimal until Phase 7 |
 | UX | Every system ships with an information panel and tooltip breakdowns showing each number's sources. The rules reference is generated from data files. The tutorial is built in Phase 8 |
-| Art | Claude-generated, vector, and stylized (board-game or map-atlas look); produced per era |
+| Art | Claude-generated, vector, and stylized (board-game or map-atlas look); produced per era. The in-game map uses an **isometric view**: the flat atlas map tilted like a board on a table, with settlements, tokens, and terrain features as upright vector pieces. Areas stay flat and the map data stays 2-D; the projection is presentation only. The title screen uses a flat atlas look |
 | Audio | Procedural, Claude-generated (Web Audio); produced per era |
-| Performance | Addressed in Phase 8 |
+| Performance | Addressed in Phase 8. **Map rendering (Phase 2 stress test):** live SVG holds 60 fps only up to a few thousand elements; a late-game 15-civilization spacious board (~20,000 elements) pans at 6 fps, and dropping terrain art alone only reaches 10. Drawing the board once into an image and moving it holds 60 fps at every size tested. Results and the Phase 8 plan: §6 |
 
 ## 5. Known risks
 
@@ -78,8 +78,43 @@ A **playtest and design review** follows every era. Each review:
 | Art limits | Claude can produce vector art and code-drawn maps, not raster illustrations or recorded audio. Art direction must stay vector and stylized |
 | Content volume | Eight eras of advances, wonders, figures, and calamities. Data-driven content keeps this to authoring, not engine work |
 
+## 6. Performance findings
+
+### Map rendering stress test (Phase 2, October 16, 2026)
+
+**Setup.** The stress screen (`?screen=stress`, `src/ui/screens/StressScreen.tsx`) builds a late-game board with `lateGamePieces` (`src/ui/screens/samplePieces.ts`): about 50% of land settled, loose tokens in every unsettled area, border conflicts, and trails between settlements. It pans the board automatically for 180 frames and records frame times. Run headless in Chrome for Testing at 1440×900 via puppeteer; frame rate caps at 60. URL options: `civs`, `room`, `type`, `seed`, `mode` (`svg` | `noart` | `cached`), `zoom`. Results appear in a panel on the page.
+
+| Map | Drawing | Zoom | Settlements / stacks / trails | SVG elements | Pan fps | Median frame |
+|---|---|---|---|---|---|---|
+| 5 civs, standard | Live SVG | 1× | 149 / 186 / 134 | 3,600 | 33 | 33 ms |
+| 5 civs, standard | Cached image | 1× | same | — | 60 | 17 ms |
+| 15 civs, standard | Live SVG | 1× | 461 / 549 / 431 | 10,400 | 12 | 83 ms |
+| 15 civs, spacious | Live SVG | 1× | 928 / 1,047 / 927 | 20,300 | 6 | 167 ms |
+| 15 civs, spacious | Live SVG | 4× | same | 20,300 | 14 | 67 ms |
+| 15 civs, spacious | No terrain art | 1× | same | 17,400 | 10 | 100 ms |
+| 15 civs, spacious | No terrain art | 4× | same | 17,400 | 20 | 50 ms |
+| 15 civs, spacious | Cached image | 1× | same | — | 60 | 17 ms |
+| 15 civs, spacious | Cached image | 4× | same | — | 60 | 17 ms |
+
+Other costs on the 15-civilization spacious board: map generation 0.3 s, first render 1.4 s, redrawing pieces after a turn 0.1–0.2 s, building the single cached image 1.8 s.
+
+**Findings.**
+- Live SVG pan speed falls with element count; even a late-game 5-civilization board drops to 33 fps.
+- Pieces (tokens, settlements, badges, trails) are a large share of the cost: hiding all terrain art lifts the 15-civilization board only from 6 to 10 fps.
+- Moving a cached image holds 60 fps regardless of content.
+- Limits of the test: headless numbers, not the player's GPU; the cached image was one 4096 px picture (sharp at 1×, blurry at 4×); the sample has about half the trails estimated for a late game.
+
+**Phase 8 plan.**
+1. Cached raster layers: terrain drawn once per game; trails, settlements, and tokens once per turn.
+2. Tiles per zoom level for sharpness, built in the background (a worker or idle time) so the 1.8 s build never blocks.
+3. Only hover, selection, move previews, and animation drawn live.
+4. Zoomed-out simplification: owner tint and settlement dots instead of full pieces.
+5. All map drawing lives in `src/ui/art/IsoMap.tsx`; the change stays inside it. Re-run the stress test before and after.
+
 ## Change log
 
+- **0.5 (October 16, 2026):** Map rendering stress test: results, findings, and the Phase 8 rendering plan recorded in §6 (Performance findings).
+- **0.4 (October 15, 2026):** Phase 2: React + Vite for screens; title screen approved; in-game map is isometric.
 - **0.3 (October 15, 2026):** Phase 1 complete. Decisions: content format (TypeScript data files, hooks by id), tooling, and layout.
 - **0.2 (October 15, 2026):** Phase 0 complete. The economy simulation is kept, not thrown away; it is re-run as rules change, including in Phase 5.
 - **0.1 (October 15, 2026):** Initial plan.

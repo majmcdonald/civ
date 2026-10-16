@@ -1,7 +1,7 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.3  
-**Date:** October 15, 2026  
+**Version:** 0.5  
+**Date:** October 16, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
 > This is a living design document. Sections marked **Decided** are current design commitments (still subject to playtesting). Items under **Open** and **Tuning** are unresolved. Ideas documented here do not become rules until they are moved into a Decided section.
@@ -43,9 +43,11 @@ Where a system has a clear equivalent in the original game, the default is to **
 | Option | Choices |
 |---|---|
 | Map | Procedural or historical |
+| Map type (procedural) | **Inland sea** (default; like the original: one mainland around a central sea, a few islands), **continents** (landmasses separated by ocean; some civilizations isolated until ships), **single landmass** (little sea). Seas are divided into sea areas in every type |
+| Civilizations | 2–15; default 5 (the player plus four AI). The original allowed 2–7. A procedural map scales with the count |
 | AST track length | Same for everyone / derived from starting conditions / authored per civilization (historical maps only) |
 | Final era | Any era; e.g., end of the Iron Age for a single evening, end of the Modern era for a full campaign |
-| Map density | Default: about 30–40 turns of expansion before a civilization's land meets a neighbor's (roughly the Stone Age). Sparser and denser options for a more peaceful or more crowded start |
+| Room to expand | Land per civilization: **crowded** (half of standard, 32 land areas), **standard** (default, 64), **spacious** (2×, 128). Standard targets about 30–40 turns of expansion before a civilization's land meets a neighbor's (roughly the Stone Age); crowded makes neighbors meet early, spacious keeps the early game peaceful longer |
 
 ## 3. Turn structure — Decided
 
@@ -84,7 +86,20 @@ Four phases. All players act simultaneously within each phase.
 - **No printed city sites.** Every area can host settlements.
 - Each area has a **population limit**. Limits are not fixed; discoveries raise them. Starting limits are **1–5**, as in the original.
 - Each area has **resources** (see §6).
+- Each land area has one **terrain** and any number of **features**:
+  - Terrain: plains, forest, hills, mountains, desert, marsh. Terrain sets the starting limit range (e.g., plains 3–5, mountains 1–2) and which resources can appear.
+  - Features: river, floodplain, coastal, volcanic/fault. Features drive calamity risk (§12) and travel (rivers and coasts need ships).
+  - Example: "Hills, river, coastal; limit 3; copper, timber."
+  - **Rivers** run through a chain of areas, ordered from source to sea; each area on the chain has the river feature. With ships, tokens travel several areas along the chain in one move (e.g., Highland → Valley → Delta in one turn). Rivers are not borders between areas and do not block movement.
+  - The original had no terrain, only printed limits and markings (floodplains, volcanoes, coasts); terrain is added so drought and resources have something to key on and the map reads clearly.
+  - A procedural generator may use hidden elevation and rainfall to place terrain sensibly; those values are not rules. Exact limit ranges per terrain are tuning.
 - **Expansion window:** by default, a civilization can expand for about 30–40 turns before its land meets a neighbor's, so the early game allows peace. Map size, area limits, and growth pace are tuned to this target.
+
+### Procedural maps
+
+- Size scales with the civilization count and room to expand (§2): about **64 land areas per civilization** on a standard map (Phase 0), plus sea areas. The map type (§2) sets the land and sea layout. Rivers and fault chains scale with the land.
+- **Starting positions use fair spacing.** Starts are placed as far apart as possible by travel distance, and each must pass a quality check: enough total area limit within about 3 moves and no more than a set share of mountains or desert. Among passing layouts, the generator prefers balanced nearby land (each start's share of the land closer to it than to any other start). If no layout passes, the generator re-rolls. On the continents type, the check applies per landmass. The original used hand-tuned printed starting regions instead.
+- Resources are not placed until their categories are decided (§6, §17).
 
 ### Population tokens
 
@@ -470,6 +485,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 | Collapse cascades | Settlement losses raise the civ-wide meter, which raises every local meter, so one collapse can trigger others. Must not become routine |
 | Fast map fill | Phase 0 simulation: with the original's growth rule and no effective cap, one civilization filled a 64-area map in about 20 turns. Resolved by the token cap (55, loose tokens only, 1–2 rises per era): with two Stone Age rises, land fills around turn 36; with fewer, it may never fill, so peace is the default until cap-raising advances add pressure |
 | No support cascades | Settlements are supported by tokens, not lower tiers (v0.3). Simpler and keeps token counts small, but removes tier-to-tier cascades. Fully populated settled areas restore a hinterland requirement |
+| Uneven expansion window on continents | On the continents map type, an isolated civilization may meet no one in the Stone Age while others meet early. Accepted for variety; the inland sea default keeps the 30–40 turn window predictable |
 | Low manpower ceiling | Fully populated settled areas cap how much of the map can be settled (about 40–60% in Phase 0), and high tiers are rare at small limits. Chosen for spatial decisions over density; discoveries that raise limits lift the ceiling |
 | Unlimited game counterparty | A currency-rich civilization can buy its way out of any shortage. Price-change rate is the main brake |
 | Mild AST regression | Regression costs position within an era, never the era itself |
@@ -490,8 +506,9 @@ These are choices made knowingly, or risks to watch in playtesting.
 - [ ] Barbarian spawn rules.
 - [ ] Technology-by-technology design: plausibility conditions, counters, adoption benefits, mitigated calamities.
 - [ ] Final resource category list.
+- [ ] Game name. Placeholder: *Succession* (after the Archaeological Succession Table).
 - [x] ~~Per-area tier caps~~ — replaced by one settlement per area (v0.3).
-- [ ] Map size per civilization. Phase 0 used 64 areas per civilization; with limits 1–5, cap 55, and two Stone Age rises, land filled around turn 36.
+- [ ] Map size per civilization (procedural maps scale land areas by civilization count). Phase 0 used 64 areas per civilization; with limits 1–5, cap 55, and two Stone Age rises, land filled around turn 36.
 - [ ] Which advances unlock towns, cities, and metropolises.
 - [ ] Tier drop details: how the host accepts or rejects refugees under simultaneous turns (standing policy or per-event choice); whether accepted refugees count against the host's cap; whether a ruler can exploit deliberate collapse to transfer tokens; do refugees count against the token cap; how refugees are spread across adjacent areas; can an unsupported settlement drop again on consecutive turns; what capturing a village yields.
 - [ ] Support variant: tokens only (current) vs tokens plus one lower-tier settlement in range. Compared in the Phase 0 simulation.
@@ -499,6 +516,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 ### Tuning (playtesting)
 
 - [ ] Settlement conversion costs and support requirements
+- [ ] Starting limit range and resource options per terrain; terrain mix on procedural maps
 - [ ] Tier exclusive abilities and tax per tier (the town tier especially)
 - [ ] Base manpower per tier; stability, discovery, and culture yields per specialist
 - [ ] Market starting prices and price-change rate
@@ -523,6 +541,8 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.5 (October 16, 2026):** Civilizations raised to 2–15. Room to expand setup option (crowded, standard, spacious: 0.5×, 1×, 2× land per civilization) replaces map density; a 4× option was tried and dropped as too heavy to draw for now.
+- **0.4 (October 15, 2026):** Civilization count is a setup option: 2–7, default 5; procedural maps scale with it. Land areas have one terrain (plains, forest, hills, mountains, desert, marsh) and feature flags (river, floodplain, coastal, volcanic/fault); terrain sets limit ranges and resource options, features drive calamity risk. Rivers are ordered chains of areas from source to sea, traveled by ship. Procedural map type is a setup option: inland sea (default), continents, single landmass; seas are divided into sea areas. Starting positions use fair spacing with a quality check.
 - **0.3 (October 15, 2026):** Settlement pyramid reworked: each tier is reached by merging the settlement with additional tokens (village 6, town +6, city +8, metropolis +10) rather than merging two lower-tier settlements. Support is loose tokens scaling by tier (2/3/4/6); support cascades between tiers removed. A metropolis now ties up 36 tokens instead of 208. Token growth uses the original's rule unchanged (+1 / +2 per area). Urban growth set at 0/1/2/3 per tier, framed as recovery. Expansion window target of 30–40 turns; map density added as a setup option. Construction follows the original: area limits do not block it, one settlement per area, and a settled area is fully populated; area limits return to a small scale. Tiers above village are unlocked by advances (towns in the Stone Age). Token cap counts loose tokens only, starts at 55, and rises 1–2 times per era; starting area limits 1–5. Recommended next steps updated after Phase 0. Added a shared tier-drop procedure with refugees that ignore area limits for one turn; refugees in foreign territory join the host unless rejected. Any enemy entry into a settled area is an attack; below the threshold the attackers are destroyed. Updated §16 (higher-tier value accepted; fast map fill added); added open questions on per-area caps and the support variant.
 - **0.2.2 (October 15, 2026):** Version 1 is single-player; multiplayer moved to a future enhancement. Added weak-AI tuning risk. Linked the development plan.
 - **0.2.1 (October 15, 2026):** Manpower designed: replaces resource slots; tier base plus advance bonuses; assignments to production, Bureaucracy, High Learning, Artists, and wonders. Currency-funded specialists and player-built projects removed. Culture points added to scoring.

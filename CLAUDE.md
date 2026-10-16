@@ -30,6 +30,7 @@ Read both before design or build work. When a decision is made in conversation, 
 - `npm run check` — typecheck (engine, tests, sim) and run all tests. Run before every commit.
 - `npm test` / `npm run test:watch` — Vitest.
 - `npm run sim -- <mode>` — economy simulation.
+- `?screen=stress` (dev server) — map rendering stress test; results and the Phase 8 rendering plan are in `docs/development_plan.md` §6.
 
 ## Conventions
 
