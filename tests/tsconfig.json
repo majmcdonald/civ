@@ -1,0 +1,9 @@
+{
+  // Tests and the economy simulation run under Node.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "allowImportingTsExtensions": true
+  },
+  "include": ["../src", "."]
+}

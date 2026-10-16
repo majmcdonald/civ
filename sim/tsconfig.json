@@ -1,0 +1,10 @@
+{
+  // Economy simulation: runs directly under Node; written before the engine's stricter index checks.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false
+  },
+  "include": ["."]
+}

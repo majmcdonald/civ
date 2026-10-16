@@ -12,7 +12,7 @@ Read both before design or build work. When a decision is made in conversation, 
 ## Current status
 
 - Design: core systems decided (v0.3); numbers untuned.
-- Build: Phase 0 done. **Phase 1 next** — foundation.
+- Build: Phases 0–1 done. **Phase 2 next** — basic screens and procedural map.
 - Economy simulation: `sim/phase0/sim.ts` (`node sim/phase0/sim.ts [cap|settle|towns|rare|sweep]`). Kept and extended as systems are designed; re-run it when economy-affecting rules change.
 
 ## Stack and architecture
@@ -25,7 +25,17 @@ Read both before design or build work. When a decision is made in conversation, 
 - **State is one serializable object** (save/load).
 - **Game log**: structured JSON lines (commands, state changes, resolution steps, random draws); downloadable; seed + commands replays a game.
 
+## Commands
+
+- `npm run check` — typecheck (engine, tests, sim) and run all tests. Run before every commit.
+- `npm test` / `npm run test:watch` — Vitest.
+- `npm run sim -- <mode>` — economy simulation.
+
 ## Conventions
+
+- The engine (`src/engine/`) and content (`src/content/`) compile without browser or Node types; a test fails if they use unseeded randomness or wall-clock time.
+- Every game action is a `Command` applied through `applyCommand`; resolution steps live in `src/engine/phases.ts`.
+- Content is TypeScript data (`satisfies`), no functions; unusual rules go in the hook registry (`src/engine/hooks.ts`) and are referenced by id.
 
 - Write rules tests alongside each engine system.
 - Every player-facing number should be explainable: systems expose the sources behind their values for tooltip breakdowns.

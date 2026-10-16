@@ -1,6 +1,6 @@
 # Development Plan
 
-**Version:** 0.2  
+**Version:** 0.3  
 **Date:** October 15, 2026  
 **Status:** Working draft
 
@@ -14,6 +14,8 @@
 | Platform | Web browser; a desktop wrapper (Tauri or Electron) remains possible later |
 | Language | TypeScript |
 | Version 1 scope | Single-player against AI. Multiplayer is a future enhancement |
+| Tooling | npm, TypeScript (strict), Vitest. Vite is added with the first screens (Phase 2) |
+| Layout | `src/engine/` (rules engine; compiled without browser types), `src/content/` (game data), `tests/`, `sim/` (economy simulation) |
 
 ## 2. Architecture
 
@@ -24,6 +26,7 @@
 | Commands | The player, the AI, tests, and replays all issue the same commands |
 | Determinism | Seeded random number generator: the same seed and commands always produce the same game |
 | Content | **Data + scripts.** Advances, wonders, figures, calamities, resources, and eras are data files. The engine provides a library of effect types; scripted hooks handle unusual rules |
+| Content format | **TypeScript data files**: plain, serializable objects checked by the compiler (`satisfies`). Effects are typed entries from the effect library; hooks are referenced by id into a script registry. No inline functions in data, so the rules reference and tooltip sources can be generated from it. Converting to JSON later is mechanical if modding becomes a goal |
 | Save/load | The game state is a single serializable object |
 | Game log | Structured, one JSON event per line (commands, state changes, resolution steps, random draws). Downloadable. The seed plus the command log replays a game exactly |
 
@@ -38,7 +41,7 @@ What the architecture enables:
 | Phase | Contents |
 |---|---|
 | **0. Pre-production** | **Done.** Economy simulation (`sim/phase0/sim.ts`) tested the settlement pyramid's return on investment and early-game pacing; results reshaped design doc v0.3. The simulation is kept and extended as systems are designed |
-| **1. Foundation** | TypeScript project; headless deterministic rules engine with command layer; data + scripts content format; rules test harness; save/load format; game-log format |
+| **1. Foundation** | **Done.** TypeScript project; headless deterministic rules engine with command layer; data + scripts content format; rules test harness; save/load format; game-log format |
 | **2. Basic screens** | Title, map, and status screens, with no behavior; procedural map generator |
 | **3. Core loop** | Turns and resolution order; settlements, conversion, support, growth, migration, surplus removal; first resource; manpower; simple conflict; basic instability and tier drop; working save/load; minimal AI; headless batch runs and downloadable game log |
 | **4. Stone Age systems** | First techs and discovery accumulators; market (its own work item); full instability sources and stabilizers; first calamities; AST and endgame countdown; information panels and rules reference begin; art and audio for the era |
@@ -77,5 +80,6 @@ A **playtest and design review** follows every era. Each review:
 
 ## Change log
 
+- **0.3 (October 15, 2026):** Phase 1 complete. Decisions: content format (TypeScript data files, hooks by id), tooling, and layout.
 - **0.2 (October 15, 2026):** Phase 0 complete. The economy simulation is kept, not thrown away; it is re-run as rules change, including in Phase 5.
 - **0.1 (October 15, 2026):** Initial plan.
