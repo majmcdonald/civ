@@ -1,6 +1,6 @@
 # Development Plan
 
-**Version:** 0.1  
+**Version:** 0.2  
 **Date:** October 15, 2026  
 **Status:** Working draft
 
@@ -37,12 +37,12 @@ What the architecture enables:
 
 | Phase | Contents |
 |---|---|
-| **0. Pre-production** | Throwaway economy simulation script to test the settlement pyramid's return on investment (design doc §16) |
+| **0. Pre-production** | **Done.** Economy simulation (`sim/phase0/sim.ts`) tested the settlement pyramid's return on investment and early-game pacing; results reshaped design doc v0.3. The simulation is kept and extended as systems are designed |
 | **1. Foundation** | TypeScript project; headless deterministic rules engine with command layer; data + scripts content format; rules test harness; save/load format; game-log format |
 | **2. Basic screens** | Title, map, and status screens, with no behavior; procedural map generator |
 | **3. Core loop** | Turns and resolution order; settlements, conversion, support, growth, migration, surplus removal; first resource; manpower; simple conflict; basic instability and tier drop; working save/load; minimal AI; headless batch runs and downloadable game log |
 | **4. Stone Age systems** | First techs and discovery accumulators; market (its own work item); full instability sources and stabilizers; first calamities; AST and endgame countdown; information panels and rules reference begin; art and audio for the era |
-| **5. Stone Age content** | First wonders and historical figures; era art and audio; **playtest and design review** |
+| **5. Stone Age content** | First wonders and historical figures; era art and audio; **re-run the economy simulation with Stone Age discoveries, calamities, and figures**; **playtest and design review** |
 | **6. Remaining eras** | Repeat Phases 4–5 for each era (Bronze → Modern), with a playtest and design review after each; historical map |
 | **7. AI enhancement** | Strategic depth and difficulty levels; retune balance numbers set against the minimal AI |
 | **8. Polish and release** | Tutorial; broader testing (scenario tests, replay regression); performance optimization; final cleanup; distribution |
@@ -59,7 +59,7 @@ A **playtest and design review** follows every era. Each review:
 | Area | Practice |
 |---|---|
 | Tests | Rules tests are written alongside each system from Phase 1. Scenario tests and replay regression are added in Phase 8 |
-| Tuning | Headless batch runs and downloadable game logs, analyzed after runs; starts in Phase 3 |
+| Tuning | The economy simulation (`sim/phase0/sim.ts`) is re-run whenever economy-affecting rules change, until headless batch runs of the real engine replace it (Phase 3). Batch runs and downloadable game logs are analyzed after runs |
 | AI | Minimal until Phase 7 |
 | UX | Every system ships with an information panel and tooltip breakdowns showing each number's sources. The rules reference is generated from data files. The tutorial is built in Phase 8 |
 | Art | Claude-generated, vector, and stylized (board-game or map-atlas look); produced per era |
@@ -77,4 +77,5 @@ A **playtest and design review** follows every era. Each review:
 
 ## Change log
 
+- **0.2 (October 15, 2026):** Phase 0 complete. The economy simulation is kept, not thrown away; it is re-run as rules change, including in Phase 5.
 - **0.1 (October 15, 2026):** Initial plan.

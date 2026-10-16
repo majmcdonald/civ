@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.2.2  
+**Version:** 0.3  
 **Date:** October 15, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -45,6 +45,7 @@ Where a system has a clear equivalent in the original game, the default is to **
 | Map | Procedural or historical |
 | AST track length | Same for everyone / derived from starting conditions / authored per civilization (historical maps only) |
 | Final era | Any era; e.g., end of the Iron Age for a single evening, end of the Modern era for a full campaign |
+| Map density | Default: about 30–40 turns of expansion before a civilization's land meets a neighbor's (roughly the Stone Age). Sparser and denser options for a more peaceful or more crowded start |
 
 ## 3. Turn structure — Decided
 
@@ -81,15 +82,20 @@ Four phases. All players act simultaneously within each phase.
 
 - The board is divided into irregular areas.
 - **No printed city sites.** Every area can host settlements.
-- Each area has a **population limit**. Limits are not fixed; discoveries raise them.
+- Each area has a **population limit**. Limits are not fixed; discoveries raise them. Starting limits are **1–5**, as in the original.
 - Each area has **resources** (see §6).
+- **Expansion window:** by default, a civilization can expand for about 30–40 turns before its land meets a neighbor's, so the early game allows peace. Map size, area limits, and growth pace are tuned to this target.
 
 ### Population tokens
 
 - Population is represented by **tokens** in areas.
-- **No fixed supply.** A civilization's maximum token count is a cap that discoveries raise.
-- **Growth is automatic**, following the original's pattern (rates to be tuned).
-- **Loose tokens produce nothing and need no support.** They have no manpower. They matter as growth, as support for villages, as a source of new settlements, as armies, and as discoverers (occupying a resource area contributes to related discoveries).
+- **No fixed supply.** A civilization's maximum token count is a **cap** that discoveries raise.
+  - The cap counts **loose tokens only**. Tokens absorbed into settlements leave the count, as in the original, where building a city returned its tokens to the stock.
+  - The cap starts at **55**, the original's token stock.
+  - Advances raise the cap **1–2 times per era**. Rise sizes are set when those advances are designed.
+  - Support tokens are loose and count against the cap, so the cap also bounds the number of settlements (roughly cap ÷ 4–5 in Phase 0). Each era's expansion is paced by its cap rises.
+- **Growth is automatic**, following the original's rule: each turn, an area with 1 loose token gains 1; an area with 2 or more gains 2. Growth never exceeds the area's population limit or the civilization's token cap. Proportional growth (about +1 per N loose tokens) will be compared in the Phase 0 simulation.
+- **Loose tokens produce nothing and need no support.** They have no manpower. They matter as growth, as support for settlements, as a source of new settlements, as armies, and as discoverers (occupying a resource area contributes to related discoveries).
 
 ### Movement
 
@@ -101,43 +107,67 @@ Four phases. All players act simultaneously within each phase.
 
 ### The settlement pyramid
 
-Settlements are built by converting lower units, extending the original's "6 tokens → city" rule into tiers.
+Settlements grow by absorbing tokens, extending the original's "6 tokens → city" rule into tiers. A village is founded from tokens; each later tier merges the settlement with additional tokens.
 
 | Tier | Built from | Token value |
 |---|---|---|
 | Village | 6 tokens | 6 |
-| Town | 2 villages | 12 |
-| City | 2 towns | 24 |
-| Metropolis | 2 cities | 48 |
+| Town | Village + 6 tokens | 12 |
+| City | Town + 8 tokens | 20 |
+| Metropolis | City + 10 tokens | 30 |
 
 - **No skipping tiers.** A player with 100 tokens cannot convert straight to a metropolis.
-- The units merged may be in the **same or adjacent areas**. If adjacent, the player chooses where the result sits.
+- **Tiers are unlocked by advances.** A game starts with villages only. A Stone Age advance unlocks towns. Cities and metropolises are unlocked by later advances, following history: towns like Jericho and Çatalhöyük appeared late in the Stone Age, cities like Uruk at the Bronze Age transition, and metropolises like Babylon and Rome in the Iron and Classical ages.
+- The tokens merged may be in the **same or adjacent areas**; the settlement stays where it is.
+- **The area limit does not block construction**, as in the original: tokens gathered for a conversion may exceed the limit, because conversion resolves before surplus removal.
 - Conversion is ordered in allocation and resolves after conflict.
 - Starting numbers; to be tuned.
 
 ### Area limits
 
-- **Per area:** at most 2 villages, 2 towns, 2 cities, and 1 metropolis.
-- **Settlements count against the area's population limit** at their token value. Loose tokens fill the remaining capacity.
-- Consequence: a fully urbanized area has no room for loose growth; discoveries that raise limits are critical.
+- **One settlement per area.**
+- **A settled area is fully populated**, as in the original: it holds no loose tokens. Loose tokens left there after a conversion are removed as surplus. Upgrades draw their tokens from adjacent areas.
+- Area limits therefore govern loose tokens only and stay small, on roughly the original's scale (1–5 or 2–10; to be tuned).
+- Consequence: settlements need **unsettled hinterland**. Their support tokens live in adjacent unsettled areas, so settling an area can starve a neighbor's support. In the Phase 0 simulation, about 40–60% of areas could be settled.
 
 ### Support
 
-Follows the original's pattern: units consumed in a conversion are gone, and support comes from **separate, additional** units.
+Follows the original's pattern (a city needed 2 tokens of support): tokens consumed in a conversion are gone, and support comes from **separate, additional** loose tokens.
 
-| Tier | Requires |
-|---|---|
-| Village | 2 tokens |
-| Town | 2 villages |
-| City | 2 towns |
-| Metropolis | 2 cities |
+| Tier | Support tokens | Total tokens tied up |
+|---|---|---|
+| Village | 2 | 8 |
+| Town | 3 | 15 |
+| City | 4 | 24 |
+| Metropolis | 6 | 36 |
 
-- Supporting units must be **adjacent or within movement range**.
-- **Cascades:** if support fails, the settlement drops a tier, which can break support for the tier above it.
+- Supporting tokens must be **adjacent or within movement range**, in unsettled areas (settled areas hold no loose tokens). Each token supports one settlement.
+- If support fails, the settlement **drops a tier** (see Tier drop). Settlements do not support each other, so there is no cascade between tiers; collapse spreads through the civ-wide meter (§10).
+- A variant (tokens plus one lower-tier settlement within range) will be compared in the Phase 0 simulation.
+
+### Tier drop
+
+One procedure applies whenever a settlement drops a tier: instability collapse (§10), support failure, calamities (§12), and capture (§11).
+
+- The settlement loses **one tier**. A village **dissolves**, and its area becomes unsettled.
+- The freed tokens equal the difference in token value: town → village 6, city → town 8, metropolis → city 10, village dissolved 6.
+- Freed tokens become **refugees**: they are placed in adjacent areas, possibly in other civilizations' territory, and **ignore area limits for one turn**. During that turn they can move on, or be used for conversions or support. Surplus removal applies to them at the end of the following turn.
+- Refugees carry knowledge into the areas and civilizations they reach (§8).
+- **Refugees in foreign territory join the host civilization** and become its tokens, adding discovery progress toward the origin civilization's advances. The host may **reject** them. Rejected refugees stay the origin's tokens, do not trigger conflict during their refugee turn, and must move on, be used by their own civilization, or be removed as surplus.
 
 ### Urban growth
 
 Settlements **generate tokens into adjacent areas** with spare capacity: cities feed their hinterland.
+
+| Tier | Tokens per turn |
+|---|---|
+| Village | 0 |
+| Town | 1 |
+| City | 2 |
+| Metropolis | 3 |
+
+- Urban growth goes to adjacent areas with room; if none has room, it is lost.
+- Its main role is **recovery**: area growth (§4) fills open land faster, so urban growth matters most after losses (conflict, calamities, collapse) or when discoveries raise area limits. The Phase 0 simulation showed it has little effect while land is open.
 
 ### Tier abilities (starting ladder)
 
@@ -145,7 +175,7 @@ Each tier keeps the abilities of the tiers below it. Higher tiers justify their 
 
 | Tier | Base manpower | Abilities |
 |---|---|---|
-| Village | 1 | Produce resources; host specialists; support towns; market endpoint |
+| Village | 1 | Produce resources; host specialists; market endpoint |
 | Town | 2 | Generic institutions auto-build here |
 | City | 3 | Build named wonders; counts toward AST settlement points |
 | Metropolis | 4 | Build great wonders; extends market range; raises the civilization's administrative capacity (reduces overextension) |
@@ -304,7 +334,7 @@ The ruler holds two direct levers. Everything else is indirect.
 
 ### Collapse
 
-- When a settlement crosses its threshold, it **drops one tier** and its freed tokens **scatter** into adjacent areas, possibly into other civilizations' territory, carrying knowledge.
+- When a settlement crosses its threshold, it **drops one tier** (§5, Tier drop); its freed tokens become refugees in adjacent areas, possibly in other civilizations' territory, carrying knowledge.
 - The local meter is **partially reset** (e.g., halved).
 - **Civilizations cannot collapse** as long as they have people left. Settlements can.
 
@@ -325,9 +355,11 @@ The ruler holds two direct levers. Everything else is indirect.
 | City | 15 | 14 |
 | Metropolis | 22 | 21 |
 
+- A settled area is fully populated (§5), so **any enemy token entering it attacks the settlement**. All tokens a civilization has in the area after movement attack together.
+- **Below the threshold**, the attackers fight the settlement's defense value and are destroyed; the settlement is unharmed.
 - Walls and similar advances raise these values; siege advances counter them.
 - The settlement fights at its defense value using the defender's strength multiplier.
-- **Capture:** the attacker takes the settlement **one tier lower**. Figure marks on it transfer to the new owner.
+- **Capture:** the attacker takes the settlement **one tier lower** (§5, Tier drop). Figure marks on it transfer to the new owner.
 - **Spoils:** a share of the defender's currency (scaled by tier) plus discovery progress toward the defender's advances.
 
 ### Conflict state
@@ -431,11 +463,14 @@ These are choices made knowingly, or risks to watch in playtesting.
 |---|---|
 | Civ-wide adoption % | Conflicts with the v0.1 idea that adoption spreads unevenly by region. Chosen for simplicity |
 | Institutions auto-build at Known | Conflicts with "knowledge is not capability." Wonders still require Developed |
-| Higher-tier value | Raw output per token falls sharply with tier (a metropolis ties up ~208 token-equivalents for 4 base manpower). Higher tiers rely entirely on exclusive abilities, which must be strong |
+| Higher-tier value | With token-based tiers, tokens tied up per base manpower is roughly flat (village 8, town 7.5, city 8, metropolis 9). Accepted: climbing is justified by exclusive abilities and by advances, not by raw manpower |
 | Weak town tier | With specialists available at any tier, the town's only exclusive ability is auto-built institutions |
 | Development ratio replaced | v0.2 initially derived manpower from a population ratio that rose with development. Replaced by tier base plus advance bonuses, which keeps manpower in small, readable whole units |
 | No instability decay | Meters accumulate over a long game unless the ruler actively stabilizes |
-| Collapse cascades | Settlement losses raise the civ-wide meter, which raises every local meter; combined with support cascades, one collapse can trigger others. Must not become routine |
+| Collapse cascades | Settlement losses raise the civ-wide meter, which raises every local meter, so one collapse can trigger others. Must not become routine |
+| Fast map fill | Phase 0 simulation: with the original's growth rule and no effective cap, one civilization filled a 64-area map in about 20 turns. Resolved by the token cap (55, loose tokens only, 1–2 rises per era): with two Stone Age rises, land fills around turn 36; with fewer, it may never fill, so peace is the default until cap-raising advances add pressure |
+| No support cascades | Settlements are supported by tokens, not lower tiers (v0.3). Simpler and keeps token counts small, but removes tier-to-tier cascades. Fully populated settled areas restore a hinterland requirement |
+| Low manpower ceiling | Fully populated settled areas cap how much of the map can be settled (about 40–60% in Phase 0), and high tiers are rare at small limits. Chosen for spatial decisions over density; discoveries that raise limits lift the ceiling |
 | Unlimited game counterparty | A currency-rich civilization can buy its way out of any shortage. Price-change rate is the main brake |
 | Mild AST regression | Regression costs position within an era, never the era itself |
 | Derived track lengths | Poor starts are already penalized by requirements; shorter rows for good starts penalize them twice. Offered as a setup option only |
@@ -448,12 +483,18 @@ These are choices made knowingly, or risks to watch in playtesting.
 
 ### Design
 
-- [ ] Token growth rates, and how the original's growth rule extends.
+- [x] ~~How the original's growth rule extends~~ — kept unchanged (v0.3).
+- [ ] Growth variant: original rule (current) vs proportional. Compared in the Phase 0 simulation.
 - [ ] What specific transport discoveries do to movement range and goods range.
 - [ ] Conditions for absorbing independent settlements peacefully.
 - [ ] Barbarian spawn rules.
 - [ ] Technology-by-technology design: plausibility conditions, counters, adoption benefits, mitigated calamities.
 - [ ] Final resource category list.
+- [x] ~~Per-area tier caps~~ — replaced by one settlement per area (v0.3).
+- [ ] Map size per civilization. Phase 0 used 64 areas per civilization; with limits 1–5, cap 55, and two Stone Age rises, land filled around turn 36.
+- [ ] Which advances unlock towns, cities, and metropolises.
+- [ ] Tier drop details: how the host accepts or rejects refugees under simultaneous turns (standing policy or per-event choice); whether accepted refugees count against the host's cap; whether a ruler can exploit deliberate collapse to transfer tokens; do refugees count against the token cap; how refugees are spread across adjacent areas; can an unsupported settlement drop again on consecutive turns; what capturing a village yields.
+- [ ] Support variant: tokens only (current) vs tokens plus one lower-tier settlement in range. Compared in the Phase 0 simulation.
 
 ### Tuning (playtesting)
 
@@ -462,7 +503,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 - [ ] Base manpower per tier; stability, discovery, and culture yields per specialist
 - [ ] Market starting prices and price-change rate
 - [ ] Conflict state duration
-- [ ] Settlement attack thresholds and defense values
+- [ ] Settlement attack thresholds and defense values (set when settlements were worth 6/12/24/48 tokens; now 6/12/20/30)
 - [ ] Instability thresholds, source and stabilizer magnitudes, partial-reset amount
 - [ ] Calamity exposure rate and condition weights
 - [ ] Figure emergence odds
@@ -474,14 +515,15 @@ These are choices made knowingly, or risks to watch in playtesting.
 See the [development plan](development_plan.md) for build phases.
 
 1. **Author a vertical slice of content:** the Stone and Bronze eras, with roughly 20 advances (conditions, counters, adoption effects), a handful of resources, and the first calamities.
-2. **Paper or spreadsheet prototype** of the core loop (population, settlements, manpower, support, instability) to test the settlement pyramid's economics before building software.
-3. **Tune the pyramid.** The tier ROI tension (§16) is the most likely early balance problem.
+2. ~~**Prototype the core loop economy**~~ — done in Phase 0 (`sim/phase0/sim.ts`); reshaped the pyramid, settlement, and cap rules (v0.3).
+3. **Re-run the economy simulation** once Stone Age advances, calamities, and historical figures are designed, to retune pacing with them in play.
 4. **Prototype the market** with several civilizations at different ranges, to confirm per-player pricing is readable to players.
 
 ---
 
 ## Change log
 
+- **0.3 (October 15, 2026):** Settlement pyramid reworked: each tier is reached by merging the settlement with additional tokens (village 6, town +6, city +8, metropolis +10) rather than merging two lower-tier settlements. Support is loose tokens scaling by tier (2/3/4/6); support cascades between tiers removed. A metropolis now ties up 36 tokens instead of 208. Token growth uses the original's rule unchanged (+1 / +2 per area). Urban growth set at 0/1/2/3 per tier, framed as recovery. Expansion window target of 30–40 turns; map density added as a setup option. Construction follows the original: area limits do not block it, one settlement per area, and a settled area is fully populated; area limits return to a small scale. Tiers above village are unlocked by advances (towns in the Stone Age). Token cap counts loose tokens only, starts at 55, and rises 1–2 times per era; starting area limits 1–5. Recommended next steps updated after Phase 0. Added a shared tier-drop procedure with refugees that ignore area limits for one turn; refugees in foreign territory join the host unless rejected. Any enemy entry into a settled area is an attack; below the threshold the attackers are destroyed. Updated §16 (higher-tier value accepted; fast map fill added); added open questions on per-area caps and the support variant.
 - **0.2.2 (October 15, 2026):** Version 1 is single-player; multiplayer moved to a future enhancement. Added weak-AI tuning risk. Linked the development plan.
 - **0.2.1 (October 15, 2026):** Manpower designed: replaces resource slots; tier base plus advance bonuses; assignments to production, Bureaucracy, High Learning, Artists, and wonders. Currency-funded specialists and player-built projects removed. Culture points added to scoring.
 - **0.2 (October 14, 2026):** Design interview. Decided game frame, setup options, turn structure and resolution order, map and population, settlement pyramid, resources and currency, market trade, discovery lifecycle mechanics, institutions and wonders, instability and collapse, conflict, calamities, historical figures, AST extension, and victory. Recorded trade-offs and remaining open items.

@@ -11,8 +11,9 @@ Read both before design or build work. When a decision is made in conversation, 
 
 ## Current status
 
-- Design: core systems decided (v0.2.x); numbers untuned.
-- Build: **Phase 0 next** — throwaway economy simulation testing the settlement pyramid's return on investment (design doc §16).
+- Design: core systems decided (v0.3); numbers untuned.
+- Build: Phase 0 done. **Phase 1 next** — foundation.
+- Economy simulation: `sim/phase0/sim.ts` (`node sim/phase0/sim.ts [cap|settle|towns|rare|sweep]`). Kept and extended as systems are designed; re-run it when economy-affecting rules change.
 
 ## Stack and architecture
 
