@@ -11,8 +11,8 @@ const MENU = [
   { label: 'Settings', enabled: true },
 ];
 
-// No behavior yet (Phase 2): menu items are inert.
-export function TitleScreen() {
+// Phase 2: only New Game does anything (opens the in-game frame); the other items are inert.
+export function TitleScreen({ onNewGame }: { onNewGame: () => void }) {
   const eras = [...content.eras].sort((a, b) => a.order - b.order);
   return (
     <main className="title-screen">
@@ -32,7 +32,13 @@ export function TitleScreen() {
 
         <nav className="title-menu" aria-label="Main menu">
           {MENU.map((item) => (
-            <button key={item.label} type="button" className="title-menu-item" disabled={!item.enabled}>
+            <button
+              key={item.label}
+              type="button"
+              className="title-menu-item"
+              disabled={!item.enabled}
+              onClick={item.label === 'New Game' ? onNewGame : undefined}
+            >
               {item.label}
             </button>
           ))}

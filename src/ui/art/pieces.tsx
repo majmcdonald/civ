@@ -8,7 +8,7 @@ export type SettlementTier = 'village' | 'town';
 // What play puts on the map, as the map screen draws it.
 export interface MapPieces {
   stacks: { area: AreaId; civ: number; count: number }[];
-  settlements: { area: AreaId; civ: number; tier: SettlementTier }[];
+  settlements: { area: AreaId; civ: number; tier: SettlementTier; name?: string }[];
   roads: [AreaId, AreaId][];
 }
 
@@ -149,6 +149,19 @@ export function AreaCount({ total, limit }: { total: number; limit: number }) {
       {state === 'over' && <path d={`M${width / 2 - 1},-3.6 l2.4,-2.4 m-2.4,0 l2.4,2.4`} stroke="#a3301c" strokeWidth={0.9} />}
       <text y={1.9} fontSize={5.2} fontWeight={700} fontFamily="var(--font-display)" fill={style.text} textAnchor="middle">
         {label}
+      </text>
+    </g>
+  );
+}
+
+// A settlement's name on a small banner, centered under the piece.
+export function SettlementLabel({ name }: { name: string }) {
+  const width = 6 + name.length * 2.9;
+  return (
+    <g>
+      <rect x={-width / 2} y={0} width={width} height={7} rx={1} fill="#fbf4e2" stroke={INK} strokeWidth={0.5} opacity={0.92} />
+      <text y={5.1} fontSize={5.2} fontFamily="var(--font-display)" fontWeight={700} fill={INK} textAnchor="middle">
+        {name}
       </text>
     </g>
   );

@@ -128,3 +128,21 @@ export function lateGamePieces(map: GameMap, turn = 0): MapPieces {
   }
   return pieces;
 }
+
+// Review-only resources per area, until resources are designed (design doc §6, §17). Ordered so
+// the first ones are the ones a settlement works first.
+export function sampleResources(map: GameMap, id: AreaId): string[] {
+  const area = map.areas[id]!;
+  const byTerrain: Record<string, string[]> = {
+    plains: ['Food', 'Clay'],
+    forest: ['Wood', 'Game'],
+    hills: ['Stone', 'Flint'],
+    mountains: ['Stone', 'Ore'],
+    desert: ['Stone'],
+    marsh: ['Reeds', 'Game'],
+  };
+  const resources = [...(byTerrain[area.terrain ?? ''] ?? [])];
+  if (area.features.some((f) => f === 'river' || f === 'floodplain')) resources.unshift('Food');
+  if (area.features.includes('coastal')) resources.push('Fish');
+  return [...new Set(resources)];
+}

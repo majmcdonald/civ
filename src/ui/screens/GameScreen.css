@@ -1,0 +1,550 @@
+.game-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 45%, #5a4632 0%, #3a2c1f 70%, #2a2017 100%);
+}
+
+.game-bar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.45rem 1rem;
+  background: var(--parchment);
+  border-bottom: 1px solid var(--parchment-edge);
+  box-shadow: 0 3px 14px rgba(10, 6, 2, 0.45);
+}
+
+.game-bar-time {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.game-civ {
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid var(--ink);
+  transform: rotate(45deg) scale(0.75);
+  flex: none;
+}
+
+.game-era {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.game-turn {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.game-turn-panel {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.game-phases {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0.3rem 0.4rem;
+  background: var(--parchment);
+  border: 1px solid var(--parchment-edge);
+  box-shadow: 0 3px 10px rgba(10, 6, 2, 0.35);
+  list-style: none;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.game-phases li {
+  padding: 0.15rem 0.45rem;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-soft);
+  opacity: 0.55;
+}
+
+.game-phases li.current {
+  opacity: 1;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.game-tabs {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  gap: 0.15rem;
+}
+
+.game-tabs button {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 0.3rem 0.55rem;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.game-tabs button:hover {
+  color: var(--accent);
+}
+
+.game-tabs button.selected {
+  border-color: var(--parchment-edge);
+  background: #f7eed8;
+  color: var(--accent);
+}
+
+.game-stats {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  margin: 0;
+}
+
+.game-stats > div {
+  text-align: right;
+}
+
+.game-stats dt {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.game-stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.game-menu {
+  background: none;
+  border: 1px solid var(--parchment-edge);
+  padding: 0.3rem 0.7rem;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.game-menu:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.game-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.game-toggle {
+  position: absolute;
+  top: 0.9rem;
+  left: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  background: var(--parchment);
+  border: 1px solid var(--parchment-edge);
+  box-shadow: 0 3px 10px rgba(10, 6, 2, 0.35);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.game-toggle input {
+  accent-color: var(--accent);
+}
+
+.game-hover {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  padding: 0.4rem 1rem;
+  background: var(--parchment);
+  border: 1px solid var(--parchment-edge);
+  box-shadow: 0 4px 14px rgba(10, 6, 2, 0.4);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.game-hint {
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.game-end-phase {
+  padding: 0.65rem 1.3rem;
+  background: var(--accent);
+  color: #fbf4e2;
+  border: 1px solid #5a1e13;
+  box-shadow: 0 4px 14px rgba(10, 6, 2, 0.45);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.game-end-phase:hover {
+  background: #a3381f;
+}
+
+.game-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(20, 12, 4, 0.55);
+}
+
+.game-sheet {
+  flex: 1;
+  max-width: 72rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--parchment);
+  border: 1px solid var(--parchment-edge);
+  box-shadow: 0 10px 40px rgba(10, 6, 2, 0.6);
+}
+
+.game-placeholder {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+@media (max-width: 1250px) {
+  .game-stats > div:nth-child(2) {
+    display: none;
+  }
+}
+
+/* Status sheets with content */
+
+.game-sheet.filled {
+  display: block;
+  overflow-y: auto;
+}
+
+.civ-sheet {
+  padding: 1.6rem 2rem 2rem;
+}
+
+.civ-sheet h2 {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--ink-faint);
+  padding-bottom: 0.25rem;
+}
+
+.civ-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  margin-bottom: 1.3rem;
+}
+
+.civ-head .game-civ {
+  align-self: center;
+}
+
+.civ-head h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  letter-spacing: 0.1em;
+}
+
+.civ-head p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.civ-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.6rem;
+}
+
+.civ-card {
+  padding: 0.9rem 1rem 1rem;
+  background: rgba(255, 250, 236, 0.45);
+  border: 1px solid var(--parchment-edge);
+}
+
+.civ-big {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.civ-big span {
+  font-size: 1.1rem;
+  color: var(--ink-soft);
+}
+
+.civ-meter {
+  height: 0.45rem;
+  margin: 0.45rem 0;
+  background: rgba(59, 42, 26, 0.12);
+  border: 1px solid rgba(59, 42, 26, 0.25);
+}
+
+.civ-meter-fill {
+  height: 100%;
+  background: var(--ink-soft);
+}
+
+.civ-meter-fill.warn {
+  background: var(--accent);
+}
+
+.civ-facts {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 0.8rem;
+  margin: 0.4rem 0 0;
+}
+
+.civ-facts dt {
+  color: var(--ink-soft);
+}
+
+.civ-facts dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.civ-pyramid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.civ-pyramid li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.2rem 0;
+  border-bottom: 1px dotted var(--ink-faint);
+}
+
+.civ-pyramid li.locked {
+  color: var(--ink-soft);
+  opacity: 0.5;
+}
+
+.civ-pyramid-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.civ-note {
+  margin: 0.6rem 0 0;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.civ-note.warn {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.civ-assign {
+  margin: 0.3rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.civ-assign li {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr 1.2rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.civ-assign .civ-meter {
+  margin: 0;
+}
+
+.civ-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.civ-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.civ-table th {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--ink-soft);
+  cursor: help;
+}
+
+.civ-table td {
+  padding: 0.25rem 0.6rem;
+  border-top: 1px solid var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.civ-table td:nth-child(n + 2),
+.civ-table th:nth-child(n + 2) {
+  text-align: center;
+}
+
+.civ-table td:last-child {
+  width: 8rem;
+}
+
+.civ-table td.warn {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.civ-place {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.civ-place small {
+  display: block;
+  color: var(--ink-soft);
+}
+
+.civ-tier-icon {
+  width: 2.6rem;
+  height: 2.4rem;
+  flex: none;
+  overflow: visible;
+}
+
+.civ-show {
+  display: flex;
+  padding: 0.1rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.civ-show:hover {
+  background: rgba(255, 250, 236, 0.8);
+  border-color: var(--parchment-edge);
+}
+
+.civ-title {
+  display: flex;
+  align-items: baseline;
+}
+
+.civ-name {
+  padding: 0;
+  background: none;
+  border: none;
+  border-bottom: 1px dotted transparent;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: text;
+}
+
+.civ-name:hover {
+  border-bottom-color: var(--ink-soft);
+}
+
+.civ-name.unnamed {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--ink-soft);
+  border-bottom-color: var(--ink-faint);
+}
+
+.civ-name-input {
+  width: 10rem;
+  padding: 0 0.2rem;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  background: #fbf4e2;
+  border: 1px solid var(--ink-soft);
+}
+
+.civ-tier {
+  font-weight: 700;
+  white-space: pre;
+}
+
+.civ-resources {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+.civ-resource {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--parchment-edge);
+  border-radius: 1rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.civ-resource.worked {
+  background: #4a3624;
+  border-color: var(--ink);
+  color: #f4ead2;
+}
+
+.civ-resource b {
+  font-variant-numeric: tabular-nums;
+}

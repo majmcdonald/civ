@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Ref, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type { AreaId, GameMap, MapArea, Point, Terrain } from '../../engine';
-import { AreaCount, PieceDefs, TokenStack, type MapPieces } from './pieces';
+import { AreaCount, PieceDefs, SettlementLabel, TokenStack, type MapPieces } from './pieces';
 import { TerrainArt } from './terrainArt';
 
 // Isometric board (development plan, Art): the flat atlas map tilted like a board on a table,
@@ -210,7 +210,8 @@ interface IsoMapProps {
   showCounts: boolean;
   hovered: AreaId | null;
   onHover: (area: AreaId | null) => void;
-  // Stress test hooks: drop the upright terrain art, and drive the view from outside.
+  // Stress test hooks: drop the upright terrain art, and drive the view from outside. The game
+  // screen also uses `handle` to center on an area.
   hideTerrainArt?: boolean;
   handle?: Ref<IsoMapHandle>;
 }
@@ -218,6 +219,8 @@ interface IsoMapProps {
 export interface IsoMapHandle {
   home: () => View;
   setView: (view: View) => void;
+  // Center on an area, zoomed in close enough to see its pieces.
+  focus: (area: AreaId) => void;
   svg: () => SVGSVGElement | null;
 }
 
@@ -236,7 +239,17 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
   const bounds = { minX: -h, maxX: w, minY: 0, maxY: (w + h) / 2 + BOARD_DEPTH };
   const home: View = { cx: (bounds.minX + bounds.maxX) / 2, cy: (bounds.minY + bounds.maxY) / 2, zoom: 1 };
   const [view, setView] = useState<View>(home);
-  useImperativeHandle(handle, () => ({ home: () => home, setView, svg: () => svgRef.current }));
+  // Larger maps allow deeper zoom, so areas can always be seen at standard detail.
+  const maxZoom = Math.max(8, w / 75);
+  useImperativeHandle(handle, () => ({
+    home: () => home,
+    setView,
+    focus: (id) => {
+      const [cx, cy] = project(map.areas[id]!.center);
+      setView({ cx, cy, zoom: maxZoom * 0.6 });
+    },
+    svg: () => svgRef.current,
+  }));
   const [size, setSize] = useState({ width: 1, height: 1 });
 
   useEffect(() => setView(home), [map]);
@@ -259,8 +272,6 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
   const inset = Math.min(insetLeft, size.width * 0.5);
   const fit = Math.max(((bounds.maxX - bounds.minX) * margin) / (size.width - inset), ((bounds.maxY - bounds.minY) * margin) / size.height);
   const unitsPerPixel = fit / view.zoom;
-  // Larger maps allow deeper zoom, so areas can always be seen at standard detail.
-  const maxZoom = Math.max(8, w / 75);
   const vbW = size.width * unitsPerPixel;
   const vbH = size.height * unitsPerPixel;
   const viewBox = `${view.cx - vbW / 2 - (inset / 2) * unitsPerPixel} ${view.cy - vbH / 2} ${vbW} ${vbH}`;
@@ -374,6 +385,20 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
           ),
         });
       }
+    }
+    // Names go on top of everything, just below their settlement.
+    for (const s of pieces.settlements) {
+      if (!s.name) continue;
+      const [cx, cy] = project(map.areas[s.area]!.center);
+      items.push({
+        y: Infinity,
+        key: `n${s.area}`,
+        node: (
+          <g key={`n${s.area}`} transform={`translate(${cx} ${cy + (s.tier === 'town' ? 4.5 : 3)}) scale(0.6)`}>
+            <SettlementLabel name={s.name} />
+          </g>
+        ),
+      });
     }
     return items.sort((a, b) => a.y - b.y).map((item) => item.node);
   }, [map, pieces, showCounts, pieceScale]);
