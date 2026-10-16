@@ -109,7 +109,11 @@ function SettlementName({ name, onRename }: { name: string | undefined; onRename
       onBlur={save}
       onKeyDown={(e) => {
         if (e.key === 'Enter') save();
-        if (e.key === 'Escape') setDraft(null);
+        // Escape cancels the edit without also closing the screen.
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          setDraft(null);
+        }
       }}
     />
   );

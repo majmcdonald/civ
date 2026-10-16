@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { content as contentBundle } from '../../content';
 import { generateMap, hooks, loadContent, startSession, submit, type AreaId, type Phase, type PlayerSetup } from '../../engine';
 import { CIV_COLORS, IsoMap, type IsoMapHandle } from '../art/IsoMap';
 import { CivilizationSheet } from './CivilizationSheet';
+import { RivalsSheet } from './RivalsSheet';
 import { samplePieces } from './samplePieces';
 import './GameScreen.css';
 
@@ -55,6 +56,15 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
   // Settlement names by area. Held here until the engine tracks settlements (design doc §5).
   const [names, setNames] = useState<ReadonlyMap<AreaId, string>>(new Map());
   const mapHandle = useRef<IsoMapHandle>(null);
+
+  // Escape closes any status screen and returns to the map.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setScreen('map');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const map = useMemo(() => generateMap({ seed: 1, civilizations: CIVILIZATIONS, type: 'inlandSea', room: 'standard' }), []);
   const pieces = useMemo(() => samplePieces(map), [map]);
@@ -169,7 +179,7 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
           </>
         ) : (
           <div className="game-sheet-backdrop" onClick={() => setScreen('map')}>
-            <article className={`game-sheet ${screen === 'civilization' ? 'filled' : ''}`} onClick={(e) => e.stopPropagation()}>
+            <article className={`game-sheet ${screen === 'civilization' || screen === 'rivals' ? 'filled' : ''}`} onClick={(e) => e.stopPropagation()}>
               {screen === 'civilization' ? (
                 <CivilizationSheet
                   map={map}
@@ -183,6 +193,16 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
                   names={names}
                   onRename={rename}
                   onShow={showOnMap}
+                />
+              ) : screen === 'rivals' ? (
+                <RivalsSheet
+                  map={map}
+                  pieces={pieces}
+                  civs={state.players.map((p, i) => ({ name: p.name, color: CIV_COLORS[i]! }))}
+                  human={HUMAN}
+                  eras={session.content.eras}
+                  finalEra={state.setup.finalEra}
+                  turn={state.turn}
                 />
               ) : (
                 <p className="game-placeholder">Placeholder</p>
