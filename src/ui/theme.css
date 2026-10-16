@@ -1,0 +1,40 @@
+/* Map-atlas look: parchment, sepia ink, muted washes. */
+:root {
+  --parchment: #efe3c6;
+  --parchment-deep: #e2d0a8;
+  --parchment-edge: #c9b085;
+  --ink: #3b2a1a;
+  --ink-soft: #6b5238;
+  --ink-faint: rgba(59, 42, 26, 0.18);
+  --accent: #8a2f1f;
+  --sea-wash: #b9c4b8;
+  --sea-ink: #5f7468;
+
+  --font-display: 'Cinzel', 'Trajan Pro', Georgia, serif;
+  --font-body: 'EB Garamond', Garamond, Georgia, serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--parchment);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
