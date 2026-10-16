@@ -1,7 +1,7 @@
 # Development Plan
 
-**Version:** 0.5  
-**Date:** October 15, 2026  
+**Version:** 0.6  
+**Date:** October 16, 2026  
 **Status:** Working draft
 
 > Companion to the [design document](civilization_game_design_document.md). This plan covers how the game is built; the design document covers what is built.
@@ -42,7 +42,7 @@ What the architecture enables:
 |---|---|
 | **0. Pre-production** | **Done.** Economy simulation (`sim/phase0/sim.ts`) tested the settlement pyramid's return on investment and early-game pacing; results reshaped design doc v0.3. The simulation is kept and extended as systems are designed |
 | **1. Foundation** | **Done.** TypeScript project; headless deterministic rules engine with command layer; data + scripts content format; rules test harness; save/load format; game-log format |
-| **2. Basic screens** | Title, map, and status screens, with no behavior; procedural map generator |
+| **2. Basic screens** | Title and map screens; an in-game frame (top bar, navigation) with seven status screens: Civilization overview and Rivals and standings laid out, the rest (Economy, Market, Knowledge, Society, Chronicle) as placeholders until their systems are built; no behavior; procedural map generator |
 | **3. Core loop** | Turns and resolution order; settlements, conversion, support, growth, migration, surplus removal; first resource; manpower; simple conflict; basic instability and tier drop; working save/load; minimal AI; headless batch runs and downloadable game log |
 | **4. Stone Age systems** | First techs and discovery accumulators; market (its own work item); full instability sources and stabilizers; first calamities; AST and endgame countdown; information panels and rules reference begin; art and audio for the era |
 | **5. Stone Age content** | First wonders and historical figures; era art and audio; **re-run the economy simulation with Stone Age discoveries, calamities, and figures**; **playtest and design review** |
@@ -113,7 +113,8 @@ Other costs on the 15-civilization spacious board: map generation 0.3 s, first r
 
 ## Change log
 
-- **0.5 (October 16, 2026):** Map rendering stress test: results, findings, and the Phase 8 rendering plan recorded in §6 (Performance findings).
+- **0.6 (October 16, 2026):** Civilization overview: settlement table with player names, resources available and worked, and click-to-show on the map. Settlement names live in UI state and resources are a review sample until the engine tracks settlements and resources are designed.
+- **0.5 (October 16, 2026):** Phase 2 status screens split into an in-game frame plus seven screens (two laid out, five placeholders). Map rendering stress test: results, findings, and the Phase 8 rendering plan recorded in §6 (Performance findings).
 - **0.4 (October 15, 2026):** Phase 2: React + Vite for screens; title screen approved; in-game map is isometric.
 - **0.3 (October 15, 2026):** Phase 1 complete. Decisions: content format (TypeScript data files, hooks by id), tooling, and layout.
 - **0.2 (October 15, 2026):** Phase 0 complete. The economy simulation is kept, not thrown away; it is re-run as rules change, including in Phase 5.

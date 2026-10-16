@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.5  
+**Version:** 0.6  
 **Date:** October 16, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -137,6 +137,11 @@ Settlements grow by absorbing tokens, extending the original's "6 tokens → cit
 - **The area limit does not block construction**, as in the original: tokens gathered for a conversion may exceed the limit, because conversion resolves before surplus removal.
 - Conversion is ordered in allocation and resolves after conflict.
 - Starting numbers; to be tuned.
+
+### Names
+
+- The player can **name a settlement** when it is founded or later, from the Civilization overview. A settlement without a name shows as "Unnamed" (e.g., "Unnamed – Town"); naming is optional.
+- Names follow the settlement through tier changes. Naming is a command, so it is saved and replayed like any other action.
 
 ### Area limits
 
@@ -511,6 +516,8 @@ These are choices made knowingly, or risks to watch in playtesting.
 - [ ] Map size per civilization (procedural maps scale land areas by civilization count). Phase 0 used 64 areas per civilization; with limits 1–5, cap 55, and two Stone Age rises, land filled around turn 36.
 - [ ] Which advances unlock towns, cities, and metropolises.
 - [ ] Tier drop details: how the host accepts or rejects refugees under simultaneous turns (standing policy or per-event choice); whether accepted refugees count against the host's cap; whether a ruler can exploit deliberate collapse to transfer tokens; do refugees count against the token cap; how refugees are spread across adjacent areas; can an unsupported settlement drop again on consecutive turns; what capturing a village yields.
+- [ ] Names for rival civilizations' settlements (generated name lists, or unnamed).
+- [ ] What happens to a settlement's name when it dissolves, is captured, or is refounded.
 - [ ] Support variant: tokens only (current) vs tokens plus one lower-tier settlement in range. Compared in the Phase 0 simulation.
 
 ### Tuning (playtesting)
@@ -541,6 +548,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.6 (October 16, 2026):** Players can name settlements at founding or from the Civilization overview; unnamed ones show as "Unnamed". Added open questions on rival settlement names and names after dissolution or capture.
 - **0.5 (October 16, 2026):** Civilizations raised to 2–15. Room to expand setup option (crowded, standard, spacious: 0.5×, 1×, 2× land per civilization) replaces map density; a 4× option was tried and dropped as too heavy to draw for now.
 - **0.4 (October 15, 2026):** Civilization count is a setup option: 2–7, default 5; procedural maps scale with it. Land areas have one terrain (plains, forest, hills, mountains, desert, marsh) and feature flags (river, floodplain, coastal, volcanic/fault); terrain sets limit ranges and resource options, features drive calamity risk. Rivers are ordered chains of areas from source to sea, traveled by ship. Procedural map type is a setup option: inland sea (default), continents, single landmass; seas are divided into sea areas. Starting positions use fair spacing with a quality check.
 - **0.3 (October 15, 2026):** Settlement pyramid reworked: each tier is reached by merging the settlement with additional tokens (village 6, town +6, city +8, metropolis +10) rather than merging two lower-tier settlements. Support is loose tokens scaling by tier (2/3/4/6); support cascades between tiers removed. A metropolis now ties up 36 tokens instead of 208. Token growth uses the original's rule unchanged (+1 / +2 per area). Urban growth set at 0/1/2/3 per tier, framed as recovery. Expansion window target of 30–40 turns; map density added as a setup option. Construction follows the original: area limits do not block it, one settlement per area, and a settled area is fully populated; area limits return to a small scale. Tiers above village are unlocked by advances (towns in the Stone Age). Token cap counts loose tokens only, starts at 55, and rises 1–2 times per era; starting area limits 1–5. Recommended next steps updated after Phase 0. Added a shared tier-drop procedure with refugees that ignore area limits for one turn; refugees in foreign territory join the host unless rejected. Any enemy entry into a settled area is an attack; below the threshold the attackers are destroyed. Updated §16 (higher-tier value accepted; fast map fill added); added open questions on per-area caps and the support variant.
