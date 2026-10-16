@@ -7,3 +7,5 @@ export { loadGame, replay, SAVE_VERSION, saveGame, type SaveFile } from './save'
 export { startSession, submit, toJsonLines, type LogLine, type Session } from './session';
 export * from './types';
 export * from './map';
+export { mapFor, mapOptions } from './world';
+export { looseTokens, STARTING_TOKEN_CAP, tokensAt } from './population';

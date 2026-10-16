@@ -1,4 +1,5 @@
 import { emit } from './context';
+import { resolveGrowth, resolveMovement, resolveSurplus } from './population';
 import type { Context } from './types';
 
 // Resolution order, design doc §3.
@@ -22,15 +23,15 @@ export type ResolutionStepId = (typeof RESOLUTION_STEPS)[number];
 
 // Each step's rules are filled in as its system is built (Phase 3 onward).
 const resolutionSteps: Record<ResolutionStepId, (ctx: Context) => void> = {
-  movement: () => {},
+  movement: resolveMovement,
   conflict: () => {},
   conversion: () => {},
   food: () => {},
   calamities: () => {},
   support: () => {},
   instability: () => {},
-  growth: () => {},
-  surplus: () => {},
+  growth: resolveGrowth,
+  surplus: resolveSurplus,
   discovery: () => {},
   figures: () => {},
   wonders: () => {},

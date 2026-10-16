@@ -2,8 +2,8 @@ import type { Era } from '../../content/types';
 import type { GameMap } from '../../engine';
 import type { MapPieces } from '../art/pieces';
 
-// Rivals and standings (design doc §11, §14, §15). AST positions and conflicts are a review sample
-// until the engine tracks them; track lengths are untuned (§17).
+// Rivals and standings (design doc §11, §14, §15). AST positions follow the movement rule until the
+// engine tracks them (Phase 4); track lengths are untuned (§17).
 
 const SPACES_PER_ERA = 4;
 
@@ -23,10 +23,9 @@ interface Standing {
   score: number;
 }
 
-// Sample AST progress: each civilization starts a few turns apart and waits at the Bronze gate,
-// since no one has the advances to pass it yet.
-function sampleSpace(civ: number, turn: number): number {
-  return Math.min(SPACES_PER_ERA - 1, ((civ * 5 + 2) % 3) + turn - 1);
+// One space per turn, waiting before the Bronze gate, since no one has the advances to pass it yet.
+function trackSpace(turn: number): number {
+  return Math.min(SPACES_PER_ERA - 1, turn - 1);
 }
 
 // Pairs of civilizations whose tokens share an area over its limit (§11).
@@ -66,7 +65,7 @@ export function RivalsSheet({ map, pieces, civs, human, eras, finalEra, turn }: 
     .map((_, civ) => {
       const mine = pieces.settlements.filter((s) => s.civ === civ);
       const towns = mine.filter((s) => s.tier === 'town').length;
-      const space = sampleSpace(civ, turn);
+      const space = trackSpace(turn);
       // Settlement points come from cities and metropolises only (§14); scoring weights are untuned.
       const settlementPoints = 0;
       const advances = 0;
@@ -100,7 +99,7 @@ export function RivalsSheet({ map, pieces, civs, human, eras, finalEra, turn }: 
             </div>
           ))}
           {civs.map((civ, i) => {
-            const space = sampleSpace(i, turn);
+            const space = trackSpace(turn);
             const waiting = space === SPACES_PER_ERA - 1;
             return (
               <div key={i} className={`rivals-row ${i === human ? 'you' : ''}`} style={{ display: 'contents' }}>

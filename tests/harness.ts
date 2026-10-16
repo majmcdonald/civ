@@ -30,6 +30,7 @@ export function testSetup(overrides: Partial<GameSetup> = {}): GameSetup {
       { id: 'ai1', name: 'Rival', kind: 'ai' },
     ],
     finalEra: 'iron',
+    map: { type: 'inlandSea', room: 'standard' },
     ...overrides,
   };
 }

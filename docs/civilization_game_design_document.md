@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.6  
+**Version:** 0.7  
 **Date:** October 16, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -109,6 +109,7 @@ Four phases. All players act simultaneously within each phase.
   - The cap starts at **55**, the original's token stock.
   - Advances raise the cap **1–2 times per era**. Rise sizes are set when those advances are designed.
   - Support tokens are loose and count against the cap, so the cap also bounds the number of settlements (roughly cap ÷ 4–5 in Phase 0). Each era's expansion is paced by its cap rises.
+- **Each civilization starts with one token in its starting area**, as in the original. The Phase 0 simulation and the 30–40 turn expansion window assume this start.
 - **Growth is automatic**, following the original's rule: each turn, an area with 1 loose token gains 1; an area with 2 or more gains 2. Growth never exceeds the area's population limit or the civilization's token cap. Proportional growth (about +1 per N loose tokens) will be compared in the Phase 0 simulation.
 - **Loose tokens produce nothing and need no support.** They have no manpower. They matter as growth, as support for settlements, as a source of new settlements, as armies, and as discoverers (occupying a resource area contributes to related discoveries).
 
@@ -117,6 +118,13 @@ Four phases. All players act simultaneously within each phase.
 - By default a token moves **one adjacent land area** per turn.
 - Transport discoveries (roads, railroads, flight, and similar) extend range.
 - **River and sea travel require discovering ships.**
+- **Orders and resolution.** Moves are ordered in allocation and all resolve at once in resolution step 1, from where tokens stood at the end of allocation, so a token moves at most once per turn. Tokens may move into an area held by another civilization; whether that leads to conflict is decided in step 2 (§11).
+- **Ordering moves (interface).** Click one of your areas; its land neighbors get a blue outline. Each click on a neighbor sends one more token, and right-click takes one back. Every planned move shows on the map as a **green arrow** with its token count. Clicking an arrow reopens planning from its source area to add or remove tokens; right-clicking it takes one back. Esc finishes planning.
+
+### Growth and surplus details
+
+- Growth is counted from the tokens present before any growth is added. When an area's limit or a civilization's cap runs out partway, areas are filled in a fixed order (lower area numbers first, then player order). This only matters at the margins and keeps the game deterministic.
+- Surplus removal applies to areas held by one civilization. Areas shared by several civilizations over the limit are resolved by conflict (§11), which runs before surplus removal.
 
 ## 5. Settlements — Decided
 
@@ -548,6 +556,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.7 (October 16, 2026):** Each civilization starts with one token in its starting area, as in the original. Movement orders resolve simultaneously from end-of-allocation positions; moves are planned by clicking an area, then its neighbors, and show as clickable green arrows. Growth counts from pre-growth tokens with a fixed fill order when a limit or cap runs out; surplus removal covers single-civilization areas, leaving shared ones to conflict.
 - **0.6 (October 16, 2026):** Players can name settlements at founding or from the Civilization overview; unnamed ones show as "Unnamed". Added open questions on rival settlement names and names after dissolution or capture.
 - **0.5 (October 16, 2026):** Civilizations raised to 2–15. Room to expand setup option (crowded, standard, spacious: 0.5×, 1×, 2× land per civilization) replaces map density; a 4× option was tried and dropped as too heavy to draw for now.
 - **0.4 (October 15, 2026):** Civilization count is a setup option: 2–7, default 5; procedural maps scale with it. Land areas have one terrain (plains, forest, hills, mountains, desert, marsh) and feature flags (river, floodplain, coastal, volcanic/fault); terrain sets limit ranges and resource options, features drive calamity risk. Rivers are ordered chains of areas from source to sea, traveled by ship. Procedural map type is a setup option: inland sea (default), continents, single landmass; seas are divided into sea areas. Starting positions use fair spacing with a quality check.

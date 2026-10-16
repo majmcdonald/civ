@@ -214,6 +214,54 @@ interface IsoMapProps {
   // screen also uses `handle` to center on an area.
   hideTerrainArt?: boolean;
   handle?: Ref<IsoMapHandle>;
+  // Numbered start flags while there are no settlements (map review); off in a game.
+  showStarts?: boolean;
+  // Movement planning (game screen): clicks on areas and arrows, the planned moves, and the
+  // selected source area with the areas it can move into.
+  onAreaClick?: (area: AreaId, button: ClickButton) => void;
+  moves?: PlannedMove[];
+  onMoveClick?: (from: AreaId, to: AreaId, button: ClickButton) => void;
+  selection?: { area: AreaId; targets: AreaId[] } | null;
+}
+
+export type ClickButton = 'primary' | 'secondary';
+
+export interface PlannedMove {
+  from: AreaId;
+  to: AreaId;
+  count: number;
+}
+
+const MOVE_FILL = '#2f8f3a';
+const MOVE_INK = '#154a1c';
+const TARGET_INK = '#1f5fd1';
+
+// A straight arrow between two area centers, starting and ending short of them so the token stacks
+// stay visible; the count sits at the tail. Arrows in opposite directions sit side by side.
+function moveArrow(a: Point, b: Point): { d: string; tail: Point } {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const px = -uy * 1.2;
+  const py = ux * 1.2;
+  const s: Point = [a[0] + dx * 0.2 + px, a[1] + dy * 0.2 + py];
+  const e: Point = [a[0] + dx * 0.95 + px, a[1] + dy * 0.95 + py];
+  const shaft = 0.5;
+  const headLen = 3.2;
+  const head = 2.2;
+  const n: Point = [e[0] - ux * headLen, e[1] - uy * headLen];
+  const pts: Point[] = [
+    [s[0] - uy * shaft, s[1] + ux * shaft],
+    [n[0] - uy * shaft, n[1] + ux * shaft],
+    [n[0] - uy * head, n[1] + ux * head],
+    e,
+    [n[0] + uy * head, n[1] - ux * head],
+    [n[0] + uy * shaft, n[1] - ux * shaft],
+    [s[0] + uy * shaft, s[1] - ux * shaft],
+  ];
+  return { d: `M${pts.map((p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`).join('L')}Z`, tail: s };
 }
 
 export interface IsoMapHandle {
@@ -230,11 +278,17 @@ export interface View {
   zoom: number;
 }
 
-export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHover, hideTerrainArt = false, handle }: IsoMapProps) {
+export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHover, hideTerrainArt = false, handle, showStarts = true, onAreaClick, moves = [], onMoveClick, selection = null }: IsoMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const onHoverRef = useRef(onHover);
   onHoverRef.current = onHover;
-  const drag = useRef<{ x: number; y: number; view: View; moved: boolean } | null>(null);
+  // The area under the pointer, for clicks (the pointer is captured while pressed).
+  const pointerArea = useRef<AreaId | null>(null);
+  const enterArea = useRef((id: AreaId) => {
+    pointerArea.current = id;
+    onHoverRef.current(id);
+  });
+  const drag = useRef<{ x: number; y: number; view: View; moved: boolean; move: [AreaId, AreaId] | null } | null>(null);
   const { width: w, height: h } = map;
   const bounds = { minX: -h, maxX: w, minY: 0, maxY: (w + h) / 2 + BOARD_DEPTH };
   const home: View = { cx: (bounds.minX + bounds.maxX) / 2, cy: (bounds.minY + bounds.maxY) / 2, zoom: 1 };
@@ -296,7 +350,9 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
   }, [fit, maxZoom]);
 
   const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
-    drag.current = { x: event.clientX, y: event.clientY, view, moved: false };
+    const arrow = (event.target as Element).closest('[data-move]')?.getAttribute('data-move');
+    const move = arrow ? (arrow.split('-').map(Number) as [AreaId, AreaId]) : null;
+    drag.current = { x: event.clientX, y: event.clientY, view, moved: false, move };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -307,8 +363,13 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
     if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
     setView({ ...d.view, cx: d.view.cx - dx * unitsPerPixel, cy: d.view.cy - dy * unitsPerPixel });
   };
-  const onPointerUp = () => {
+  const onPointerUp = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const d = drag.current;
     drag.current = null;
+    if (!d || d.moved || (event.button !== 0 && event.button !== 2)) return;
+    const button: ClickButton = event.button === 0 ? 'primary' : 'secondary';
+    if (d.move) onMoveClick?.(d.move[0], d.move[1], button);
+    else if (pointerArea.current !== null) onAreaClick?.(pointerArea.current, button);
   };
 
   const land = useMemo(() => map.areas.filter((a) => a.kind === 'land'), [map]);
@@ -353,7 +414,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
         place(`t${area}-${stack.civ}`, [cx + dx, cy], <TokenStack count={stack.count} color={CIV_COLORS[stack.civ]!} />, 0.55);
       });
     }
-    if (pieces.settlements.length === 0) {
+    if (showStarts && pieces.settlements.length === 0) {
       map.starts.forEach((id, civ) => {
         place(
           `f${civ}`,
@@ -401,7 +462,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
       });
     }
     return items.sort((a, b) => a.y - b.y).map((item) => item.node);
-  }, [map, pieces, showCounts, pieceScale]);
+  }, [map, pieces, showCounts, pieceScale, showStarts]);
 
   // Everything that changes only with the map, so panning and zooming re-render cheaply.
   const board = useMemo(
@@ -421,7 +482,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
                 strokeDasharray="2 3"
                 style={{ strokeOpacity: 'calc(var(--border-opacity) * 0.95)' }}
                 vectorEffect="non-scaling-stroke"
-                onPointerEnter={() => onHoverRef.current(area.id)}
+                onPointerEnter={() => enterArea.current(area.id)}
               />
             ))}
             {map.coastline.map((path, i) => (
@@ -435,7 +496,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
                 stroke={TERRAIN_FILL[area.terrain!]}
                 strokeWidth={0.6}
                 vectorEffect="non-scaling-stroke"
-                onPointerEnter={() => onHoverRef.current(area.id)}
+                onPointerEnter={() => enterArea.current(area.id)}
               />
             ))}
             {land
@@ -491,7 +552,11 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerLeave={() => onHover(null)}
+      onPointerLeave={() => {
+        pointerArea.current = null;
+        onHover(null);
+      }}
+      onContextMenu={(event) => event.preventDefault()}
     >
       <GlyphDefs />
       <clipPath id="board-clip">
@@ -523,7 +588,35 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
           />
         </g>
       )}
+      {selection && (
+        <g transform={PROJECTION} clipPath="url(#board-clip)" pointerEvents="none">
+          {selection.targets.map((id) => (
+            <path
+              key={id}
+              d={ringPath(map.areas[id]!.outline)}
+              fill="none"
+              stroke={TARGET_INK}
+              strokeWidth={2}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          <path d={ringPath(map.areas[selection.area]!.outline)} fill="rgba(47,143,58,0.2)" stroke={MOVE_INK} strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
+        </g>
+      )}
       <g pointerEvents="none">{piecesLayer}</g>
+      {moves.map((m) => {
+        const { d, tail } = moveArrow(project(map.areas[m.from]!.center), project(map.areas[m.to]!.center));
+        return (
+          <g key={`${m.from}-${m.to}`} data-move={`${m.from}-${m.to}`} className="iso-move">
+            <title>Planned move: click to change, right-click to take one back</title>
+            <path d={d} fill={MOVE_FILL} stroke={MOVE_INK} strokeWidth={0.35} strokeLinejoin="round" />
+            <circle cx={tail[0]} cy={tail[1]} r={2.1} fill="#f4fbef" stroke={MOVE_INK} strokeWidth={0.35} />
+            <text x={tail[0]} y={tail[1] + 1.1} fontSize={3} fontWeight={700} fontFamily="var(--font-display)" fill={MOVE_INK} textAnchor="middle">
+              {m.count}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 }

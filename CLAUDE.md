@@ -11,8 +11,8 @@ Read both before design or build work. When a decision is made in conversation, 
 
 ## Current status
 
-- Design: core systems decided (v0.3); numbers untuned.
-- Build: Phases 0–1 done. **Phase 2 next** — basic screens and procedural map.
+- Design: core systems decided (v0.6); numbers untuned.
+- Build: Phases 0–2 done. **Phase 3 next** — core loop.
 - Economy simulation: `sim/phase0/sim.ts` (`node sim/phase0/sim.ts [cap|settle|towns|rare|sweep]`). Kept and extended as systems are designed; re-run it when economy-affecting rules change.
 
 ## Stack and architecture

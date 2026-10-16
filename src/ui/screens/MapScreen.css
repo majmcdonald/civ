@@ -188,3 +188,11 @@
     max-height: 40%;
   }
 }
+
+.iso-move {
+  cursor: pointer;
+}
+
+.iso-move:hover path {
+  fill: #3aa847;
+}

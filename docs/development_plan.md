@@ -1,6 +1,6 @@
 # Development Plan
 
-**Version:** 0.6  
+**Version:** 0.7  
 **Date:** October 16, 2026  
 **Status:** Working draft
 
@@ -27,7 +27,7 @@
 | Determinism | Seeded random number generator: the same seed and commands always produce the same game |
 | Content | **Data + scripts.** Advances, wonders, figures, calamities, resources, and eras are data files. The engine provides a library of effect types; scripted hooks handle unusual rules |
 | Content format | **TypeScript data files**: plain, serializable objects checked by the compiler (`satisfies`). Effects are typed entries from the effect library; hooks are referenced by id into a script registry. No inline functions in data, so the rules reference and tooltip sources can be generated from it. Converting to JSON later is mechanical if modding becomes a goal |
-| Save/load | The game state is a single serializable object |
+| Save/load | The game state is a single serializable object. The procedural map is not stored in it: the setup holds the map options, and the map is rebuilt from the seed on load (the generator is deterministic across JavaScript engines), so saves stay small |
 | Game log | Structured, one JSON event per line (commands, state changes, resolution steps, random draws). Downloadable. The seed plus the command log replays a game exactly |
 
 What the architecture enables:
@@ -42,7 +42,7 @@ What the architecture enables:
 |---|---|
 | **0. Pre-production** | **Done.** Economy simulation (`sim/phase0/sim.ts`) tested the settlement pyramid's return on investment and early-game pacing; results reshaped design doc v0.3. The simulation is kept and extended as systems are designed |
 | **1. Foundation** | **Done.** TypeScript project; headless deterministic rules engine with command layer; data + scripts content format; rules test harness; save/load format; game-log format |
-| **2. Basic screens** | Title and map screens; an in-game frame (top bar, navigation) with seven status screens: Civilization overview and Rivals and standings laid out, the rest (Economy, Market, Knowledge, Society, Chronicle) as placeholders until their systems are built; no behavior; procedural map generator |
+| **2. Basic screens** | **Done.** Title and map screens; an in-game frame (top bar, navigation) with seven status screens: Civilization overview and Rivals and standings laid out, the rest (Economy, Market, Knowledge, Society, Chronicle) as placeholders until their systems are built; no behavior; procedural map generator |
 | **3. Core loop** | Turns and resolution order; settlements, conversion, support, growth, migration, surplus removal; first resource; manpower; simple conflict; basic instability and tier drop; working save/load; minimal AI; headless batch runs and downloadable game log |
 | **4. Stone Age systems** | First techs and discovery accumulators; market (its own work item); full instability sources and stabilizers; first calamities; AST and endgame countdown; information panels and rules reference begin; art and audio for the era |
 | **5. Stone Age content** | First wonders and historical figures; era art and audio; **re-run the economy simulation with Stone Age discoveries, calamities, and figures**; **playtest and design review** |
@@ -113,6 +113,7 @@ Other costs on the 15-civilization spacious board: map generation 0.3 s, first r
 
 ## Change log
 
+- **0.7 (October 16, 2026):** Phase 2 complete: title, map, in-game frame, Civilization overview, Rivals and standings, five placeholder screens, procedural map generator, rendering stress test. Phase 3 started: the game setup holds the map options (type, room to expand; one civilization per player, 2–15) and the map is rebuilt from the seed rather than saved; the state tracks loose tokens per area, starting with one token per civilization. Movement orders, simultaneous movement, growth, and surplus removal work, with move planning on the map.
 - **0.6 (October 16, 2026):** Civilization overview: settlement table with player names, resources available and worked, and click-to-show on the map. Settlement names live in UI state and resources are a review sample until the engine tracks settlements and resources are designed.
 - **0.5 (October 16, 2026):** Phase 2 status screens split into an in-game frame plus seven screens (two laid out, five placeholders). Map rendering stress test: results, findings, and the Phase 8 rendering plan recorded in §6 (Performance findings).
 - **0.4 (October 15, 2026):** Phase 2: React + Vite for screens; title screen approved; in-game map is isometric.

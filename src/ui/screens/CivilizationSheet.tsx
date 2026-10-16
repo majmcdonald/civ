@@ -179,7 +179,7 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
               );
             })}
           </ul>
-          <p className={`civ-note ${short > 0 ? 'warn' : ''}`}>{short > 0 ? `${short} short of support` : 'All settlements supported'}</p>
+          {rows.length > 0 && <p className={`civ-note ${short > 0 ? 'warn' : ''}`}>{short > 0 ? `${short} short of support` : 'All settlements supported'}</p>}
         </section>
 
         <section className="civ-card">
@@ -226,6 +226,13 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
             </tr>
           </thead>
           <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={6} className="civ-empty">
+                  No settlements yet. Six tokens in or next to one area can found a village.
+                </td>
+              </tr>
+            )}
             {rows.map((r) => {
               const t = TIER[r.tier];
               const ok = r.support >= t.support;

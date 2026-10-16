@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createRng, random, randomInt, stepRng, type Context } from '../src/engine';
+import { createRng, mapFor, random, randomInt, stepRng, type Context } from '../src/engine';
 import { newGame, testContent } from './harness';
 
 function contextFor(seed: number): Context {
   const game = newGame({ seed });
-  return { state: game.state, content: testContent(), events: [] };
+  return { state: game.state, content: testContent(), map: mapFor(game.setup), events: [] };
 }
 
 describe('seeded random number generator', () => {
