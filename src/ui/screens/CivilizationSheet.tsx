@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { AreaId, GameMap } from '../../engine';
+import type { AreaId, GameMap, SupportSummary } from '../../engine';
 import type { MapPieces, SettlementTier } from '../art/pieces';
 import { sampleResources } from './samplePieces';
 
@@ -22,7 +22,6 @@ interface SettlementRow {
   area: AreaId;
   tier: SettlementTier;
   place: string;
-  support: number;
   resources: string[];
 }
 
@@ -44,22 +43,13 @@ function summarize(map: GameMap, pieces: MapPieces, civ: number, cap: number) {
   }
   growth = Math.min(growth, Math.max(0, cap - loose));
 
-  // Support (§5): each adjacent loose token supports one settlement; larger tiers claim first.
-  const spare = new Map(own.map((s) => [s.area, s.count]));
   const settlements = pieces.settlements
     .filter((s) => s.civ === civ)
     .sort((a, b) => TIER[b.tier].value - TIER[a.tier].value || a.area - b.area);
   const rows: SettlementRow[] = settlements.map((s) => {
     const area = map.areas[s.area]!;
-    let support = 0;
-    for (const n of area.neighbors) {
-      const take = Math.min(spare.get(n) ?? 0, TIER[s.tier].support - support);
-      if (take <= 0) continue;
-      spare.set(n, spare.get(n)! - take);
-      support += take;
-    }
     const features = area.features.length > 0 ? `, ${area.features.join(', ')}` : '';
-    return { area: s.area, tier: s.tier, place: `${capitalize(area.terrain!)}${features}`, support, resources: sampleResources(map, s.area) };
+    return { area: s.area, tier: s.tier, place: `${capitalize(area.terrain!)}${features}`, resources: sampleResources(map, s.area) };
   });
 
   const settled = rows.reduce((sum, r) => sum + TIER[r.tier].value, 0);
@@ -129,14 +119,23 @@ interface CivilizationSheetProps {
   turn: number;
   cap: number;
   names: ReadonlyMap<AreaId, string>;
+  // Support at this turn's check, with the player's planned moves and settlements (engine).
+  support: SupportSummary;
+  // Whether moves or settlements are planned this turn, so the numbers include them.
+  planned: boolean;
   onRename: (area: AreaId, name: string) => void;
   onShow: (area: AreaId) => void;
 }
 
-export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, cap, names, onRename, onShow }: CivilizationSheetProps) {
+export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, cap, names, support, planned, onRename, onShow }: CivilizationSheetProps) {
   const { loose, growth, rows, settled, manpower, urban } = summarize(map, pieces, civ, cap);
   const counts = (tier: TierId) => rows.filter((r) => r.tier === tier).length;
-  const short = rows.filter((r) => r.support < TIER[r.tier].support).length;
+  const supportOf = (area: AreaId) => support.settlements.find((s) => s.area === area)?.support ?? 0;
+  const short = support.settlements.filter((s) => s.support < s.needed);
+  const label = (area: AreaId) => {
+    const s = support.settlements.find((x) => x.area === area)!;
+    return `${names.get(area) ?? 'Unnamed'} – ${TIER[s.tier as TierId].name}`;
+  };
 
   return (
     <div className="civ-sheet">
@@ -179,7 +178,34 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
               );
             })}
           </ul>
-          {rows.length > 0 && <p className={`civ-note ${short > 0 ? 'warn' : ''}`}>{short > 0 ? `${short} short of support` : 'All settlements supported'}</p>}
+        </section>
+
+        <section className="civ-card">
+          <h2 title={planned ? 'At the end of this turn, with your planned moves and settlements' : 'At the end of this turn'}>Support{planned && <span className="civ-planned"> · with plans</span>}</h2>
+          <div className="civ-big" title="Support tokens your settlements get, against what they need: village 2, town 3 (§5)">
+            {support.supplied}
+            <span> / {support.needed} needed</span>
+          </div>
+          <Meter value={support.supplied} max={Math.max(1, support.needed)} tone={short.length > 0 ? 'warn' : 'ink'} />
+          <dl className="civ-facts">
+            <dt title="Loose tokens not supporting any settlement: free to found or upgrade settlements">Free tokens</dt>
+            <dd>{support.free}</dd>
+            <dt title="Unsettled areas with at least 8 free tokens in or next to them: 6 to found a village and 2 to support it">Village sites</dt>
+            <dd>{support.villageSites.length}</dd>
+          </dl>
+          {short.length > 0 ? (
+            <ul className="civ-warnings">
+              {short.map((s) => (
+                <li key={s.area}>
+                  {label(s.area)}: {s.support} of {s.needed} — will {s.tier === 'village' ? 'dissolve' : 'drop a tier'}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="civ-note">
+              {support.settlements.length > 0 ? 'All settlements supported' : support.villageSites.length > 0 ? 'Enough free tokens to found a village' : 'A village needs 8 tokens in or next to one area'}
+            </p>
+          )}
         </section>
 
         <section className="civ-card">
@@ -219,7 +245,7 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
             <tr>
               <th>Settlement</th>
               <th title="Resources in the settlement's area; dark ones are being worked, one manpower each (§6). Sample resources until they are designed">Resources</th>
-              <th title="Loose tokens in adjacent unsettled areas tied to this settlement, against the tier's need (§5)">Support</th>
+              <th title="Loose tokens in adjacent unsettled areas tied to this settlement at the end of this turn, against the tier's need (§5)">Support</th>
               <th title="Units of labor each turn (§6)">Manpower</th>
               <th title="Tokens added to adjacent areas each turn (§5)">Urban growth</th>
               <th title="Local instability meter plus the civ-wide meter (§10)">Stability</th>
@@ -235,7 +261,7 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
             )}
             {rows.map((r) => {
               const t = TIER[r.tier];
-              const ok = r.support >= t.support;
+              const ok = supportOf(r.area) >= t.support;
               const worked = r.resources.slice(0, t.manpower);
               return (
                 <tr key={r.area}>
@@ -264,7 +290,7 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
                     </span>
                   </td>
                   <td className={ok ? '' : 'warn'} title={ok ? undefined : 'Drops a tier if not supported at resolution'}>
-                    {r.support} / {t.support}
+                    {supportOf(r.area)} / {t.support}
                   </td>
                   <td>{t.manpower}</td>
                   <td>{t.growth > 0 ? `+${t.growth}` : '—'}</td>

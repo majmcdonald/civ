@@ -137,11 +137,11 @@ const COUNT_STYLE: Record<CountState, { fill: string; stroke: string; text: stri
 };
 
 // Tokens in the area (all civilizations) over its population limit, e.g. "3/5". Over the limit
-// means conflict (design doc §11).
-export function AreaCount({ total, limit }: { total: number; limit: number }) {
+// means conflict (design doc §11). Tokens ordered out this turn show as "4−3/4".
+export function AreaCount({ total, limit, leaving = 0 }: { total: number; limit: number; leaving?: number }) {
   const state = countState(total, limit);
   const style = COUNT_STYLE[state];
-  const label = `${total}/${limit}`;
+  const label = leaving > 0 ? `${total}−${leaving}/${limit}` : `${total}/${limit}`;
   const width = 4 + label.length * 3.4;
   return (
     <g opacity={style.opacity}>

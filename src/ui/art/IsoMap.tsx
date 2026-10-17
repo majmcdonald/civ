@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Ref, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type { AreaId, GameMap, MapArea, Point, Terrain } from '../../engine';
-import { AreaCount, PieceDefs, SettlementLabel, TokenStack, type MapPieces } from './pieces';
+import { AreaCount, PieceDefs, SettlementLabel, TokenStack, type MapPieces, type SettlementTier } from './pieces';
 import { TerrainArt } from './terrainArt';
 
 // Isometric board (development plan, Art): the flat atlas map tilted like a board on a table,
@@ -222,6 +222,17 @@ interface IsoMapProps {
   moves?: PlannedMove[];
   onMoveClick?: (from: AreaId, to: AreaId, button: ClickButton) => void;
   selection?: { area: AreaId; targets: AreaId[] } | null;
+  // Planned settlement conversions, drawn as translucent pieces; clicking one calls `onPlanClick`.
+  plans?: PlannedSettlement[];
+  onPlanClick?: (area: AreaId) => void;
+}
+
+export interface PlannedSettlement {
+  area: AreaId;
+  civ: number;
+  tier: SettlementTier;
+  // The conversion would fail, or the settlement would drop at once.
+  warn: boolean;
 }
 
 export type ClickButton = 'primary' | 'secondary';
@@ -237,8 +248,9 @@ const MOVE_INK = '#154a1c';
 const TARGET_INK = '#1f5fd1';
 
 // A straight arrow between two area centers, starting and ending short of them so the token stacks
-// stay visible; the count sits at the tail. Arrows in opposite directions sit side by side.
-function moveArrow(a: Point, b: Point): { d: string; tail: Point } {
+// and count badges stay visible. The count sits in a pill on the shaft, drawn in the arrow's own
+// colors so it reads as part of it. Arrows in opposite directions sit side by side.
+function moveArrow(a: Point, b: Point): { d: string; mid: Point } {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
   const len = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -246,8 +258,17 @@ function moveArrow(a: Point, b: Point): { d: string; tail: Point } {
   const uy = dy / len;
   const px = -uy * 1.2;
   const py = ux * 1.2;
-  const s: Point = [a[0] + dx * 0.2 + px, a[1] + dy * 0.2 + py];
-  const e: Point = [a[0] + dx * 0.95 + px, a[1] + dy * 0.95 + py];
+  // Clear an ellipse around each center that covers the token stack and its count badge; between
+  // close areas, fall back to fractions of the distance.
+  const clear = (rx: number, ry: number) => 1 / Math.sqrt((ux / rx) ** 2 + (uy / ry) ** 2);
+  let from = clear(7, 6);
+  let to = clear(7, 5.5);
+  if (len - from - to < 9) {
+    from = len * 0.35;
+    to = len * 0.2;
+  }
+  const s: Point = [a[0] + ux * from + px, a[1] + uy * from + py];
+  const e: Point = [b[0] - ux * to + px, b[1] - uy * to + py];
   const shaft = 0.5;
   const headLen = 3.2;
   const head = 2.2;
@@ -261,7 +282,7 @@ function moveArrow(a: Point, b: Point): { d: string; tail: Point } {
     [n[0] + uy * shaft, n[1] - ux * shaft],
     [s[0] + uy * shaft, s[1] - ux * shaft],
   ];
-  return { d: `M${pts.map((p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`).join('L')}Z`, tail: s };
+  return { d: `M${pts.map((p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`).join('L')}Z`, mid: [s[0] + (n[0] - s[0]) * 0.7, s[1] + (n[1] - s[1]) * 0.7] };
 }
 
 export interface IsoMapHandle {
@@ -278,7 +299,7 @@ export interface View {
   zoom: number;
 }
 
-export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHover, hideTerrainArt = false, handle, showStarts = true, onAreaClick, moves = [], onMoveClick, selection = null }: IsoMapProps) {
+export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHover, hideTerrainArt = false, handle, showStarts = true, onAreaClick, moves = [], onMoveClick, selection = null, plans = [], onPlanClick }: IsoMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const onHoverRef = useRef(onHover);
   onHoverRef.current = onHover;
@@ -288,7 +309,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
     pointerArea.current = id;
     onHoverRef.current(id);
   });
-  const drag = useRef<{ x: number; y: number; view: View; moved: boolean; move: [AreaId, AreaId] | null } | null>(null);
+  const drag = useRef<{ x: number; y: number; view: View; moved: boolean; move: [AreaId, AreaId] | null; plan: AreaId | null } | null>(null);
   const { width: w, height: h } = map;
   const bounds = { minX: -h, maxX: w, minY: 0, maxY: (w + h) / 2 + BOARD_DEPTH };
   const home: View = { cx: (bounds.minX + bounds.maxX) / 2, cy: (bounds.minY + bounds.maxY) / 2, zoom: 1 };
@@ -352,7 +373,8 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
   const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     const arrow = (event.target as Element).closest('[data-move]')?.getAttribute('data-move');
     const move = arrow ? (arrow.split('-').map(Number) as [AreaId, AreaId]) : null;
-    drag.current = { x: event.clientX, y: event.clientY, view, moved: false, move };
+    const plan = (event.target as Element).closest('[data-plan]')?.getAttribute('data-plan');
+    drag.current = { x: event.clientX, y: event.clientY, view, moved: false, move, plan: plan ? Number(plan) : null };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -369,6 +391,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
     if (!d || d.moved || (event.button !== 0 && event.button !== 2)) return;
     const button: ClickButton = event.button === 0 ? 'primary' : 'secondary';
     if (d.move) onMoveClick?.(d.move[0], d.move[1], button);
+    else if (d.plan !== null) onPlanClick?.(d.plan);
     else if (pointerArea.current !== null) onAreaClick?.(pointerArea.current, button);
   };
 
@@ -429,6 +452,8 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
         );
       });
     }
+    const leaving = new Map<AreaId, number>();
+    for (const m of moves) leaving.set(m.from, (leaving.get(m.from) ?? 0) + m.count);
     if (showCounts) {
       const settled = new Set(pieces.settlements.map((p) => p.area));
       for (const area of map.areas) {
@@ -441,7 +466,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
           key: `c${area.id}`,
           node: (
             <g key={`c${area.id}`} transform={`translate(${cx} ${cy + (total > 0 ? 3.4 : 0)}) scale(0.6)`}>
-              <AreaCount total={total} limit={area.limit} />
+              <AreaCount total={total} limit={area.limit} leaving={leaving.get(area.id) ?? 0} />
             </g>
           ),
         });
@@ -462,7 +487,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
       });
     }
     return items.sort((a, b) => a.y - b.y).map((item) => item.node);
-  }, [map, pieces, showCounts, pieceScale, showStarts]);
+  }, [map, pieces, showCounts, pieceScale, showStarts, moves]);
 
   // Everything that changes only with the map, so panning and zooming re-render cheaply.
   const board = useMemo(
@@ -600,19 +625,34 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
               vectorEffect="non-scaling-stroke"
             />
           ))}
-          <path d={ringPath(map.areas[selection.area]!.outline)} fill="rgba(47,143,58,0.2)" stroke={MOVE_INK} strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
+          <path d={ringPath(map.areas[selection.area]!.outline)} fill="rgba(47,143,58,0.2)" stroke={TARGET_INK} strokeWidth={4} vectorEffect="non-scaling-stroke" />
         </g>
       )}
       <g pointerEvents="none">{piecesLayer}</g>
+      {plans.map((p) => {
+        const [cx, cy] = project(map.areas[p.area]!.center);
+        return (
+          <g key={`p${p.area}`} data-plan={p.area} className="iso-plan" transform={`translate(${cx} ${cy})`}>
+            <title>{p.warn ? 'Planned, with a problem: see the planning panel. Click to cancel' : 'Planned: click to cancel'}</title>
+            <g opacity={0.55} transform={`scale(${p.tier === 'town' ? 0.62 : 0.75})`}>
+              <use href={`#piece-${p.tier}`} color={CIV_COLORS[p.civ]} />
+            </g>
+          </g>
+        );
+      })}
       {moves.map((m) => {
-        const { d, tail } = moveArrow(project(map.areas[m.from]!.center), project(map.areas[m.to]!.center));
+        const { d, mid } = moveArrow(project(map.areas[m.from]!.center), project(map.areas[m.to]!.center));
+        const label = `+${m.count}`;
+        const width = 2.4 + label.length * 2.1;
         return (
           <g key={`${m.from}-${m.to}`} data-move={`${m.from}-${m.to}`} className="iso-move">
-            <title>Planned move: click to change, right-click to take one back</title>
+            <title>{`Planned move: ${m.count} token${m.count === 1 ? '' : 's'}. Click to change, right-click to take one back`}</title>
+            {/* A wider invisible outline makes the thin arrow easier to click. */}
+            <path d={d} fill="none" stroke="transparent" strokeWidth={3} pointerEvents="stroke" />
             <path d={d} fill={MOVE_FILL} stroke={MOVE_INK} strokeWidth={0.35} strokeLinejoin="round" />
-            <circle cx={tail[0]} cy={tail[1]} r={2.1} fill="#f4fbef" stroke={MOVE_INK} strokeWidth={0.35} />
-            <text x={tail[0]} y={tail[1] + 1.1} fontSize={3} fontWeight={700} fontFamily="var(--font-display)" fill={MOVE_INK} textAnchor="middle">
-              {m.count}
+            <rect x={mid[0] - width / 2} y={mid[1] - 1.9} width={width} height={3.8} rx={1.9} fill={MOVE_FILL} stroke={MOVE_INK} strokeWidth={0.35} />
+            <text x={mid[0]} y={mid[1] + 1.05} fontSize={3} fontWeight={700} fontFamily="var(--font-display)" fill="#f4fbef" textAnchor="middle">
+              {label}
             </text>
           </g>
         );

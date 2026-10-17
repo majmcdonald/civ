@@ -4,7 +4,7 @@ import { newGame, testContent } from './harness';
 
 function contextFor(seed: number): Context {
   const game = newGame({ seed });
-  return { state: game.state, content: testContent(), map: mapFor(game.setup), events: [] };
+  return { state: game.state, content: testContent(), map: mapFor(game.setup), events: [], refugees: [] };
 }
 
 describe('seeded random number generator', () => {

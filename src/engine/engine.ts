@@ -2,6 +2,7 @@ import type { Content } from './content';
 import { clone, emit } from './context';
 import { runResolution, runResources } from './phases';
 import { setMoveOrder, STARTING_TOKEN_CAP, validateMoveOrder } from './population';
+import { nameSettlement, setConversionOrder, TIERS, validateConversionOrder, validateName } from './settlements';
 import { createRng } from './rng';
 import { mapFor, validateMap } from './world';
 import {
@@ -15,7 +16,7 @@ import {
   type Phase,
 } from './types';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 interface CommandHandler<C extends Command> {
   validate(ctx: Pick<Context, 'state' | 'map'>, command: C): string | null;
@@ -52,6 +53,22 @@ const handlers: CommandHandlers = {
       setMoveOrder(ctx, command);
     },
   },
+  orderConversion: {
+    validate(ctx, command) {
+      return validateConversionOrder(ctx, command);
+    },
+    execute(ctx, command) {
+      setConversionOrder(ctx, command);
+    },
+  },
+  nameSettlement: {
+    validate(ctx, command) {
+      return validateName(ctx, command);
+    },
+    execute(ctx, command) {
+      nameSettlement(ctx, command);
+    },
+  },
 };
 
 export function validateSetup(setup: GameSetup, content: Content): string | null {
@@ -60,6 +77,8 @@ export function validateSetup(setup: GameSetup, content: Content): string | null
   if (ids.size !== setup.players.length) return 'Player ids must be unique';
   if (setup.players.filter((p) => p.kind === 'human').length > 1) return 'Version 1 allows at most one human player';
   if (!content.eras.some((e) => e.id === setup.finalEra)) return `Unknown final era "${setup.finalEra}"`;
+  const tiers = setup.unlockedTiers ?? ['village'];
+  if (!tiers.includes('village') || tiers.some((t) => !TIERS.some((rule) => rule.id === t))) return 'Unlocked tiers must be known tiers, including village';
   // Also checks the player count against the civilizations a map supports (2–15).
   return validateMap(setup);
 }
@@ -75,14 +94,16 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
     rng: createRng(setup.seed),
     turn: 1,
     phase: 'resources',
-    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP })),
+    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, tiers: [...(setup.unlockedTiers ?? ['village'])] })),
     // Each civilization starts with one token in its starting area (design doc §4).
     stacks: setup.players
       .map((p, i) => ({ area: map.starts[i]!, player: p.id, count: 1 }))
       .sort((a, b) => a.area - b.area),
     orders: [],
+    settlements: [],
+    conversions: [],
   };
-  const ctx: Context = { state, content, map, events: [] };
+  const ctx: Context = { state, content, map, events: [], refugees: [] };
   emit(ctx, { type: 'gameStarted', seed: setup.seed, players: setup.players.map((p) => p.id) });
   emit(ctx, { type: 'turnStarted', turn: 1 });
   emit(ctx, { type: 'phaseStarted', phase: 'resources' });
@@ -97,7 +118,7 @@ export function applyCommand(state: GameState, command: Command, content: Conten
   const problem = handler.validate({ state, map }, command);
   if (problem) return { ok: false, reason: problem };
 
-  const ctx: Context = { state: clone(state), content, map, events: [] };
+  const ctx: Context = { state: clone(state), content, map, events: [], refugees: [] };
   handler.execute(ctx, command);
   return { ok: true, state: ctx.state, events: ctx.events };
 }

@@ -1,5 +1,5 @@
 import { emit } from './context';
-import type { AreaId } from './map/types';
+import type { AreaId, GameMap } from './map/types';
 import type { Context, GameState, MoveOrder, PlayerId, Stack } from './types';
 
 // Loose tokens: movement, growth, and surplus removal (design doc §4).
@@ -8,6 +8,11 @@ export const STARTING_TOKEN_CAP = 55;
 
 export function tokensAt(state: GameState, area: AreaId, player: PlayerId): number {
   return state.stacks.find((s) => s.area === area && s.player === player)?.count ?? 0;
+}
+
+// A settled area holds no loose tokens (design doc §5), so its limit for them is 0.
+export function looseLimit(state: GameState, map: GameMap, area: AreaId): number {
+  return state.settlements.some((s) => s.area === area) ? 0 : map.areas[area]!.limit;
 }
 
 export function looseTokens(state: GameState, player: PlayerId): number {
@@ -49,7 +54,7 @@ function compare(a: string, b: string): number {
 }
 
 // Adds `delta` to a player's stack in an area, dropping empty stacks and keeping a stable order.
-function adjust(state: GameState, area: AreaId, player: PlayerId, delta: number): void {
+export function adjust(state: GameState, area: AreaId, player: PlayerId, delta: number): void {
   const stack = state.stacks.find((s) => s.area === area && s.player === player);
   if (stack) stack.count += delta;
   else state.stacks.push({ area, player, count: delta });
@@ -70,7 +75,7 @@ export function resolveMovement(ctx: Context): void {
   state.orders = [];
 }
 
-function areaTotals(state: GameState): Map<AreaId, number> {
+export function areaTotals(state: GameState): Map<AreaId, number> {
   const totals = new Map<AreaId, number>();
   for (const s of state.stacks) totals.set(s.area, (totals.get(s.area) ?? 0) + s.count);
   return totals;
@@ -85,7 +90,7 @@ export function resolveGrowth(ctx: Context): void {
   const room = new Map(state.players.map((p) => [p.id, p.tokenCap - looseTokens(state, p.id)]));
   const grown = new Map<PlayerId, number>();
   for (const s of [...state.stacks]) {
-    const add = Math.min(s.count >= 2 ? 2 : 1, map.areas[s.area]!.limit - totals.get(s.area)!, room.get(s.player)!);
+    const add = Math.min(s.count >= 2 ? 2 : 1, looseLimit(state, map, s.area) - totals.get(s.area)!, room.get(s.player)!);
     if (add <= 0) continue;
     totals.set(s.area, totals.get(s.area)! + add);
     room.set(s.player, room.get(s.player)! - add);
@@ -98,8 +103,14 @@ export function resolveGrowth(ctx: Context): void {
   }
 }
 
+function refugeesAt(ctx: Context, area: AreaId, player: PlayerId): number {
+  return ctx.refugees.find((r) => r.area === area && r.player === player)?.count ?? 0;
+}
+
 // Resolution step 9: tokens over an area's limit are removed. Areas shared by several
-// civilizations are left to conflict (§11), which runs earlier in resolution.
+// civilizations are left to conflict (§11), which runs earlier in resolution. Then a civilization
+// over its token cap loses the excess from its fullest areas. Refugees placed this turn are exempt
+// from both until the next turn (§5).
 export function resolveSurplus(ctx: Context): void {
   const { state, map } = ctx;
   const byArea = new Map<AreaId, Stack[]>();
@@ -107,9 +118,23 @@ export function resolveSurplus(ctx: Context): void {
   for (const [area, stacks] of byArea) {
     const [only] = stacks;
     if (stacks.length !== 1 || !only) continue;
-    const over = only.count - map.areas[area]!.limit;
+    const over = only.count - refugeesAt(ctx, area, only.player) - looseLimit(state, map, area);
     if (over <= 0) continue;
     adjust(state, area, only.player, -over);
     emit(ctx, { type: 'surplusRemoved', player: only.player, area, count: over });
+  }
+  for (const p of state.players) {
+    const exempt = ctx.refugees.reduce((sum, r) => (r.player === p.id ? sum + r.count : sum), 0);
+    let over = looseTokens(state, p.id) - exempt - p.tokenCap;
+    if (over <= 0) continue;
+    emit(ctx, { type: 'overCapRemoved', player: p.id, count: over });
+    while (over > 0) {
+      const removable = (s: Stack) => s.count - refugeesAt(ctx, s.area, p.id);
+      const fullest = state.stacks
+        .filter((s) => s.player === p.id && removable(s) > 0)
+        .sort((a, b) => removable(b) - removable(a) || a.area - b.area)[0]!;
+      adjust(state, fullest.area, p.id, -1);
+      over -= 1;
+    }
   }
 }

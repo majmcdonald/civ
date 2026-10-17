@@ -9,3 +9,19 @@ export * from './types';
 export * from './map';
 export { mapFor, mapOptions } from './world';
 export { looseTokens, STARTING_TOKEN_CAP, tokensAt } from './population';
+export {
+  assignSupport,
+  conversionCost,
+  NAME_MAX_LENGTH,
+  nextTier,
+  previewConversions,
+  projectTurn,
+  supportSummary,
+  settlementAt,
+  tierRules,
+  TIERS,
+  tokensInReach,
+  type ConversionPreview,
+  type SupportSummary,
+  type TierRules,
+} from './settlements';

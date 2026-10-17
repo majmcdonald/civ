@@ -209,6 +209,21 @@
   cursor: pointer;
 }
 
+.game-undo-moves {
+  padding: 0.4rem 1rem;
+  background: #f4fbef;
+  color: #154a1c;
+  border: 1px solid #2f8f3a;
+  box-shadow: 0 4px 14px rgba(10, 6, 2, 0.35);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.game-undo-moves:hover {
+  background: #dcefd2;
+}
+
 .game-end-phase:hover {
   background: #a3381f;
 }
@@ -379,6 +394,23 @@
 .civ-note {
   margin: 0.6rem 0 0;
   font-style: italic;
+  color: var(--ink-soft);
+}
+
+.civ-warnings {
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.civ-planned {
+  font-size: 0.75em;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--ink-soft);
 }
 
@@ -742,6 +774,96 @@
 .game-plan span {
   font-size: 0.85rem;
   color: var(--ink-soft);
+}
+
+.game-plan button {
+  pointer-events: auto;
+  font: inherit;
+  cursor: pointer;
+}
+
+.game-plan-convert {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  margin-top: 0.3rem;
+}
+
+.game-plan-convert button {
+  padding: 0.2rem 0.9rem;
+  background: #2f8f3a;
+  color: #f4fbef;
+  border: 1px solid #154a1c;
+}
+
+.game-plan-convert button:hover {
+  background: #3aa847;
+}
+
+.game-plan-convert em {
+  font-style: normal;
+  font-size: 0.85rem;
+  color: #a3301c;
+}
+
+.game-plan-locked {
+  margin-top: 0.3rem;
+  font-style: italic;
+}
+
+.game-plan-list {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0.3rem 0 0;
+  border-top: 1px solid rgba(47, 143, 58, 0.35);
+  font-size: 0.85rem;
+}
+
+.game-plan-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.game-plan-list li.warn .game-plan-link {
+  color: #a3301c;
+}
+
+.game-plan-link,
+.game-plan-cancel {
+  background: none;
+  border: none;
+  padding: 0 0.2rem;
+  color: #154a1c;
+}
+
+.game-plan-link:hover {
+  text-decoration: underline;
+}
+
+.game-plan-cancel {
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+
+.game-plan-cancel:hover {
+  color: #a3301c;
+}
+
+.game-report {
+  position: absolute;
+  left: 50%;
+  top: 1rem;
+  transform: translateX(-50%);
+  padding: 0.45rem 1.1rem;
+  background: #eef5e6;
+  border: 1px solid #2f8f3a;
+  color: #154a1c;
+  box-shadow: 0 4px 14px rgba(10, 6, 2, 0.4);
+  text-align: center;
+  pointer-events: none;
 }
 
 .game-notice {

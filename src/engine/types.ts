@@ -29,7 +29,12 @@ export interface GameSetup {
   players: PlayerSetup[];
   finalEra: EraId;
   map: MapSetup;
+  // Settlement tiers every civilization starts with; villages only by default (design doc §5).
+  // Advances unlock the rest once they exist.
+  unlockedTiers?: SettlementTier[];
 }
+
+export type SettlementTier = 'village' | 'town' | 'city' | 'metropolis';
 
 // A player's loose tokens in one area (design doc §4).
 export interface Stack {
@@ -45,6 +50,22 @@ export interface PlayerState {
   endedPhase: boolean;
   // Most loose tokens the civilization may have (design doc §4).
   tokenCap: number;
+  // Settlement tiers the civilization can build (design doc §5).
+  tiers: SettlementTier[];
+}
+
+// One settlement per area (design doc §5).
+export interface Settlement {
+  area: AreaId;
+  player: PlayerId;
+  tier: SettlementTier;
+  name?: string;
+}
+
+// A founding (no settlement in the area) or an upgrade to the next tier, ordered in allocation.
+export interface ConversionOrder {
+  player: PlayerId;
+  area: AreaId;
 }
 
 // Tokens ordered in allocation to move from one area to an adjacent one; resolved together.
@@ -65,12 +86,24 @@ export interface GameState {
   players: PlayerState[];
   stacks: Stack[];
   orders: MoveOrder[];
+  settlements: Settlement[];
+  conversions: ConversionOrder[];
 }
 
 export type Command =
   | { type: 'endPhase'; player: PlayerId }
   // Sets how many tokens move from `from` to `to` this turn; 0 cancels the order.
-  | { type: 'orderMove'; player: PlayerId; from: AreaId; to: AreaId; count: number };
+  | { type: 'orderMove'; player: PlayerId; from: AreaId; to: AreaId; count: number }
+  // Orders (or with `ordered: false`, cancels) founding a village or upgrading the settlement here.
+  | { type: 'orderConversion'; player: PlayerId; area: AreaId; ordered: boolean }
+  // Names a settlement; an empty name clears it.
+  | { type: 'nameSettlement'; player: PlayerId; area: AreaId; name: string };
+
+// Tokens taken from one area by a conversion.
+export interface TokenSource {
+  area: AreaId;
+  count: number;
+}
 
 export type GameEvent =
   | { type: 'gameStarted'; seed: number; players: PlayerId[] }
@@ -81,7 +114,12 @@ export type GameEvent =
   | { type: 'randomDraw'; label: string; value: number }
   | { type: 'tokensMoved'; player: PlayerId; from: AreaId; to: AreaId; count: number }
   | { type: 'tokensGrew'; player: PlayerId; count: number }
-  | { type: 'surplusRemoved'; player: PlayerId; area: AreaId; count: number };
+  | { type: 'surplusRemoved'; player: PlayerId; area: AreaId; count: number }
+  | { type: 'overCapRemoved'; player: PlayerId; count: number }
+  | { type: 'settlementBuilt'; player: PlayerId; area: AreaId; tier: SettlementTier; from: TokenSource[] }
+  | { type: 'conversionFailed'; player: PlayerId; area: AreaId; reason: string }
+  | { type: 'settlementDropped'; player: PlayerId; area: AreaId; tier: SettlementTier | null; refugees: number; lost: number }
+  | { type: 'urbanGrowth'; player: PlayerId; from: AreaId; to: AreaId; count: number };
 
 export interface StampedEvent {
   turn: number;
@@ -95,6 +133,9 @@ export interface Context {
   content: Content;
   map: GameMap;
   events: StampedEvent[];
+  // Refugees placed during this resolution; they ignore area limits and the token cap until the
+  // next turn's surplus removal (design doc §5).
+  refugees: Stack[];
 }
 
 export type ApplyResult =

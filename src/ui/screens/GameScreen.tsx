@@ -1,8 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { content as contentBundle } from '../../content';
-import { hooks, mapFor, tokensAt, loadContent, startSession, submit, type AreaId, type Phase, type PlayerSetup } from '../../engine';
-import { CIV_COLORS, IsoMap, type ClickButton, type IsoMapHandle } from '../art/IsoMap';
-import type { MapPieces } from '../art/pieces';
+import {
+  conversionCost,
+  hooks,
+  loadContent,
+  mapFor,
+  nextTier,
+  previewConversions,
+  settlementAt,
+  startSession,
+  submit,
+  supportSummary,
+  tierRules,
+  tokensAt,
+  tokensInReach,
+  type AreaId,
+  type ConversionPreview,
+  type GameEvent,
+  type Phase,
+  type PlayerSetup,
+  type SettlementTier as Tier,
+} from '../../engine';
+import { CIV_COLORS, IsoMap, type ClickButton, type IsoMapHandle, type PlannedSettlement } from '../art/IsoMap';
+import type { MapPieces, SettlementTier } from '../art/pieces';
 import { CivilizationSheet } from './CivilizationSheet';
 import { RivalsSheet } from './RivalsSheet';
 import './GameScreen.css';
@@ -41,7 +61,142 @@ function newSession() {
   const players: PlayerSetup[] = Array.from({ length: CIVILIZATIONS }, (_, i) =>
     i === HUMAN ? { id: 'p1', name: 'Your people', kind: 'human' } : { id: `ai${i}`, name: `Rival ${i}`, kind: 'ai' },
   );
-  return startSession({ seed: 1, players, finalEra: 'modern', map: { type: 'inlandSea', room: 'standard' } }, loaded.content);
+  // Towns are open from the start until the advance that unlocks them exists (design doc §5).
+  return startSession(
+    { seed: 1, players, finalEra: 'modern', map: { type: 'inlandSea', room: 'standard' }, unlockedTiers: ['village', 'town'] },
+    loaded.content,
+  );
+}
+
+// The map has pieces for villages and towns only; larger tiers are not unlocked by anything yet.
+function pieceTier(tier: Tier): SettlementTier {
+  return tier === 'village' ? 'village' : 'town';
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+// Warnings for a planned conversion, worst first; empty when it will go through cleanly.
+function conversionWarnings(p: ConversionPreview): string[] {
+  if (!p.built) return [p.reason ?? 'Will not be built'];
+  const warnings: string[] = [];
+  const name = tierRules(p.tier).name.toLowerCase();
+  if (p.support < p.needed) {
+    const fate = p.tier === 'village' ? 'the village will dissolve' : `the ${name} will drop a tier`;
+    warnings.push(`Only ${p.support} of ${p.needed} support after ${p.tier === 'village' ? 'founding' : 'upgrading'} — ${fate}`);
+  }
+  if (p.leftover > 0) warnings.push(`${plural(p.leftover, 'token')} left in the area will be removed`);
+  return warnings;
+}
+
+// One line per notable result of the turn for the player, for the notice after resolution.
+function turnReport(events: GameEvent[], me: string): string[] {
+  const lines: string[] = [];
+  for (const e of events) {
+    if (!('player' in e) || e.player !== me) continue;
+    if (e.type === 'settlementBuilt') lines.push(`${tierRules(e.tier).name} ${e.tier === 'village' ? 'founded' : 'built'}`);
+    if (e.type === 'conversionFailed') lines.push(`Not built: ${e.reason}`);
+    if (e.type === 'settlementDropped') lines.push(e.tier ? `A settlement dropped to ${e.tier} for lack of support` : 'A village dissolved for lack of support');
+  }
+  return lines;
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+interface ConversionOption {
+  tier: Tier;
+  upgrade: boolean;
+  cost: number;
+  unlocked: boolean;
+  ordered: ConversionPreview | null;
+}
+
+function usesText(p: ConversionPreview): string {
+  const here = p.from.filter((f) => f.area === p.area).reduce((sum, f) => sum + f.count, 0);
+  const near = p.from.reduce((sum, f) => sum + f.count, 0) - here;
+  const parts = [here > 0 ? `${here} here` : '', near > 0 ? `${near} from neighbours` : ''].filter(Boolean);
+  return `Uses ${parts.join(', ')} · support ${p.support} of ${p.needed}`;
+}
+
+interface PlanPanelProps {
+  source: AreaId | null;
+  state: { tokens: number; left: number };
+  conversion: ConversionOption | null;
+  previews: ConversionPreview[];
+  areaName: (area: AreaId) => string;
+  onConvert: (area: AreaId, ordered: boolean) => void;
+  onSelect: (area: AreaId) => void;
+}
+
+// Allocation planning for the selected area (moves, founding, upgrading) and the turn's planned
+// settlements, each with what will happen if the turn resolved now.
+function PlanPanel({ source, state, conversion, previews, areaName, onConvert, onSelect }: PlanPanelProps) {
+  const others = previews.filter((p) => p.area !== source);
+  return (
+    <div className="game-plan" aria-live="polite">
+      {source !== null && (
+        <>
+          {state.tokens > 0 && (
+            <>
+              <strong>
+                {state.left} of {plural(state.tokens, 'token')} left to move
+              </strong>
+              <span>Click a neighbour to send one · right-click to take one back · Esc when done</span>
+            </>
+          )}
+          {conversion && <ConversionRow area={source} option={conversion} onConvert={onConvert} />}
+        </>
+      )}
+      {others.length > 0 && (
+        <ul className="game-plan-list">
+          {others.map((p) => {
+            const warnings = conversionWarnings(p);
+            return (
+              <li key={p.area} className={warnings.length > 0 ? 'warn' : ''} title={warnings.join('\n') || usesText(p)}>
+                <button type="button" className="game-plan-link" onClick={() => onSelect(p.area)}>
+                  {tierRules(p.tier).name} planned · {areaName(p.area)}
+                  {warnings.length > 0 && ' ⚠'}
+                </button>
+                <button type="button" className="game-plan-cancel" title="Cancel" onClick={() => onConvert(p.area, false)}>
+                  ×
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ConversionRow({ area, option, onConvert }: { area: AreaId; option: ConversionOption; onConvert: (area: AreaId, ordered: boolean) => void }) {
+  const name = tierRules(option.tier).name;
+  if (option.ordered) {
+    const warnings = conversionWarnings(option.ordered);
+    return (
+      <div className="game-plan-convert">
+        <strong>{name} planned</strong>
+        {warnings.length > 0 ? warnings.map((w) => <em key={w}>{w}</em>) : <span>{usesText(option.ordered)}</span>}
+        <button type="button" onClick={() => onConvert(area, false)}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+  if (!option.unlocked) return <span className="game-plan-locked">{name}s are not unlocked yet</span>;
+  return (
+    <div className="game-plan-convert">
+      <button type="button" onClick={() => onConvert(area, true)}>
+        {option.upgrade ? `Upgrade to ${name.toLowerCase()}` : `Found ${name.toLowerCase()}`}
+      </button>
+      <span>
+        {option.cost} tokens in or next to this area, plus {tierRules(option.tier).support} support
+      </span>
+    </div>
+  );
 }
 
 export function GameScreen({ onExit }: { onExit: () => void }) {
@@ -53,15 +208,17 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
   });
   const [hovered, setHovered] = useState<AreaId | null>(null);
   const [showCounts, setShowCounts] = useState(true);
-  // Settlement names by area. Held here until the engine tracks settlements (design doc §5).
-  const [names, setNames] = useState<ReadonlyMap<AreaId, string>>(new Map());
   const mapHandle = useRef<IsoMapHandle>(null);
   // Movement planning: the area tokens are being sent from, and the last rejected order.
   const [selected, setSelected] = useState<AreaId | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // What happened to the player's settlements in the last resolution.
+  const [report, setReport] = useState<string[]>([]);
 
   // Open on the player's starting area.
   useEffect(() => {
+    while (session.state.phase === 'trade') for (const player of session.state.players) submit(session, { type: 'endPhase', player: player.id });
+    setVersion((v) => v + 1);
     mapHandle.current?.focus(mapFor(session.setup).starts[HUMAN]!);
   }, [session]);
 
@@ -78,31 +235,30 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
 
   const { state } = session;
   const map = useMemo(() => mapFor(session.setup), [session]);
-  // Settlements and roads arrive with later Phase 3 steps.
+  // Roads arrive with transport advances.
   const pieces = useMemo<MapPieces>(() => {
     const civ = new Map(state.players.map((p, i) => [p.id, i]));
-    return { stacks: state.stacks.map((s) => ({ area: s.area, civ: civ.get(s.player)!, count: s.count })), settlements: [], roads: [] };
+    return {
+      stacks: state.stacks.map((s) => ({ area: s.area, civ: civ.get(s.player)!, count: s.count })),
+      settlements: state.settlements.map((s) => ({ area: s.area, civ: civ.get(s.player)!, tier: pieceTier(s.tier), ...(s.name ? { name: s.name } : {}) })),
+      roads: [],
+    };
   }, [state]);
+  const names = useMemo(() => new Map(state.settlements.flatMap((s) => (s.name ? [[s.area, s.name] as const] : []))), [state]);
 
   const era = [...session.content.eras].sort((a, b) => a.order - b.order)[0]!;
   const tokens = pieces.stacks.filter((s) => s.civ === HUMAN).reduce((sum, s) => sum + s.count, 0);
   const mine = pieces.settlements.filter((s) => s.civ === HUMAN);
   const towns = mine.filter((s) => s.tier === 'town').length;
   const villages = mine.length - towns;
-  const namedPieces = useMemo(
-    () => ({ ...pieces, settlements: pieces.settlements.map((s) => (names.has(s.area) ? { ...s, name: names.get(s.area)! } : s)) }),
-    [pieces, names],
-  );
   const hoveredArea = hovered === null ? null : map.areas[hovered];
   const hoveredSettlement = hovered === null ? undefined : pieces.settlements.find((s) => s.area === hovered);
 
-  const rename = (area: AreaId, name: string) =>
-    setNames((current) => {
-      const next = new Map(current);
-      if (name) next.set(area, name);
-      else next.delete(area);
-      return next;
-    });
+  const rename = (area: AreaId, name: string) => {
+    const result = submit(session, { type: 'nameSettlement', player: state.players[HUMAN]!.id, area, name });
+    if (!result.ok) setNotice(result.reason);
+    setVersion((v) => v + 1);
+  };
 
   const showOnMap = (area: AreaId) => {
     setScreen('map');
@@ -116,9 +272,23 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  // The player ends the phase; AI players (minimal until Phase 7) end it at once.
+  useEffect(() => {
+    if (report.length === 0) return;
+    const timer = window.setTimeout(() => setReport([]), 6000);
+    return () => window.clearTimeout(timer);
+  }, [report]);
+
+  // The player ends the phase; AI players (minimal until Phase 7) end it at once. The trade phase
+  // is skipped while no one can trade (trade discovery, design doc §7).
   const endPhase = () => {
-    for (const player of state.players) submit(session, { type: 'endPhase', player: player.id });
+    const events: GameEvent[] = [];
+    do {
+      for (const player of session.state.players) {
+        const result = submit(session, { type: 'endPhase', player: player.id });
+        if (result.ok) events.push(...result.events.map((e) => e.event));
+      }
+    } while (session.state.phase === 'trade');
+    setReport(turnReport(events, me));
     setSelected(null);
     setVersion((v) => v + 1);
   };
@@ -133,12 +303,44 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
     session.state.orders.find((o) => o.player === me && o.from === from && o.to === to)?.count ?? 0;
   const left = (from: AreaId) => tokensAt(state, from, me) - myOrders.filter((o) => o.from === from).reduce((sum, o) => sum + o.count, 0);
   const source = planning ? selected : null;
-  const targets = source === null ? [] : map.areas[source]!.neighbors.filter((n) => map.areas[n]!.kind === 'land');
+  const targets = source === null || tokensAt(state, source, me) === 0 ? [] : map.areas[source]!.neighbors.filter((n) => map.areas[n]!.kind === 'land');
+
+  // Settlement conversions (design doc §5): previewed with this turn's planned moves.
+  const previews = useMemo(() => (planning ? previewConversions(state, map, session.content, me) : []), [planning, state, map, session, me]);
+  const plans: PlannedSettlement[] = previews.map((p) => ({ area: p.area, civ: HUMAN, tier: pieceTier(p.tier), warn: conversionWarnings(p).length > 0 }));
+  // An area can be selected to move from, to upgrade its settlement, or to found one with tokens in reach.
+  const selectable = (area: AreaId) => {
+    if (map.areas[area]!.kind !== 'land') return false;
+    const here = settlementAt(state, area);
+    if (here) return here.player === me;
+    return tokensInReach(state, map, me, area) > 0;
+  };
+  const convert = (area: AreaId, ordered: boolean) => {
+    const result = submit(session, { type: 'orderConversion', player: me, area, ordered });
+    if (!result.ok) setNotice(result.reason);
+    setVersion((v) => v + 1);
+  };
+
+  const undoMoves = () => {
+    for (const o of myOrders) submit(session, { type: 'orderMove', player: me, from: o.from, to: o.to, count: 0 });
+    setVersion((v) => v + 1);
+  };
 
   const order = (from: AreaId, to: AreaId, count: number) => {
     const result = submit(session, { type: 'orderMove', player: me, from, to, count });
     if (!result.ok) setNotice(result.reason);
     setVersion((v) => v + 1);
+  };
+
+  // What the panel offers for the selected area: found, upgrade, a locked tier, or nothing.
+  const conversionOption = (area: AreaId): ConversionOption | null => {
+    const here = settlementAt(state, area);
+    if (here && here.player !== me) return null;
+    const tier = nextTier(state, area);
+    if (!tier) return null;
+    const ordered = previews.find((p) => p.area === area) ?? null;
+    const unlocked = state.players[HUMAN]!.tiers.includes(tier.id);
+    return { tier: tier.id, upgrade: Boolean(here), cost: conversionCost(tier.id), unlocked, ordered };
   };
 
   const onAreaClick = (area: AreaId, button: ClickButton) => {
@@ -149,12 +351,12 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
       return;
     }
     if (button !== 'primary') return;
-    if (tokensAt(state, area, me) === 0 || area === source) {
+    if (area === source || !selectable(area)) {
       setSelected(null);
       return;
     }
     if (!planning) {
-      setNotice('Moves are ordered in the Allocation phase');
+      setNotice('Moves and settlements are ordered in the Allocation phase');
       return;
     }
     setSelected(area);
@@ -209,7 +411,7 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
         <IsoMap
           handle={mapHandle}
           map={map}
-          pieces={namedPieces}
+          pieces={pieces}
           showStarts={false}
           showCounts={showCounts}
           hovered={hovered}
@@ -218,6 +420,8 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
           moves={myOrders}
           onMoveClick={onMoveClick}
           selection={source === null ? null : { area: source, targets }}
+          plans={plans}
+          onPlanClick={(area) => planning && convert(area, false)}
         />
 
         {screen === 'map' ? (
@@ -226,15 +430,28 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
               <input type="checkbox" checked={showCounts} onChange={(e) => setShowCounts(e.target.checked)} />
               Tokens / limits
             </label>
-            {source !== null && (
-              <div className="game-plan" aria-live="polite">
-                <strong>
-                  {left(source)} of {tokensAt(state, source, me)} token{tokensAt(state, source, me) === 1 ? '' : 's'} left to move
-                </strong>
-                <span>Click a neighbour to send one · right-click to take one back · Esc when done</span>
-              </div>
+            {planning && (source !== null || previews.length > 0) && (
+              <PlanPanel
+                source={source}
+                state={{ tokens: source === null ? 0 : tokensAt(state, source, me), left: source === null ? 0 : left(source) }}
+                conversion={source === null ? null : conversionOption(source)}
+                previews={previews}
+                areaName={(area) => names.get(area) ?? capitalize(map.areas[area]!.terrain!)}
+                onConvert={convert}
+                onSelect={(area) => {
+                  setSelected(area);
+                  mapHandle.current?.focus(area);
+                }}
+              />
             )}
             {notice && <div className="game-notice">{notice}</div>}
+            {report.length > 0 && (
+              <div className="game-report" aria-live="polite">
+                {report.map((line, i) => (
+                  <div key={i}>{line}</div>
+                ))}
+              </div>
+            )}
             <div className="game-hover" aria-live="polite">
               {hoveredArea ? (
                 hoveredArea.kind === 'sea' ? (
@@ -248,7 +465,7 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
                   </>
                 )
               ) : (
-                <span className="game-hint">{planning ? 'Click one of your areas to plan moves' : 'Drag to pan · scroll to zoom'}</span>
+                <span className="game-hint">{planning ? 'Click one of your areas to plan moves or settlements' : 'Drag to pan · scroll to zoom'}</span>
               )}
             </div>
             <div className="game-turn-panel">
@@ -259,6 +476,11 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
                   </li>
                 ))}
               </ol>
+              {planning && myOrders.length > 0 && (
+                <button type="button" className="game-undo-moves" onClick={undoMoves}>
+                  Undo all moves ({myOrders.reduce((sum, o) => sum + o.count, 0)})
+                </button>
+              )}
               <button type="button" className="game-end-phase" onClick={endPhase}>
                 End {PHASE_NAMES[state.phase]} phase
               </button>
@@ -278,6 +500,8 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
                   turn={state.turn}
                   cap={STARTING_TOKEN_CAP}
                   names={names}
+                  support={supportSummary(state, map, session.content, me)}
+                  planned={myOrders.length > 0 || state.conversions.some((c) => c.player === me)}
                   onRename={rename}
                   onShow={showOnMap}
                 />

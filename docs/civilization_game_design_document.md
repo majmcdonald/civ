@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.7  
+**Version:** 0.8  
 **Date:** October 16, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -119,7 +119,7 @@ Four phases. All players act simultaneously within each phase.
 - Transport discoveries (roads, railroads, flight, and similar) extend range.
 - **River and sea travel require discovering ships.**
 - **Orders and resolution.** Moves are ordered in allocation and all resolve at once in resolution step 1, from where tokens stood at the end of allocation, so a token moves at most once per turn. Tokens may move into an area held by another civilization; whether that leads to conflict is decided in step 2 (§11).
-- **Ordering moves (interface).** Click one of your areas; its land neighbors get a blue outline. Each click on a neighbor sends one more token, and right-click takes one back. Every planned move shows on the map as a **green arrow** with its token count. Clicking an arrow reopens planning from its source area to add or remove tokens; right-clicking it takes one back. Esc finishes planning.
+- **Ordering moves (interface).** Click one of your areas; it gets a double-width blue border and its land neighbors a normal blue outline. Each click on a neighbor sends one more token, and right-click takes one back. Every planned move shows on the map as a **green arrow** carrying its token count ("+2"), and the source area's badge subtracts the tokens leaving (e.g., "4−3/4": 4 tokens, 3 leaving, limit 4). Clicking an arrow reopens planning from its source area to add or remove tokens; right-clicking it takes one back. Esc finishes planning. **Undo all moves** clears every planned move for the turn.
 
 ### Growth and surplus details
 
@@ -144,6 +144,8 @@ Settlements grow by absorbing tokens, extending the original's "6 tokens → cit
 - The tokens merged may be in the **same or adjacent areas**; the settlement stays where it is.
 - **The area limit does not block construction**, as in the original: tokens gathered for a conversion may exceed the limit, because conversion resolves before surplus removal.
 - Conversion is ordered in allocation and resolves after conflict.
+- **Which tokens are used.** The player picks only the settlement's area; the engine picks the tokens at resolution, from positions after this turn's movement. It takes the area's own tokens first, then tokens from adjacent areas holding the most of the civilization's tokens (lower area numbers break ties). If too few are in reach, the order fails and the player is told why. The original needed all 6 tokens in the city's own area.
+- **Ordering conversions (interface).** Click one of your areas and choose "Found village" (or "Upgrade" on a settlement). A planned conversion shows on the map as a ghost (translucent) settlement piece, and is listed in the planning panel, which also shows any warning. Clicking it, or the cancel control in the panel, undoes the order at any time before resolution.
 - Starting numbers; to be tuned.
 
 ### Names
@@ -170,7 +172,9 @@ Follows the original's pattern (a city needed 2 tokens of support): tokens consu
 | Metropolis | 6 | 36 |
 
 - Supporting tokens must be **adjacent or within movement range**, in unsettled areas (settled areas hold no loose tokens). Each token supports one settlement.
-- If support fails, the settlement **drops a tier** (see Tier drop). Settlements do not support each other, so there is no cascade between tiers; collapse spreads through the civ-wide meter (§10).
+- **New settlements get no grace turn**, as in the original: support is checked in step 6 of the turn a settlement is founded or upgraded. When the player plans a conversion, the planning panel shows the support left after the engine takes its tokens (counting this turn's planned moves) and warns when the settlement will drop, e.g., "Only 1 of 2 support after founding — the village will dissolve."
+- Support tokens are assigned by the engine: larger tiers claim first, then lower area numbers.
+- If support fails, the settlement **drops a tier** (see Tier drop). Support is checked every turn and a settlement drops at most one tier per check, so one still short next turn drops again. Settlements do not support each other, so there is no cascade between tiers; collapse spreads through the civ-wide meter (§10).
 - A variant (tokens plus one lower-tier settlement within range) will be compared in the Phase 0 simulation.
 
 ### Tier drop
@@ -179,7 +183,9 @@ One procedure applies whenever a settlement drops a tier: instability collapse (
 
 - The settlement loses **one tier**. A village **dissolves**, and its area becomes unsettled.
 - The freed tokens equal the difference in token value: town → village 6, city → town 8, metropolis → city 10, village dissolved 6.
-- Freed tokens become **refugees**: they are placed in adjacent areas, possibly in other civilizations' territory, and **ignore area limits for one turn**. During that turn they can move on, or be used for conversions or support. Surplus removal applies to them at the end of the following turn.
+- Freed tokens become **refugees** and **ignore area limits for one turn**.
+- **Where refugees go.** Refugees fill the settlement's own area (now unsettled) up to its limit first, as in the original, where a reduced city was replaced by tokens in its area. The rest are dealt one at a time to adjacent areas that are the civilization's own or empty, those with the most room first (lower area numbers break ties). They enter other civilizations' areas only when no own or empty adjacent area exists.
+- **Refugees and the token cap.** Like area limits, the cap ignores refugees for their grace turn. At the end of the following turn, a civilization still over its cap loses the excess, taken from its fullest areas first (lower area numbers break ties). During that turn they can move on, or be used for conversions or support. Surplus removal applies to them at the end of the following turn.
 - Refugees carry knowledge into the areas and civilizations they reach (§8).
 - **Refugees in foreign territory join the host civilization** and become its tokens, adding discovery progress toward the origin civilization's advances. The host may **reject** them. Rejected refugees stay the origin's tokens, do not trigger conflict during their refugee turn, and must move on, be used by their own civilization, or be removed as surplus.
 
@@ -194,7 +200,7 @@ Settlements **generate tokens into adjacent areas** with spare capacity: cities 
 | City | 2 |
 | Metropolis | 3 |
 
-- Urban growth goes to adjacent areas with room; if none has room, it is lost.
+- Urban growth goes to adjacent unsettled areas with room that are the civilization's own or empty, most room first (lower area numbers break ties), within the token cap. If none has room, it is lost. It follows area growth in resolution step 8.
 - Its main role is **recovery**: area growth (§4) fills open land faster, so urban growth matters most after losses (conflict, calamities, collapse) or when discoveries raise area limits. The Phase 0 simulation showed it has little effect while land is open.
 
 ### Tier abilities (starting ladder)
@@ -523,7 +529,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 - [x] ~~Per-area tier caps~~ — replaced by one settlement per area (v0.3).
 - [ ] Map size per civilization (procedural maps scale land areas by civilization count). Phase 0 used 64 areas per civilization; with limits 1–5, cap 55, and two Stone Age rises, land filled around turn 36.
 - [ ] Which advances unlock towns, cities, and metropolises.
-- [ ] Tier drop details: how the host accepts or rejects refugees under simultaneous turns (standing policy or per-event choice); whether accepted refugees count against the host's cap; whether a ruler can exploit deliberate collapse to transfer tokens; do refugees count against the token cap; how refugees are spread across adjacent areas; can an unsupported settlement drop again on consecutive turns; what capturing a village yields.
+- [ ] Tier drop details: how the host accepts or rejects refugees under simultaneous turns (standing policy or per-event choice); whether accepted refugees count against the host's cap; whether a ruler can exploit deliberate collapse to transfer tokens; what capturing a village yields.
 - [ ] Names for rival civilizations' settlements (generated name lists, or unnamed).
 - [ ] What happens to a settlement's name when it dissolves, is captured, or is refounded.
 - [ ] Support variant: tokens only (current) vs tokens plus one lower-tier settlement in range. Compared in the Phase 0 simulation.
@@ -556,6 +562,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.8 (October 16, 2026):** Conversions: the player picks the area, the engine picks the tokens at resolution (own area first, then the fullest adjacent areas). Planned conversions show on the map as ghost pieces and can be undone until resolution. Arrows carry their count; source badges show tokens leaving ("4−3/4"); Undo all moves clears the turn's moves. New settlements need their support the turn they are built, with a warning when planning; the engine assigns support tokens, larger tiers first. Refugees fill the dropped settlement's own area up to its limit, then own or empty neighbors with the most room; rival areas only as a last resort. Refugees ignore the token cap for their grace turn; any excess left after it is removed from the fullest areas. Urban growth goes to own or empty neighbors with the most room. An unsupported settlement drops one tier per turn.
 - **0.7 (October 16, 2026):** Each civilization starts with one token in its starting area, as in the original. Movement orders resolve simultaneously from end-of-allocation positions; moves are planned by clicking an area, then its neighbors, and show as clickable green arrows. Growth counts from pre-growth tokens with a fixed fill order when a limit or cap runs out; surplus removal covers single-civilization areas, leaving shared ones to conflict.
 - **0.6 (October 16, 2026):** Players can name settlements at founding or from the Civilization overview; unnamed ones show as "Unnamed". Added open questions on rival settlement names and names after dissolution or capture.
 - **0.5 (October 16, 2026):** Civilizations raised to 2–15. Room to expand setup option (crowded, standard, spacious: 0.5×, 1×, 2× land per civilization) replaces map density; a 4× option was tried and dropped as too heavy to draw for now.
