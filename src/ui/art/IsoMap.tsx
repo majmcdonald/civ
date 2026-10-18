@@ -222,17 +222,15 @@ interface IsoMapProps {
   moves?: PlannedMove[];
   onMoveClick?: (from: AreaId, to: AreaId, button: ClickButton) => void;
   selection?: { area: AreaId; targets: AreaId[] } | null;
-  // Planned settlement conversions, drawn as translucent pieces; clicking one calls `onPlanClick`.
+  // Planned settlement conversions, drawn as translucent pieces. Like real pieces, they let clicks
+  // through to the area.
   plans?: PlannedSettlement[];
-  onPlanClick?: (area: AreaId) => void;
 }
 
 export interface PlannedSettlement {
   area: AreaId;
   civ: number;
   tier: SettlementTier;
-  // The conversion would fail, or the settlement would drop at once.
-  warn: boolean;
 }
 
 export type ClickButton = 'primary' | 'secondary';
@@ -299,7 +297,7 @@ export interface View {
   zoom: number;
 }
 
-export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHover, hideTerrainArt = false, handle, showStarts = true, onAreaClick, moves = [], onMoveClick, selection = null, plans = [], onPlanClick }: IsoMapProps) {
+export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHover, hideTerrainArt = false, handle, showStarts = true, onAreaClick, moves = [], onMoveClick, selection = null, plans = [] }: IsoMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const onHoverRef = useRef(onHover);
   onHoverRef.current = onHover;
@@ -309,7 +307,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
     pointerArea.current = id;
     onHoverRef.current(id);
   });
-  const drag = useRef<{ x: number; y: number; view: View; moved: boolean; move: [AreaId, AreaId] | null; plan: AreaId | null } | null>(null);
+  const drag = useRef<{ x: number; y: number; view: View; moved: boolean; move: [AreaId, AreaId] | null } | null>(null);
   const { width: w, height: h } = map;
   const bounds = { minX: -h, maxX: w, minY: 0, maxY: (w + h) / 2 + BOARD_DEPTH };
   const home: View = { cx: (bounds.minX + bounds.maxX) / 2, cy: (bounds.minY + bounds.maxY) / 2, zoom: 1 };
@@ -373,8 +371,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
   const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     const arrow = (event.target as Element).closest('[data-move]')?.getAttribute('data-move');
     const move = arrow ? (arrow.split('-').map(Number) as [AreaId, AreaId]) : null;
-    const plan = (event.target as Element).closest('[data-plan]')?.getAttribute('data-plan');
-    drag.current = { x: event.clientX, y: event.clientY, view, moved: false, move, plan: plan ? Number(plan) : null };
+    drag.current = { x: event.clientX, y: event.clientY, view, moved: false, move };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -391,7 +388,6 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
     if (!d || d.moved || (event.button !== 0 && event.button !== 2)) return;
     const button: ClickButton = event.button === 0 ? 'primary' : 'secondary';
     if (d.move) onMoveClick?.(d.move[0], d.move[1], button);
-    else if (d.plan !== null) onPlanClick?.(d.plan);
     else if (pointerArea.current !== null) onAreaClick?.(pointerArea.current, button);
   };
 
@@ -632,8 +628,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, hovered, onHove
       {plans.map((p) => {
         const [cx, cy] = project(map.areas[p.area]!.center);
         return (
-          <g key={`p${p.area}`} data-plan={p.area} className="iso-plan" transform={`translate(${cx} ${cy})`}>
-            <title>{p.warn ? 'Planned, with a problem: see the planning panel. Click to cancel' : 'Planned: click to cancel'}</title>
+          <g key={`p${p.area}`} data-plan={p.area} transform={`translate(${cx} ${cy})`} pointerEvents="none">
             <g opacity={0.55} transform={`scale(${p.tier === 'town' ? 0.62 : 0.75})`}>
               <use href={`#piece-${p.tier}`} color={CIV_COLORS[p.civ]} />
             </g>

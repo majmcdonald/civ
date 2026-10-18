@@ -25,3 +25,5 @@ export {
   type SupportSummary,
   type TierRules,
 } from './settlements';
+export { previewConflicts, type ConflictEvent } from './conflict';
+export { aiCommands } from './ai';

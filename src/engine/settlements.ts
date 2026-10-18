@@ -1,3 +1,4 @@
+import { resolveConflict } from './conflict';
 import { clone, emit } from './context';
 import type { Content } from './content';
 import type { AreaId, GameMap } from './map/types';
@@ -14,13 +15,17 @@ export interface TierRules {
   value: number;
   support: number;
   urbanGrowth: number;
+  // Tokens one civilization needs in the area to attack the settlement, and the tokens it fights
+  // as (design doc §11).
+  attack: number;
+  defense: number;
 }
 
 export const TIERS: readonly TierRules[] = [
-  { id: 'village', name: 'Village', value: 6, support: 2, urbanGrowth: 0 },
-  { id: 'town', name: 'Town', value: 12, support: 3, urbanGrowth: 1 },
-  { id: 'city', name: 'City', value: 20, support: 4, urbanGrowth: 2 },
-  { id: 'metropolis', name: 'Metropolis', value: 30, support: 6, urbanGrowth: 3 },
+  { id: 'village', name: 'Village', value: 6, support: 2, urbanGrowth: 0, attack: 7, defense: 6 },
+  { id: 'town', name: 'Town', value: 12, support: 3, urbanGrowth: 1, attack: 10, defense: 9 },
+  { id: 'city', name: 'City', value: 20, support: 4, urbanGrowth: 2, attack: 15, defense: 14 },
+  { id: 'metropolis', name: 'Metropolis', value: 30, support: 6, urbanGrowth: 3, attack: 22, defense: 21 },
 ];
 
 export const NAME_MAX_LENGTH = 32;
@@ -155,7 +160,7 @@ export function resolveConversion(ctx: Context): void {
 // Support each settlement receives: loose tokens of its civilization in adjacent unsettled areas,
 // one settlement per token. Larger tiers claim first, then lower area ids (design doc §5). Also
 // returns the tokens left over, by "area:player".
-function allocateSupport(state: GameState, map: GameMap): { support: Map<AreaId, number>; spare: Map<string, number> } {
+export function allocateSupport(state: GameState, map: GameMap): { support: Map<AreaId, number>; spare: Map<string, number> } {
   const spare = new Map(state.stacks.map((s) => [`${s.area}:${s.player}`, s.count]));
   const order = [...state.settlements].sort((a, b) => tierRules(b.tier).value - tierRules(a.tier).value || a.area - b.area);
   const support = new Map<AreaId, number>();
@@ -265,7 +270,7 @@ export function resolveUrbanGrowth(ctx: Context): void {
 }
 
 // What a player's ordered conversions would do if the turn resolved now, with this turn's planned
-// moves: the interface shows it while planning. Conflict and calamities are not predicted.
+// moves: the interface shows it while planning. Calamities are not predicted.
 export interface ConversionPreview {
   area: AreaId;
   tier: SettlementTier;
@@ -278,11 +283,12 @@ export interface ConversionPreview {
   needed: number;
 }
 
-// The state after this turn's movement and conversions, as resolution would leave it before the
-// support check. Conflict and calamities are not predicted.
+// The state after this turn's movement, conflict, and conversions, as resolution would leave it
+// before the support check, from the orders given so far. Calamities are not predicted.
 export function projectTurn(state: GameState, map: GameMap, content: Content): { state: GameState; events: Context['events'] } {
   const ctx: Context = { state: clone(state), content, map, events: [], refugees: [] };
   resolveMovement(ctx);
+  resolveConflict(ctx);
   resolveConversion(ctx);
   return { state: ctx.state, events: ctx.events };
 }

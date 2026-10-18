@@ -125,8 +125,9 @@ describe('founding', () => {
   });
 
   it('fails when another civilization has tokens in the area', () => {
-    const { game, area } = scene();
-    place(game, area, 'p1', 6);
+    const { game, area, b } = scene();
+    place(game, area, 'p1', 1);
+    place(game, b, 'p1', 5);
     place(game, area, 'ai1', 1);
     const events = found(game, area);
     expect(eventsOfType(events, 'conversionFailed')[0]!.reason).toMatch(/Another civilization's tokens/);

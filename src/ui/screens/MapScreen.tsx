@@ -17,13 +17,13 @@ import { NO_PIECES } from '../art/pieces';
 import { samplePieces } from './samplePieces';
 import './MapScreen.css';
 
-const TYPE_NAMES: Record<MapType, string> = {
+export const TYPE_NAMES: Record<MapType, string> = {
   inlandSea: 'Inland sea',
   continents: 'Continents',
   singleLandmass: 'Single landmass',
 };
 
-const ROOM_NAMES: Record<RoomToExpand, string> = {
+export const ROOM_NAMES: Record<RoomToExpand, string> = {
   crowded: 'Crowded',
   standard: 'Standard',
   spacious: 'Spacious',

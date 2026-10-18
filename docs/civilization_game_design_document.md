@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.8  
+**Version:** 0.9  
 **Date:** October 16, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -119,7 +119,7 @@ Four phases. All players act simultaneously within each phase.
 - Transport discoveries (roads, railroads, flight, and similar) extend range.
 - **River and sea travel require discovering ships.**
 - **Orders and resolution.** Moves are ordered in allocation and all resolve at once in resolution step 1, from where tokens stood at the end of allocation, so a token moves at most once per turn. Tokens may move into an area held by another civilization; whether that leads to conflict is decided in step 2 (§11).
-- **Ordering moves (interface).** Click one of your areas; it gets a double-width blue border and its land neighbors a normal blue outline. Each click on a neighbor sends one more token, and right-click takes one back. Every planned move shows on the map as a **green arrow** carrying its token count ("+2"), and the source area's badge subtracts the tokens leaving (e.g., "4−3/4": 4 tokens, 3 leaving, limit 4). Clicking an arrow reopens planning from its source area to add or remove tokens; right-clicking it takes one back. Esc finishes planning. **Undo all moves** clears every planned move for the turn.
+- **Ordering moves (interface).** Click one of your areas; it gets a double-width blue border and its land neighbors a normal blue outline. Each click on a neighbor sends one more token, and right-click takes one back. Every planned move shows on the map as a **green arrow** carrying its token count ("+2"), and the source area's badge subtracts the tokens leaving (e.g., "4−3/4": 4 tokens, 3 leaving, limit 4). Clicking an arrow reopens planning from its source area to add or remove tokens; right-clicking it takes one back. Esc finishes planning. **Undo all moves and settlements** clears every planned move, founding, and upgrade for the turn.
 
 ### Growth and surplus details
 
@@ -145,13 +145,13 @@ Settlements grow by absorbing tokens, extending the original's "6 tokens → cit
 - **The area limit does not block construction**, as in the original: tokens gathered for a conversion may exceed the limit, because conversion resolves before surplus removal.
 - Conversion is ordered in allocation and resolves after conflict.
 - **Which tokens are used.** The player picks only the settlement's area; the engine picks the tokens at resolution, from positions after this turn's movement. It takes the area's own tokens first, then tokens from adjacent areas holding the most of the civilization's tokens (lower area numbers break ties). If too few are in reach, the order fails and the player is told why. The original needed all 6 tokens in the city's own area.
-- **Ordering conversions (interface).** Click one of your areas and choose "Found village" (or "Upgrade" on a settlement). A planned conversion shows on the map as a ghost (translucent) settlement piece, and is listed in the planning panel, which also shows any warning. Clicking it, or the cancel control in the panel, undoes the order at any time before resolution.
+- **Ordering conversions (interface).** Click one of your areas and choose "Found village" (or "Upgrade" on a settlement). A planned conversion shows on the map as a ghost (translucent) settlement piece, and is listed in the planning panel, which also shows any warning. The ghost does not react to clicks, so clicking its area always plans moves as usual. The planning panel's "Unfound village" (or "Cancel upgrade") button, or the × in its list, undoes the order at any time before resolution.
 - Starting numbers; to be tuned.
 
 ### Names
 
 - The player can **name a settlement** when it is founded or later, from the Civilization overview. A settlement without a name shows as "Unnamed" (e.g., "Unnamed – Town"); naming is optional.
-- Names follow the settlement through tier changes. Naming is a command, so it is saved and replayed like any other action.
+- Names follow the settlement through tier changes and capture; the new owner can rename it. Naming is a command, so it is saved and replayed like any other action.
 
 ### Area limits
 
@@ -179,7 +179,7 @@ Follows the original's pattern (a city needed 2 tokens of support): tokens consu
 
 ### Tier drop
 
-One procedure applies whenever a settlement drops a tier: instability collapse (§10), support failure, calamities (§12), and capture (§11).
+One procedure applies whenever a settlement drops a tier: instability collapse (§10), support failure, calamities (§12), and capture (§11). **Capture releases no refugees**: the settlement's defense value already stands for its people, who died fighting (§11).
 
 - The settlement loses **one tier**. A village **dissolves**, and its area becomes unsettled.
 - The freed tokens equal the difference in token value: town → village 6, city → town 8, metropolis → city 10, village dissolved 6.
@@ -377,8 +377,16 @@ The ruler holds two direct levers. Everything else is indirect.
 | Element | Decision |
 |---|---|
 | Trigger | Combined tokens of two or more civilizations exceed the area's limit. Coexistence below the limit is allowed. Technologies may change this |
-| Attrition | Deterministic. Each token has a **strength** (base 1); losses scale with enemy strength. Discoveries raise strength; counters cancel matching modifiers |
+| Attrition | Deterministic. Each token has a **strength** (base 1); a civilization's **power** in an area is the sum of its tokens' strength. Discoveries raise strength; counters cancel matching modifiers. Losses follow the original's removal rule (below) |
 | Commander figures | Temporary conflict modifiers |
+
+### Removing tokens in conflict
+
+- Following the original, the civilizations in an over-limit area remove tokens **one at a time, taking turns**, until the area is within its limit or only one civilization is left.
+- **The side with the least power removes first** (the original used the fewest tokens; with every token at strength 1 the two are the same).
+- Example: Plains, limit 3; you have 4 tokens, a rival 2. The rival removes (4 vs 1), then you (3 vs 1), then the rival (3 vs 0).
+- **Rounds.** In each round every side removes one token, weakest power first, stopping as soon as the area is within its limit; the order is recomputed from power at the start of each round. **Sides with equal power remove together**, as in the original, even if that removes one more token than needed (Plains, limit 3, 2 vs 2 ends 1 vs 1).
+- Three or more sides follow the same order. Example: Plains, limit 3; you 3, rival A 2, rival B 1. B removes (3/2/0), then A (3/1/0), then you (2/1/0).
 
 ### Attacking settlements
 
@@ -391,9 +399,13 @@ The ruler holds two direct levers. Everything else is indirect.
 
 - A settled area is fully populated (§5), so **any enemy token entering it attacks the settlement**. All tokens a civilization has in the area after movement attack together.
 - **Below the threshold**, the attackers fight the settlement's defense value and are destroyed; the settlement is unharmed.
+- **At or above the threshold**, the settlement fights as a side of tokens equal to its defense value, using the removal rule above, until one side has none left; there is no area limit to stop at. If the defense is eliminated, the attackers capture. Example: 9 attackers against a village (defends as 6): the village, weaker, removes first each round and is gone after its sixth removal, leaving 4 attackers to capture; 7 attackers capture with 2. If the last tokens on both sides fall together, no one is left to capture and the settlement holds.
+- **Reinforcements.** The defender's own tokens in the area after movement add their power to the defense. The threshold is still checked against the settlement's own value; reinforcements only strengthen the fight. Example: 8 attackers against a village reinforced by 3 fight 8 vs 9 and are destroyed. Reinforcements that survive beyond the garrison are removed as surplus (§3, step 9).
+- **Several attackers.** Each attacker's threshold is checked separately; attackers below it are destroyed first. The settlement then joins the remaining attackers as one side (power = defense value plus reinforcements) in a single fight under the removal rule, weakest first, until one side is left. A surviving attacker captures. Example: village (6) attacked by A 8 and B 7 runs 8/7/6 → 7/6/5 → … → 3/2/1; in the sixth round the village falls (A 2, B 1), then B removes and A captures with 2.
 - Walls and similar advances raise these values; siege advances counter them.
 - The settlement fights at its defense value using the defender's strength multiplier.
 - **Capture:** the attacker takes the settlement **one tier lower** (§5, Tier drop). Figure marks on it transfer to the new owner.
+- **Surviving attackers.** When a town or larger is captured, the survivors garrison it and are removed, since a settled area holds no loose tokens (§5). When a village is captured, it is destroyed and the survivors stay as loose tokens up to the area's limit; any extra is surplus. A capture releases no refugees (§5, Tier drop). Example: 13 attackers take a town (defends as 9), win with 5, and the 5 garrison the new village. The new owner must support the captured settlement the same turn (§5).
 - **Spoils:** a share of the defender's currency (scaled by tier) plus discovery progress toward the defender's advances.
 
 ### Conflict state
@@ -529,9 +541,9 @@ These are choices made knowingly, or risks to watch in playtesting.
 - [x] ~~Per-area tier caps~~ — replaced by one settlement per area (v0.3).
 - [ ] Map size per civilization (procedural maps scale land areas by civilization count). Phase 0 used 64 areas per civilization; with limits 1–5, cap 55, and two Stone Age rises, land filled around turn 36.
 - [ ] Which advances unlock towns, cities, and metropolises.
-- [ ] Tier drop details: how the host accepts or rejects refugees under simultaneous turns (standing policy or per-event choice); whether accepted refugees count against the host's cap; whether a ruler can exploit deliberate collapse to transfer tokens; what capturing a village yields.
+- [ ] Tier drop details: how the host accepts or rejects refugees under simultaneous turns (standing policy or per-event choice); whether accepted refugees count against the host's cap; whether a ruler can exploit deliberate collapse to transfer tokens.
 - [ ] Names for rival civilizations' settlements (generated name lists, or unnamed).
-- [ ] What happens to a settlement's name when it dissolves, is captured, or is refounded.
+- [ ] What happens to a settlement's name when it dissolves or is refounded.
 - [ ] Support variant: tokens only (current) vs tokens plus one lower-tier settlement in range. Compared in the Phase 0 simulation.
 
 ### Tuning (playtesting)
@@ -562,6 +574,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.9 (October 16, 2026):** The undo button also clears planned foundings and upgrades. Ghost settlements ignore clicks; a planned founding or upgrade is undone with the planning panel's "Unfound village" / "Cancel upgrade" button. Conflict losses follow the original's removal rule: sides take turns removing one token until the area is within its limit or one side is left; the side with the least power (sum of token strength) removes first. Rounds run weakest first; equal power removes together; three or more sides follow the same order. A settlement attacked at or above its threshold fights as its defense value in tokens under the removal rule until one side is eliminated. Surviving attackers garrison a captured town or larger and are removed; a captured village is destroyed and survivors stay up to the area's limit. Capture releases no refugees. The defender's own tokens moved into an attacked settlement's area add their power to its defense. Several attackers on one settlement fight it and each other in a single fight, after attackers below the threshold are destroyed. A captured settlement keeps its name. If the last tokens on both sides of a settlement fight fall together, the settlement holds.
 - **0.8 (October 16, 2026):** Conversions: the player picks the area, the engine picks the tokens at resolution (own area first, then the fullest adjacent areas). Planned conversions show on the map as ghost pieces and can be undone until resolution. Arrows carry their count; source badges show tokens leaving ("4−3/4"); Undo all moves clears the turn's moves. New settlements need their support the turn they are built, with a warning when planning; the engine assigns support tokens, larger tiers first. Refugees fill the dropped settlement's own area up to its limit, then own or empty neighbors with the most room; rival areas only as a last resort. Refugees ignore the token cap for their grace turn; any excess left after it is removed from the fullest areas. Urban growth goes to own or empty neighbors with the most room. An unsupported settlement drops one tier per turn.
 - **0.7 (October 16, 2026):** Each civilization starts with one token in its starting area, as in the original. Movement orders resolve simultaneously from end-of-allocation positions; moves are planned by clicking an area, then its neighbors, and show as clickable green arrows. Growth counts from pre-growth tokens with a fixed fill order when a limit or cap runs out; surplus removal covers single-civilization areas, leaving shared ones to conflict.
 - **0.6 (October 16, 2026):** Players can name settlements at founding or from the Civilization overview; unnamed ones show as "Unnamed". Added open questions on rival settlement names and names after dissolution or capture.

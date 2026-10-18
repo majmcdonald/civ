@@ -877,3 +877,22 @@
   box-shadow: 0 4px 14px rgba(10, 6, 2, 0.4);
   pointer-events: none;
 }
+
+.game-plan-conflicts li {
+  padding: 0.1rem 0.2rem;
+  color: #a3301c;
+}
+
+.game-plan-conflicts li::before {
+  content: '⚔';
+  margin-right: 0.1rem;
+}
+
+.game-plan-conflicts li.game-plan-head {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.game-plan-conflicts li.game-plan-head::before {
+  content: none;
+}

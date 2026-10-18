@@ -196,11 +196,3 @@
 .iso-move:hover path {
   fill: #3aa847;
 }
-
-.iso-plan {
-  cursor: pointer;
-}
-
-.iso-plan:hover > g:first-of-type {
-  opacity: 0.8;
-}

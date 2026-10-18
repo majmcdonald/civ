@@ -154,9 +154,9 @@ describe('surplus removal', () => {
     place(game, start, 'p1', limit);
     place(game, start, 'ai1', 2);
     toAllocation(game);
-    resolveTurn(game);
-    expect(tokensAt(game.state, start, 'p1')).toBe(limit);
-    expect(tokensAt(game.state, start, 'ai1')).toBe(2);
+    const events = resolveTurn(game);
+    expect(eventsOfType(events, 'conflict').map((e) => e.area)).toContain(start);
+    expect(eventsOfType(events, 'surplusRemoved').filter((e) => e.area === start)).toEqual([]);
   });
 });
 

@@ -1,3 +1,4 @@
+import { resolveConflict } from './conflict';
 import { emit } from './context';
 import { resolveGrowth, resolveMovement, resolveSurplus } from './population';
 import { resolveConversion, resolveSupport, resolveUrbanGrowth } from './settlements';
@@ -25,7 +26,7 @@ export type ResolutionStepId = (typeof RESOLUTION_STEPS)[number];
 // Each step's rules are filled in as its system is built (Phase 3 onward).
 const resolutionSteps: Record<ResolutionStepId, (ctx: Context) => void> = {
   movement: resolveMovement,
-  conflict: () => {},
+  conflict: resolveConflict,
   conversion: resolveConversion,
   food: () => {},
   calamities: () => {},

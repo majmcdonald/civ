@@ -105,6 +105,12 @@ export interface TokenSource {
   count: number;
 }
 
+// A number of one player's tokens: losses, attacking forces.
+export interface TokenCount {
+  player: PlayerId;
+  count: number;
+}
+
 export type GameEvent =
   | { type: 'gameStarted'; seed: number; players: PlayerId[] }
   | { type: 'turnStarted'; turn: number }
@@ -119,7 +125,21 @@ export type GameEvent =
   | { type: 'settlementBuilt'; player: PlayerId; area: AreaId; tier: SettlementTier; from: TokenSource[] }
   | { type: 'conversionFailed'; player: PlayerId; area: AreaId; reason: string }
   | { type: 'settlementDropped'; player: PlayerId; area: AreaId; tier: SettlementTier | null; refugees: number; lost: number }
-  | { type: 'urbanGrowth'; player: PlayerId; from: AreaId; to: AreaId; count: number };
+  | { type: 'urbanGrowth'; player: PlayerId; from: AreaId; to: AreaId; count: number }
+  | { type: 'conflict'; area: AreaId; losses: TokenCount[] }
+  | {
+      type: 'settlementAttacked';
+      area: AreaId;
+      defender: PlayerId;
+      // The settlement's tier before the attack.
+      tier: SettlementTier;
+      attackers: TokenCount[];
+      // Attackers below the threshold, destroyed without a fight.
+      repelled: PlayerId[];
+      losses: TokenCount[];
+      capturedBy: PlayerId | null;
+      survivors: number;
+    };
 
 export interface StampedEvent {
   turn: number;

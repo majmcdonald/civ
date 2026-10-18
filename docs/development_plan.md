@@ -1,6 +1,6 @@
 # Development Plan
 
-**Version:** 0.8  
+**Version:** 0.9  
 **Date:** October 16, 2026  
 **Status:** Working draft
 
@@ -113,6 +113,7 @@ Other costs on the 15-civilization spacious board: map generation 0.3 s, first r
 
 ## Change log
 
+- **0.9 (October 16, 2026):** Phase 3 step 4: conflict runs at resolution step 2 (removal rule in over-limit areas; settlement attacks with thresholds, defense value, reinforcements, several attackers, capture one tier lower). The planning panel forecasts the fights planned moves lead to, and the turn report lists them; conversion and support previews now include conflict. Spoils and the conflict state wait for currency and instability (steps 5 and 6). New Game opens a setup panel on the title screen (opponents 1–14, map type, map size as room to expand, seed) before the game starts; `?screen=game` still opens a default game. Minimal AI started early (part of step 7): `aiCommands` in `src/engine/ai.ts` gives a fixed, deterministic pattern of allocation orders (fill an area, then overflow into empty or own neighbours; found one village per turn at the densest site not next to a settlement, else upgrade one; keep only orders the engine's preview says will be built and supported). AI players issue them through the same command layer before ending allocation.
 - **0.8 (October 16, 2026):** Phase 3 step 3: settlements live in the engine (founding, upgrading, support check, tier drop with refugees, urban growth, naming as a command). Planned conversions show on the map and in the planning panel with a preview of the tokens taken and the support left; results are reported after resolution. Towns are unlocked from the start in the game screen (setup option `unlockedTiers`) until the advance that unlocks them exists. The game screen skips the trade phase while no one can trade. The Civilization overview gains a Support card (support needed and supplied, free tokens, village sites, settlements that will drop), computed by the engine at this turn's support check including planned moves and settlements.
 - **0.7 (October 16, 2026):** Phase 2 complete: title, map, in-game frame, Civilization overview, Rivals and standings, five placeholder screens, procedural map generator, rendering stress test. Phase 3 started: the game setup holds the map options (type, room to expand; one civilization per player, 2–15) and the map is rebuilt from the seed rather than saved; the state tracks loose tokens per area, starting with one token per civilization. Movement orders, simultaneous movement, growth, and surplus removal work, with move planning on the map.
 - **0.6 (October 16, 2026):** Civilization overview: settlement table with player names, resources available and worked, and click-to-show on the map. Settlement names live in UI state and resources are a review sample until the engine tracks settlements and resources are designed.
