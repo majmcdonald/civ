@@ -1,4 +1,5 @@
 import type { Content } from './content';
+import { SCHEMA_VERSION } from './engine';
 import { startSession, submit, type Session } from './session';
 import type { Command, GameSetup, GameState } from './types';
 
@@ -43,4 +44,19 @@ export function loadGame(json: string, content: Content): Session {
     throw new Error('Saved state does not match its replay; the rules have changed since this game was saved');
   }
   return session;
+}
+
+// Loading for players: like loadGame, but a save whose replay no longer matches (the rules changed
+// since it was saved) still opens, from its saved state, with a warning. The game log restarts at
+// that point and replaying from the seed is no longer exact. Saves from an older state layout
+// cannot be opened.
+export function openSave(json: string, content: Content): { session: Session; warning: string | null } {
+  try {
+    return { session: loadGame(json, content), warning: null };
+  } catch (error) {
+    const save = JSON.parse(json) as SaveFile;
+    if (save.saveVersion !== SAVE_VERSION || save.state?.schemaVersion !== SCHEMA_VERSION) throw error;
+    const session: Session = { content, setup: save.setup, state: save.state, commands: save.commands, log: [] };
+    return { session, warning: 'The rules have changed since this game was saved; it continues from the saved position' };
+  }
 }

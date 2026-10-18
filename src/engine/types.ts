@@ -25,6 +25,8 @@ export interface MapSetup {
 }
 
 export interface GameSetup {
+  // The player's name for the game, used to label saves; no effect on the rules.
+  name?: string;
   seed: number;
   players: PlayerSetup[];
   finalEra: EraId;

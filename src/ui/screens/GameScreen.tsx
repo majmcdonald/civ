@@ -9,6 +9,7 @@ import {
   nextTier,
   previewConflicts,
   previewConversions,
+  saveGame,
   settlementAt,
   startSession,
   submit,
@@ -19,17 +20,20 @@ import {
   tokensInReach,
   type AreaId,
   type ConflictEvent,
+  type Content,
   type ConversionPreview,
   type GameEvent,
   type MapSetup,
   type Phase,
   type PlayerSetup,
+  type Session,
   type SettlementTier as Tier,
 } from '../../engine';
 import { CIV_COLORS, IsoMap, type ClickButton, type IsoMapHandle, type PlannedSettlement } from '../art/IsoMap';
 import type { MapPieces, SettlementTier } from '../art/pieces';
 import { CivilizationSheet } from './CivilizationSheet';
 import { RivalsSheet } from './RivalsSheet';
+import { AUTOSAVE_ID, downloadSave, writeSave } from '../saves';
 import './GameScreen.css';
 
 // In-game frame (Phase 2): top bar with era, turn, and phase; navigation between the map and the
@@ -61,21 +65,27 @@ const HUMAN = 0;
 
 // Choices from the New Game screen (design doc §2, Setup options).
 export interface NewGameOptions {
+  name: string;
   seed: number;
   opponents: number;
   map: MapSetup;
 }
 
-export const DEFAULT_GAME: NewGameOptions = { seed: 1, opponents: 4, map: { type: 'inlandSea', room: 'standard' } };
+export const DEFAULT_GAME: NewGameOptions = { name: '', seed: 1, opponents: 4, map: { type: 'inlandSea', room: 'standard' } };
 
-function newSession(options: NewGameOptions) {
+export function gameContent(): Content {
   const loaded = loadContent(contentBundle, hooks);
   if (!loaded.ok) throw new Error(loaded.errors.join('\n'));
+  return loaded.content;
+}
+
+export function newSession(options: NewGameOptions): Session {
   const players: PlayerSetup[] = Array.from({ length: options.opponents + 1 }, (_, i) =>
     i === HUMAN ? { id: 'p1', name: 'Your people', kind: 'human' } : { id: `ai${i}`, name: `Rival ${i}`, kind: 'ai' },
   );
   // Towns are open from the start until the advance that unlocks them exists (design doc §5).
-  return startSession({ seed: options.seed, players, finalEra: 'modern', map: options.map, unlockedTiers: ['village', 'town'] }, loaded.content);
+  const name = options.name.trim() || 'Untitled game';
+  return startSession({ name, seed: options.seed, players, finalEra: 'modern', map: options.map, unlockedTiers: ['village', 'town'] }, gameContent());
 }
 
 // The map has pieces for villages and towns only; larger tiers are not unlocked by anything yet.
@@ -244,8 +254,14 @@ function ConversionRow({ area, option, onConvert }: { area: AreaId; option: Conv
   );
 }
 
-export function GameScreen({ options, onExit }: { options: NewGameOptions; onExit: () => void }) {
-  const [session] = useState(() => newSession(options));
+interface GameScreenProps {
+  session: Session;
+  // Shown when the game opens, e.g. a warning from loading a save.
+  message: string | null;
+  onExit: () => void;
+}
+
+export function GameScreen({ session, message, onExit }: GameScreenProps) {
   const [, setVersion] = useState(0);
   const [screen, setScreen] = useState<ScreenId>(() => {
     const tab = new URLSearchParams(window.location.search).get('tab');
@@ -258,7 +274,8 @@ export function GameScreen({ options, onExit }: { options: NewGameOptions; onExi
   const [selected, setSelected] = useState<AreaId | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // What happened to the player's settlements in the last resolution.
-  const [report, setReport] = useState<string[]>([]);
+  const [report, setReport] = useState<string[]>(message ? [message] : []);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Open on the player's starting area.
   useEffect(() => {
@@ -327,6 +344,7 @@ export function GameScreen({ options, onExit }: { options: NewGameOptions; onExi
   // once. The trade phase is skipped while no one can trade (trade discovery, design doc §7).
   const endPhase = () => {
     const events: GameEvent[] = [];
+    const turn = session.state.turn;
     do {
       for (const player of session.state.players) {
         if (player.kind === 'ai') for (const command of aiCommands(session.state, session.content, player.id)) submit(session, command);
@@ -335,6 +353,10 @@ export function GameScreen({ options, onExit }: { options: NewGameOptions; onExi
       }
     } while (session.state.phase === 'trade');
     setReport(turnReport(events, me, describeConflict));
+    if (session.state.turn > turn) {
+      const failed = writeSave(session, `${gameName(session)} - autosave`, AUTOSAVE_ID);
+      if (failed) setNotice(failed);
+    }
     setSelected(null);
     setVersion((v) => v + 1);
   };
@@ -458,9 +480,10 @@ export function GameScreen({ options, onExit }: { options: NewGameOptions; onExi
               {towns} town{towns === 1 ? '' : 's'} · {villages} village{villages === 1 ? '' : 's'}
             </dd>
           </div>
-          <button type="button" className="game-menu" onClick={onExit} title="Return to the title screen">
+          <button type="button" className="game-menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
             Menu
           </button>
+          {menuOpen && <GameMenu session={session} onClose={() => setMenuOpen(false)} onExit={onExit} />}
         </dl>
       </header>
 
@@ -580,5 +603,43 @@ export function GameScreen({ options, onExit }: { options: NewGameOptions; onExi
         )}
       </section>
     </main>
+  );
+}
+
+function gameName(session: Session): string {
+  return session.setup.name ?? 'Untitled game';
+}
+
+// In-game menu: save to a browser slot, export to a file, or return to the title screen.
+function GameMenu({ session, onClose, onExit }: { session: Session; onClose: () => void; onExit: () => void }) {
+  const fallback = `${gameName(session)} - turn ${session.state.turn}`;
+  const [name, setName] = useState(fallback);
+  const [status, setStatus] = useState<string | null>(null);
+  const saveName = name.trim() || fallback;
+  return (
+    <div className="game-menu-panel" role="dialog" aria-label="Game menu">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          setStatus(writeSave(session, saveName) ?? `Saved as "${saveName}"`);
+        }}
+      >
+        <label>
+          <span>Save as</span>
+          <input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} autoFocus />
+        </label>
+        <button type="submit">Save</button>
+      </form>
+      <button type="button" onClick={() => downloadSave(saveGame(session), saveName, session.state.turn)}>
+        Export to file
+      </button>
+      <button type="button" onClick={onExit} title="Progress since the last save or autosave is lost">
+        Exit to title
+      </button>
+      <button type="button" onClick={onClose}>
+        Close
+      </button>
+      {status && <p className="game-menu-status">{status}</p>}
+    </div>
   );
 }

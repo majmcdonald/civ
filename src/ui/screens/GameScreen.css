@@ -896,3 +896,61 @@
 .game-plan-conflicts li.game-plan-head::before {
   content: none;
 }
+
+.game-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 1rem;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 16rem;
+  padding: 0.8rem;
+  background: var(--parchment);
+  border: 1px solid var(--parchment-edge);
+  box-shadow: 0 6px 24px rgba(10, 6, 2, 0.45);
+}
+
+.game-menu-panel form {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.game-menu-panel label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.game-menu-panel input,
+.game-menu-panel button {
+  font: inherit;
+  font-size: 0.9rem;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink);
+  background: #f7eed8;
+  border: 1px solid var(--parchment-edge);
+  padding: 0.25rem 0.5rem;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.game-menu-panel button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.game-menu-status {
+  margin: 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--ink-soft);
+}

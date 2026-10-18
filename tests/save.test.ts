@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadGame, replay, SAVE_VERSION, saveGame, toJsonLines, type LogLine } from '../src/engine';
+import { loadGame, openSave, replay, SAVE_VERSION, saveGame, toJsonLines, type LogLine } from '../src/engine';
 import { advanceTurns, newGame, play, testContent } from './harness';
 
 describe('save and load', () => {
@@ -31,6 +31,34 @@ describe('save and load', () => {
     const save = JSON.parse(saveGame(game));
     save.state.turn = 99;
     expect(() => loadGame(JSON.stringify(save), testContent())).toThrow(/does not match/);
+  });
+});
+
+describe('opening a save', () => {
+  it('opens a matching save without a warning', () => {
+    const game = newGame();
+    advanceTurns(game, 2);
+    const { session, warning } = openSave(saveGame(game), testContent());
+    expect(warning).toBeNull();
+    expect(session.state).toEqual(game.state);
+  });
+
+  it('opens a save whose replay no longer matches from its saved state, with a warning', () => {
+    const game = newGame();
+    advanceTurns(game, 1);
+    const save = JSON.parse(saveGame(game));
+    save.state.turn = 99;
+    const { session, warning } = openSave(JSON.stringify(save), testContent());
+    expect(warning).toMatch(/rules have changed/);
+    expect(session.state.turn).toBe(99);
+    expect(session.commands).toEqual(game.commands);
+  });
+
+  it('refuses a save from an older state layout', () => {
+    const save = JSON.parse(saveGame(newGame()));
+    save.state.turn = 99;
+    save.state.schemaVersion = 1;
+    expect(() => openSave(JSON.stringify(save), testContent())).toThrow(/does not match/);
   });
 });
 

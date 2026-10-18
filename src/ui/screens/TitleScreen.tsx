@@ -1,29 +1,54 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { content } from '../../content';
-import { LAND_AREAS_PER_CIVILIZATION, MAP_TYPES, MAX_CIVILIZATIONS, ROOM_FACTOR, ROOM_TO_EXPAND, type MapType, type RoomToExpand } from '../../engine';
+import { LAND_AREAS_PER_CIVILIZATION, MAP_TYPES, MAX_CIVILIZATIONS, ROOM_FACTOR, ROOM_TO_EXPAND, openSave, type MapType, type RoomToExpand, type Session } from '../../engine';
 import { AtlasBackground } from '../art/AtlasBackground';
 import { CompassRose } from '../art/CompassRose';
-import { DEFAULT_GAME, type NewGameOptions } from './GameScreen';
+import { deleteSave, downloadSave, listSaves, nameFromFile, readSave, writeSave, type SaveSlot } from '../saves';
+import { DEFAULT_GAME, gameContent, type NewGameOptions } from './GameScreen';
 import { ROOM_NAMES, TYPE_NAMES } from './MapScreen';
 import './TitleScreen.css';
 
-const MENU = [
-  { label: 'New Game', enabled: true },
-  { label: 'Continue', enabled: false },
-  { label: 'Load Game', enabled: true },
-  { label: 'Rules Reference', enabled: true },
-  { label: 'Settings', enabled: true },
-];
+const MENU = ['New Game', 'Continue', 'Load Game', 'Rules Reference', 'Settings'] as const;
 
 const OPPONENT_COUNTS = Array.from({ length: MAX_CIVILIZATIONS - 1 }, (_, i) => i + 1);
 
 // The seed is the player's choice, not engine randomness: the engine only sees the number.
 const randomSeed = () => Math.floor(Math.random() * 1_000_000) + 1;
 
-// Only New Game does anything; it opens the game setup. The other items are inert.
-export function TitleScreen({ onStart }: { onStart: (options: NewGameOptions) => void }) {
+// Opens a saved game; returns an error message on failure.
+function open(json: string, onOpen: (session: Session, message: string | null) => void): string | null {
+  try {
+    const { session, warning } = openSave(json, gameContent());
+    onOpen(session, warning);
+    return null;
+  } catch (error) {
+    return `Unable to load: ${error instanceof Error ? error.message : 'unreadable save'}`;
+  }
+}
+
+function openSlot(slot: SaveSlot, onOpen: (session: Session, message: string | null) => void): string | null {
+  const json = readSave(slot.id);
+  return json ? open(json, onOpen) : 'Unable to load: the save is missing';
+}
+
+interface TitleScreenProps {
+  onStart: (options: NewGameOptions) => void;
+  onOpen: (session: Session, message: string | null) => void;
+}
+
+// New Game opens the game setup, Continue the most recent save, and Load Game the list of saves.
+// Rules Reference and Settings are inert.
+export function TitleScreen({ onStart, onOpen }: TitleScreenProps) {
   const eras = [...content.eras].sort((a, b) => a.order - b.order);
   const [setup, setSetup] = useState<NewGameOptions | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const latest = listSaves()[0];
+  const actions: Partial<Record<(typeof MENU)[number], () => void>> = {
+    'New Game': () => setSetup({ ...DEFAULT_GAME, seed: randomSeed() }),
+    Continue: () => latest && setError(openSlot(latest, onOpen)),
+    'Load Game': () => setLoading(true),
+  };
   return (
     <main className="title-screen">
       <AtlasBackground />
@@ -42,19 +67,23 @@ export function TitleScreen({ onStart }: { onStart: (options: NewGameOptions) =>
 
         {setup ? (
           <NewGameSetup options={setup} onChange={setSetup} onStart={() => onStart(setup)} onBack={() => setSetup(null)} />
+        ) : loading ? (
+          <LoadGame onOpen={onOpen} onBack={() => setLoading(false)} />
         ) : (
           <nav className="title-menu" aria-label="Main menu">
             {MENU.map((item) => (
               <button
-                key={item.label}
+                key={item}
                 type="button"
                 className="title-menu-item"
-                disabled={!item.enabled}
-                onClick={item.label === 'New Game' ? () => setSetup({ ...DEFAULT_GAME, seed: randomSeed() }) : undefined}
+                disabled={item === 'Continue' && !latest}
+                title={item === 'Continue' && latest ? `${latest.name} · turn ${latest.turn}` : undefined}
+                onClick={actions[item]}
               >
-                {item.label}
+                {item}
               </button>
             ))}
+            {error && <p className="title-error">{error}</p>}
           </nav>
         )}
       </div>
@@ -95,6 +124,10 @@ function NewGameSetup({ options, onChange, onStart, onBack }: NewGameSetupProps)
       }}
     >
       <h2>New Game</h2>
+      <label>
+        <span>Game name</span>
+        <input value={options.name} maxLength={60} placeholder="e.g. Matt's game" onChange={(e) => onChange({ ...options, name: e.target.value })} autoFocus />
+      </label>
       <label>
         <span>Opponents</span>
         <select value={options.opponents} onChange={(e) => onChange({ ...options, opponents: Number(e.target.value) })}>
@@ -146,5 +179,83 @@ function NewGameSetup({ options, onChange, onStart, onBack }: NewGameSetupProps)
         </button>
       </div>
     </form>
+  );
+}
+
+// Saved games in browser storage, newest first: open, export to a file, or delete; and import a
+// file as a new save.
+function LoadGame({ onOpen, onBack }: { onOpen: TitleScreenProps['onOpen']; onBack: () => void }) {
+  const [saves, setSaves] = useState(listSaves);
+  const [error, setError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const exportSlot = (slot: SaveSlot) => {
+    const json = readSave(slot.id);
+    if (json) downloadSave(json, slot.name, slot.turn);
+    else setError('Unable to export: the save is missing');
+  };
+  const remove = (slot: SaveSlot) => {
+    deleteSave(slot.id);
+    setSaves(listSaves());
+  };
+  const importFile = async (file: File) => {
+    try {
+      const { session } = openSave(await file.text(), gameContent());
+      setError(writeSave(session, nameFromFile(file)));
+      setSaves(listSaves());
+    } catch (e) {
+      setError(`Unable to import: ${e instanceof Error ? e.message : 'unreadable file'}`);
+    }
+  };
+  return (
+    <section className="title-load" aria-label="Load game">
+      <h2>Load Game</h2>
+      {saves.length === 0 ? (
+        <p className="title-setup-summary">No saved games yet</p>
+      ) : (
+        <table>
+          <tbody>
+            {saves.map((slot) => (
+              <tr key={slot.id}>
+                <td>
+                  <button type="button" className="title-load-open" onClick={() => setError(openSlot(slot, onOpen))}>
+                    {slot.name}
+                  </button>
+                </td>
+                <td>Turn {slot.turn}</td>
+                <td>{new Date(slot.savedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                <td className="title-load-actions">
+                  <button type="button" onClick={() => exportSlot(slot)} title="Download as a file">
+                    Export
+                  </button>
+                  <button type="button" onClick={() => remove(slot)} title="Delete this save">
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {error && <p className="title-error">{error}</p>}
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".json,application/json"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void importFile(file);
+          e.target.value = '';
+        }}
+      />
+      <div className="title-setup-actions">
+        <button type="button" className="title-menu-item" onClick={onBack}>
+          Back
+        </button>
+        <button type="button" className="title-menu-item" onClick={() => fileInput.current?.click()}>
+          Import file
+        </button>
+      </div>
+    </section>
   );
 }
