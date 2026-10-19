@@ -608,6 +608,8 @@ These are choices made knowingly, or risks to watch in playtesting.
 
 ### Tuning (playtesting)
 
+No balance changes until the Stone Age is complete (development plan §4, Tuning); the items below wait for that pass.
+
 - [ ] Settlement conversion costs and support requirements
 - [ ] Starting limit range and resource options per terrain; terrain mix on procedural maps; food odds per terrain and feature
 - [ ] Tier exclusive abilities and tax per tier (the town tier especially)

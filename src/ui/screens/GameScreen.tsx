@@ -28,6 +28,7 @@ import {
   startSession,
   submit,
   supportSummary,
+  toJsonLines,
   tierRules,
   TIERS,
   tokensAt,
@@ -48,7 +49,7 @@ import { CIV_COLORS, IsoMap, type ClickButton, type IsoMapHandle, type PlannedSe
 import type { MapPieces, SettlementTier } from '../art/pieces';
 import { CivilizationSheet } from './CivilizationSheet';
 import { RivalsSheet } from './RivalsSheet';
-import { AUTOSAVE_ID, downloadSave, writeSave } from '../saves';
+import { AUTOSAVE_ID, downloadLog, downloadSave, writeSave } from '../saves';
 import './GameScreen.css';
 
 // In-game frame (Phase 2): top bar with era, turn, and phase; navigation between the map and the
@@ -823,6 +824,13 @@ function GameMenu({ session, onClose, onExit }: { session: Session; onClose: () 
       </form>
       <button type="button" onClick={() => downloadSave(saveGame(session), saveName, session.state.turn)}>
         Export to file
+      </button>
+      <button
+        type="button"
+        onClick={() => downloadLog(toJsonLines(session.log), saveName, session.state.turn)}
+        title="Every command, event, and random draw since the game started or was last loaded, as JSON lines"
+      >
+        Download game log
       </button>
       <button type="button" onClick={onExit} title="Progress since the last save or autosave is lost">
         Exit to title

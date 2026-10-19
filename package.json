@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json && tsc -p src/ui/tsconfig.json && tsc -p tests/tsconfig.json && tsc -p sim/tsconfig.json",
     "check": "npm run typecheck && npm test",
-    "sim": "node sim/phase0/sim.ts"
+    "sim": "node sim/phase0/sim.ts",
+    "batch": "node sim/run.mjs ./sim/batch.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

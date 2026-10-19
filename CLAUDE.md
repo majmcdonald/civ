@@ -12,8 +12,8 @@ Read both before design or build work. When a decision is made in conversation, 
 ## Current status
 
 - Design: core systems decided (v0.12); numbers untuned.
-- Build: Phases 0–2 done. **Phase 3 in progress** — core loop (steps 1–6 of 7 done: tokens, movement and growth, settlements, conflict, food and manpower, instability; minimal AI and save/load from step 7 done early).
-- Economy simulation: `sim/phase0/sim.ts` (`node sim/phase0/sim.ts [cap|settle|towns|rare|sweep]`). Kept and extended as systems are designed; re-run it when economy-affecting rules change.
+- Build: Phases 0–3 done (Phase 3 core loop: tokens, movement and growth, settlements, conflict, food and manpower, instability, minimal AI, save/load, batch runs, game log). **Phase 4 (Stone Age systems) is next.**
+- **No balance changes until the Stone Age is complete**; every number is a placeholder until then. Batch runs (`npm run batch`) measure the real engine and only report. The Phase 0 economy simulation (`sim/phase0/sim.ts`) predates the engine and is no longer re-run.
 
 ## Stack and architecture
 
@@ -29,7 +29,8 @@ Read both before design or build work. When a decision is made in conversation, 
 
 - `npm run check` — typecheck (engine, tests, sim) and run all tests. Run before every commit.
 - `npm test` / `npm run test:watch` — Vitest.
-- `npm run sim -- <mode>` — economy simulation.
+- `npm run batch -- [--games N] [--civs N] [--map type|all] [--room size] [--turns N] [--json file] [--logs dir]` — all-AI batch runs on the real engine; pacing report.
+- `npm run sim -- <mode>` — Phase 0 economy simulation (historical).
 - `?screen=stress` (dev server) — map rendering stress test; results and the Phase 8 rendering plan are in `docs/development_plan.md` §6.
 
 ## Conventions

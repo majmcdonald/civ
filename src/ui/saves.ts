@@ -63,16 +63,26 @@ function newId(): string {
   return `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
 }
 
-function fileName(name: string, turn: number): string {
-  const safe = name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'game';
-  return `succession-${safe}-turn-${turn}.json`;
+function fileName(name: string, turn: number, extension = 'json', kind = ''): string {
+  // Save names default to "<game> - turn N"; the turn is added once.
+  const safe = name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().replace(/-turn-\d+$/, '') || 'game';
+  return `succession-${safe}-turn-${turn}${kind}.${extension}`;
 }
 
 export function downloadSave(json: string, name: string, turn: number): void {
-  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  download(json, 'application/json', fileName(name, turn));
+}
+
+// The game log as JSON lines: seed, commands, events, and random draws (development plan, Game log).
+export function downloadLog(jsonLines: string, name: string, turn: number): void {
+  download(jsonLines, 'application/x-ndjson', fileName(name, turn, 'jsonl', '-log'));
+}
+
+function download(text: string, type: string, file: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = fileName(name, turn);
+  link.download = file;
   document.body.append(link);
   link.click();
   link.remove();
