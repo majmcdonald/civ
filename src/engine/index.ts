@@ -11,6 +11,19 @@ export { mapFor, mapOptions } from './world';
 export { BASE_MOVEMENT, GROWTH_PER_TOKEN, looseTokens, reachable, STARTING_TOKEN_CAP, tokensAt } from './population';
 export { assigned, manpower, usable } from './resources';
 export {
+  BUREAUCRACY,
+  bureaucracyAt,
+  capitalDistance,
+  capitalOf,
+  civInstability,
+  localInstability,
+  overextension,
+  OVEREXTENSION_FREE,
+  threshold,
+  totalInstability,
+  type InstabilitySource,
+} from './instability';
+export {
   assignSupport,
   conversionCost,
   NAME_MAX_LENGTH,

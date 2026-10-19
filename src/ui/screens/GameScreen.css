@@ -854,6 +854,30 @@
   opacity: 0.75;
 }
 
+.game-plan-stability {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 0.2rem;
+}
+
+.game-plan-stability strong {
+  color: var(--ink);
+}
+
+.game-plan-stability.warn strong {
+  color: #a3301c;
+}
+
+.game-plan-unrest {
+  max-width: 30rem;
+  white-space: normal;
+  margin: 0.2rem 0;
+  font-size: 0.85rem;
+  color: #a3301c;
+  text-align: center;
+}
+
 .game-plan-locked {
   margin-top: 0.3rem;
   font-style: italic;

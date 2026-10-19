@@ -9,8 +9,20 @@ export type SettlementTier = 'village' | 'town';
 export interface MapPieces {
   // `growth`: progress toward the next token (design doc §4).
   stacks: { area: AreaId; civ: number; count: number; growth?: number }[];
-  // `work`: manpower on the area's resources (design doc §6).
-  settlements: { area: AreaId; civ: number; tier: SettlementTier; name?: string; work?: { resource: string; count: number }[] }[];
+  // `work`: manpower on the area's resources and Bureaucracy (design doc §6). `instability`: the
+  // local meter; `threshold`: where it collapses; `risk`: within 2 of collapse, marked on the map;
+  // `capital`: the civilization's capital (design doc §10).
+  settlements: {
+    area: AreaId;
+    civ: number;
+    tier: SettlementTier;
+    name?: string;
+    work?: { resource: string; count: number }[];
+    instability?: number;
+    threshold?: number;
+    risk?: boolean;
+    capital?: boolean;
+  }[];
   roads: [AreaId, AreaId][];
 }
 
@@ -188,14 +200,26 @@ export function ResourceIcon({ resource }: { resource: string }) {
 }
 
 // A settlement's name on a small banner, centered under the piece.
-export function SettlementLabel({ name }: { name: string }) {
-  const width = 6 + name.length * 2.9;
+// A settlement's name below its piece; a capital gets a gold star to the left of it, or alone
+// when unnamed.
+export function SettlementLabel({ name, capital = false }: { name?: string; capital?: boolean }) {
+  const width = name ? 6 + name.length * 2.9 : 0;
   return (
     <g>
-      <rect x={-width / 2} y={0} width={width} height={7} rx={1} fill="#fbf4e2" stroke={INK} strokeWidth={0.5} opacity={0.92} />
-      <text y={5.1} fontSize={5.2} fontFamily="var(--font-display)" fontWeight={700} fill={INK} textAnchor="middle">
-        {name}
-      </text>
+      {name && (
+        <>
+          <rect x={-width / 2} y={0} width={width} height={7} rx={1} fill="#fbf4e2" stroke={INK} strokeWidth={0.5} opacity={0.92} />
+          <text y={5.1} fontSize={5.2} fontFamily="var(--font-display)" fontWeight={700} fill={INK} textAnchor="middle">
+            {name}
+          </text>
+        </>
+      )}
+      {capital && (
+        <g transform={`translate(${name ? -width / 2 - 5 : 0} 3.5) scale(1.4)`}>
+          <title>Capital</title>
+          <path d="M0,-3 L0.9,-0.9 L3,-0.9 L1.3,0.4 L1.9,2.6 L0,1.3 L-1.9,2.6 L-1.3,0.4 L-3,-0.9 L-0.9,-0.9Z" fill="#e2b33c" stroke="#5a4210" strokeWidth={0.5} strokeLinejoin="round" />
+        </g>
+      )}
     </g>
   );
 }

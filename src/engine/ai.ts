@@ -1,8 +1,10 @@
 import type { Content } from './content';
 import { applyCommand } from './engine';
+import { BUREAUCRACY, CAPITAL_BUREAUCRACY, overextension, threshold, totalInstability } from './instability';
 import type { AreaId, GameMap } from './map/types';
 import { looseTokens, tokensAt } from './population';
-import { allocateSupport, nextTier, previewConversions, settlementAt, supportSummary } from './settlements';
+import { assigned, manpower } from './resources';
+import { allocateSupport, nextTier, previewConversions, settlementAt, supportSummary, tierRules } from './settlements';
 import type { Command, GameState, PlayerId } from './types';
 import { mapFor } from './world';
 
@@ -20,8 +22,15 @@ import { mapFor } from './world';
 //    its own and has room, most room first. Areas fill before tokens move on, which keeps them
 //    dense enough for villages. It never moves into another civilization's area, and leaves the
 //    village site and its neighbors alone.
+// 3. Calm unrest: Bureaucracy assigned now works from next turn, after this turn's resolution
+//    adds overextension again, so the AI looks two turns of overextension ahead. A settlement
+//    within 3 of its collapse threshold by then moves 1 manpower to Bureaucracy (unassigned first,
+//    else from its most recent assignment); one 6 or more below it moves 1 back to the area's
+//    first resource.
 
 const FOUND_MIN_LOOSE = 12;
+const CALM_WITHIN = 3;
+const CALM_CLEAR = 6;
 const FOUND_MIN_REACH = 8;
 
 function landNeighbors(map: GameMap, area: AreaId): AreaId[] {
@@ -71,6 +80,23 @@ export function aiCommands(state: GameState, content: Content, player: PlayerId)
       send -= 1;
     }
     for (const [to, count] of [...sent].sort((a, b) => a[0] - b[0])) issue({ type: 'orderMove', player, from: stack.area, to, count });
+  }
+
+  for (const s of current.settlements.filter((x) => x.player === player)) {
+    const work = s.work ?? [];
+    const calm = work.find((w) => w.resource === BUREAUCRACY)?.count ?? 0;
+    const rising = Math.max(0, overextension(current, player) - CAPITAL_BUREAUCRACY);
+    const gap = threshold(current, map, s) - totalInstability(current, s) - 2 * rising;
+    if (gap <= CALM_WITHIN && calm < manpower(s)) {
+      const from = [...work].reverse().find((w) => w.resource !== BUREAUCRACY);
+      if (assigned(s) >= manpower(s) && from) issue({ type: 'assignWork', player, area: s.area, resource: from.resource, count: from.count - 1 });
+      issue({ type: 'assignWork', player, area: s.area, resource: BUREAUCRACY, count: calm + 1 });
+    } else if (gap >= CALM_CLEAR && calm > 0) {
+      issue({ type: 'assignWork', player, area: s.area, resource: BUREAUCRACY, count: calm - 1 });
+      const resource = map.areas[s.area]!.resources[0];
+      const on = work.find((w) => w.resource === resource)?.count ?? 0;
+      if (resource) issue({ type: 'assignWork', player, area: s.area, resource, count: on + 1 });
+    }
   }
   return commands;
 }

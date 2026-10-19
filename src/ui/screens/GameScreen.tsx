@@ -3,6 +3,17 @@ import { content as contentBundle } from '../../content';
 import {
   aiCommands,
   assigned,
+  BUREAUCRACY,
+  bureaucracyAt,
+  capitalDistance,
+  capitalOf,
+  civInstability,
+  localInstability,
+  overextension,
+  OVEREXTENSION_FREE,
+  threshold,
+  totalInstability,
+  type InstabilitySource,
   conversionCost,
   hooks,
   loadContent,
@@ -137,8 +148,10 @@ function conflictLine(e: ConflictEvent, me: string, who: (player: string) => str
 }
 
 // One line per notable result of the turn for the player, for the notice after resolution.
-function turnReport(events: GameEvent[], me: string, conflict: (e: ConflictEvent) => string | null): string[] {
+function turnReport(events: GameEvent[], me: string, conflict: (e: ConflictEvent) => string | null, place: (area: AreaId) => string): string[] {
   const lines: string[] = [];
+  // A collapse is reported as such, not as the tier drop it causes.
+  const collapsed = new Set(events.flatMap((e) => (e.type === 'settlementCollapsed' ? [e.area] : [])));
   for (const e of events) {
     if (e.type === 'conflict' || e.type === 'settlementAttacked') {
       const line = conflict(e);
@@ -147,7 +160,9 @@ function turnReport(events: GameEvent[], me: string, conflict: (e: ConflictEvent
     if (!('player' in e) || e.player !== me) continue;
     if (e.type === 'settlementBuilt') lines.push(`${tierRules(e.tier).name} ${e.tier === 'village' ? 'founded' : 'built'}`);
     if (e.type === 'conversionFailed') lines.push(`Not built: ${e.reason}`);
-    if (e.type === 'settlementDropped') lines.push(e.tier ? `A settlement dropped to ${e.tier} for lack of support` : 'A village dissolved for lack of support');
+    if (e.type === 'settlementCollapsed') lines.push(`A ${e.tier} collapsed in unrest`);
+    if (e.type === 'capitalMoved' && e.area !== null) lines.push(`Capital: ${place(e.area)}`);
+    if (e.type === 'settlementDropped' && !collapsed.has(e.area)) lines.push(e.tier ? `A settlement dropped to ${e.tier} for lack of support` : 'A village dissolved for lack of support');
     if (e.type === 'foodSupport') lines.push(`Food stood in for ${plural(e.count, 'support token')}`);
   }
   return lines;
@@ -172,6 +187,45 @@ function usesText(p: ConversionPreview): string {
   return `Uses ${parts.join(', ')} · support ${p.support} of ${p.needed}`;
 }
 
+const SOURCE_NAMES: Record<InstabilitySource, string> = {
+  overextension: 'overextension',
+  losses: 'settlements lost',
+  lostSupport: 'lost support',
+  conflict: 'nearby fight',
+  bureaucracy: 'Bureaucracy',
+  noSettlements: 'no settlements left',
+};
+
+function thresholdReason(distance: number | null, capital: boolean): string {
+  if (capital) return 'capital, 1 free Bureaucracy';
+  if (distance === null) return 'no land route to the capital';
+  return `${plural(distance, 'area')} from the capital`;
+}
+
+// A settlement's instability (design doc §10): local plus civ-wide against its threshold, and what
+// changed them last turn.
+interface StabilityOption {
+  local: number;
+  civ: number;
+  threshold: number;
+  // Why the threshold is what it is: the capital, or the distance from it.
+  reason: string;
+  changes: string[];
+}
+
+function StabilityRow({ option }: { option: StabilityOption }) {
+  const risk = option.threshold - option.local - option.civ <= 2;
+  return (
+    <div className={`game-plan-stability ${risk ? 'warn' : ''}`} title="Local meter plus the civ-wide meter; at the threshold the settlement collapses one tier (§10)">
+      <strong>
+        Instability {option.local} + {option.civ} of {option.threshold}
+      </strong>
+      <span>Collapses at {option.threshold} · {option.reason}</span>
+      {option.changes.length > 0 && <span>Last turn: {option.changes.join(' · ')}</span>}
+    </div>
+  );
+}
+
 // A settlement's manpower and what its area offers (design doc §6, Manpower).
 interface WorkOption {
   total: number;
@@ -193,8 +247,11 @@ interface PlanPanelProps {
   state: { tokens: number; left: number };
   conversion: ConversionOption | null;
   work: WorkOption | null;
+  stability: StabilityOption | null;
   previews: ConversionPreview[];
   conflicts: { area: AreaId; text: string }[];
+  // Overextension the civilization's Bureaucracy does not cover, if any (design doc §10).
+  unrest: string | null;
   // Settlements with manpower free and a resource it could gather.
   idle: { area: AreaId; count: number }[];
   areaName: (area: AreaId) => string;
@@ -205,7 +262,7 @@ interface PlanPanelProps {
 
 // The selected area's details, and in allocation its actions (moves, founding, upgrading,
 // manpower) and the turn's planned settlements, each with what will happen if the turn resolved now.
-function PlanPanel({ source, details, planning, state, conversion, work, previews, conflicts, idle, areaName, onConvert, onWork, onSelect }: PlanPanelProps) {
+function PlanPanel({ source, details, planning, state, conversion, work, stability, previews, conflicts, unrest, idle, areaName, onConvert, onWork, onSelect }: PlanPanelProps) {
   const others = planning ? previews.filter((p) => p.area !== source) : [];
   const idleElsewhere = planning ? idle.filter((i) => i.area !== source) : [];
   return (
@@ -217,6 +274,7 @@ function PlanPanel({ source, details, planning, state, conversion, work, preview
           {details.stacks.length > 0 && <span>{details.stacks.map((s) => `${s.mine ? 'Your tokens' : s.name}: ${s.count}`).join(' · ')}</span>}
         </div>
       )}
+      {stability && <StabilityRow option={stability} />}
       {source !== null && planning && (
         <>
           {work && <WorkRow area={source} work={work} onWork={onWork} />}
@@ -261,6 +319,7 @@ function PlanPanel({ source, details, planning, state, conversion, work, preview
           ))}
         </ul>
       )}
+      {planning && unrest && <div className="game-plan-unrest">{unrest}</div>}
       {conflicts.length > 0 && (
         <ul className="game-plan-list game-plan-conflicts">
           <li className="game-plan-head">Fights if the turn resolved now</li>
@@ -279,9 +338,8 @@ function WorkRow({ area, work, onWork }: { area: AreaId; work: WorkOption; onWor
       <strong>
         Manpower: {work.total - work.free} of {work.total} working
       </strong>
-      {work.rows.length === 0 && <span>Nothing to gather in this area yet</span>}
       {work.rows.map((r) => (
-        <span key={r.resource} className="game-plan-work-row" title={r.usable ? '1 per manpower, gathered at the start of next turn' : 'Your civilization cannot gather this yet'}>
+        <span key={r.resource} className="game-plan-work-row" title={r.resource === BUREAUCRACY ? 'Each unit lowers this settlement’s instability by 1 a turn, then the civ-wide meter' : r.usable ? '1 per manpower, gathered at the start of next turn' : 'Your civilization cannot gather this yet'}>
           <span>{capitalize(r.resource)}</span>
           <button type="button" aria-label={`Less ${r.resource}`} disabled={r.count === 0} onClick={() => onWork(area, r.resource, r.count - 1)}>
             −
@@ -292,7 +350,7 @@ function WorkRow({ area, work, onWork }: { area: AreaId; work: WorkOption; onWor
           </button>
         </span>
       ))}
-      {work.rows.length > 0 && <small>Changes take effect next turn</small>}
+      <small>Changes take effect next turn</small>
     </div>
   );
 }
@@ -311,7 +369,7 @@ function ConversionRow({ area, option, onConvert }: { area: AreaId; option: Conv
       </div>
     );
   }
-  if (!option.unlocked) return <span className="game-plan-locked">{name}s are not unlocked yet</span>;
+  if (!option.unlocked) return <span className="game-plan-locked">{name === 'City' ? 'Cities' : `${name}s`} are not unlocked yet</span>;
   return (
     <div className="game-plan-convert">
       <button type="button" onClick={() => onConvert(area, true)}>
@@ -343,8 +401,9 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   // Movement planning: the area tokens are being sent from, and the last rejected order.
   const [selected, setSelected] = useState<AreaId | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  // What happened to the player's settlements in the last resolution.
+  // What happened to the player's settlements in the last resolution, and the instability changes.
   const [report, setReport] = useState<string[]>(message ? [message] : []);
+  const [lastEvents, setLastEvents] = useState<GameEvent[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Open on the player's starting area.
@@ -372,7 +431,17 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     const civ = new Map(state.players.map((p, i) => [p.id, i]));
     return {
       stacks: state.stacks.map((s) => ({ area: s.area, civ: civ.get(s.player)!, count: s.count, ...(s.growth ? { growth: s.growth } : {}) })),
-      settlements: state.settlements.map((s) => ({ area: s.area, civ: civ.get(s.player)!, tier: pieceTier(s.tier), ...(s.name ? { name: s.name } : {}), work: s.work ?? [] })),
+      settlements: state.settlements.map((s) => ({
+        area: s.area,
+        civ: civ.get(s.player)!,
+        tier: pieceTier(s.tier),
+        ...(s.name ? { name: s.name } : {}),
+        work: s.work ?? [],
+        instability: localInstability(s),
+        threshold: threshold(state, map, s),
+        risk: civ.get(s.player) === HUMAN && threshold(state, map, s) - totalInstability(state, s) <= 2,
+        capital: capitalOf(state, s.player) === s.area,
+      })),
       roads: [],
     };
   }, [state]);
@@ -422,7 +491,8 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
         if (result.ok) events.push(...result.events.map((e) => e.event));
       }
     } while (session.state.phase === 'trade');
-    setReport(turnReport(events, me, describeConflict));
+    setReport(turnReport(events, me, describeConflict, (area) => areaName(area)));
+    setLastEvents(events);
     if (session.state.turn > turn) {
       const failed = writeSave(session, `${gameName(session)} - autosave`, AUTOSAVE_ID);
       if (failed) setNotice(failed);
@@ -444,6 +514,13 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     tokensAt(session.state, from, me) - session.state.orders.filter((o) => o.player === me && o.from === from).reduce((sum, o) => sum + o.count, 0);
   const source = selected;
   const moveTargets = (area: AreaId) => (planning && left(area) > 0 ? reachable(session.state, map, me, area) : []);
+  // A move beyond the neighbours passes through one of the player's settlements (design doc §4,
+  // Settlement step); the first such settlement next to both ends, by area id.
+  const moveVia = (from: AreaId, to: AreaId): AreaId | null => {
+    if (map.areas[from]!.neighbors.includes(to)) return null;
+    const via = map.areas[from]!.neighbors.filter((n) => map.areas[n]!.neighbors.includes(to) && settlementAt(state, n)?.player === me).sort((a, b) => a - b)[0];
+    return via ?? null;
+  };
 
   // Names from the state before resolution, so the report can name a settlement that was destroyed.
   const areaName = (area: AreaId) => names.get(area) ?? capitalize(map.areas[area]!.terrain!);
@@ -461,7 +538,8 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   const details = (area: AreaId): AreaDetails => {
     const a = map.areas[area]!;
     const here = settlementAt(state, area);
-    const title = here ? `${names.get(area) ?? 'Unnamed'} – ${tierRules(here.tier).name} of ${who(here.player)}` : capitalize(a.terrain!);
+    const capital = here && capitalOf(state, here.player) === area ? ', capital' : '';
+    const title = here ? `${names.get(area) ?? 'Unnamed'} – ${tierRules(here.tier).name} of ${who(here.player)}${capital}` : capitalize(a.terrain!);
     const facts = [here ? capitalize(a.terrain!) : '', ...a.features, `limit ${a.limit}`, ...a.resources].filter(Boolean).join(' · ');
     const stacks = state.stacks.filter((st) => st.area === area).map((st) => ({ name: who(st.player), count: st.count, mine: st.player === me }));
     return { title, facts, stacks };
@@ -477,11 +555,28 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     const here = settlementAt(state, area);
     if (!here || here.player !== me) return null;
     const work = here.work ?? [];
-    const rows = map.areas[area]!.resources.map((resource) => ({ resource, count: work.find((w) => w.resource === resource)?.count ?? 0, usable: usable(state, session.content, me, resource) }));
+    const count = (resource: string) => work.find((w) => w.resource === resource)?.count ?? 0;
+    const rows = map.areas[area]!.resources.map((resource) => ({ resource, count: count(resource), usable: usable(state, session.content, me, resource) }));
+    rows.push({ resource: BUREAUCRACY, count: count(BUREAUCRACY), usable: true });
     return { total: manpower(here), free: manpower(here) - assigned(here), rows };
   };
+  const stabilityOption = (area: AreaId): StabilityOption | null => {
+    const here = settlementAt(state, area);
+    if (!here || here.player !== me) return null;
+    const changes = lastEvents.flatMap((e) => {
+      if (e.type !== 'instabilityChanged' || e.player !== me || (e.area !== null && e.area !== area)) return [];
+      return [`${e.amount > 0 ? '+' : '−'}${Math.abs(e.amount)} ${SOURCE_NAMES[e.source]}${e.area === null ? ' (civ-wide)' : ''}`];
+    });
+    const reason = thresholdReason(capitalDistance(state, map, here), capitalOf(state, me) === area);
+    return { local: localInstability(here), civ: civInstability(state, me), threshold: threshold(state, map, here), reason, changes };
+  };
+  // Overextension Bureaucracy does not cover: the civ-wide meter will keep rising.
+  const calming = state.settlements.filter((s) => s.player === me).reduce((sum, s) => sum + bureaucracyAt(state, s), 0);
+  const rising = overextension(state, me) - calming;
+  const unrest = rising > 0 ? `Unrest rising: overextension +${overextension(state, me)} a turn, Bureaucracy −${calming}. Assign Bureaucracy or the farthest settlements will collapse first` : null;
+  // Unassigned manpower produces nothing; Bureaucracy is open to every settlement.
   const idle = state.settlements
-    .filter((s) => s.player === me && assigned(s) < manpower(s) && map.areas[s.area]!.resources.some((r) => usable(state, session.content, me, r)))
+    .filter((s) => s.player === me && assigned(s) < manpower(s))
     .map((s) => ({ area: s.area, count: manpower(s) - assigned(s) }));
   const assignWork = (area: AreaId, resource: string, count: number) => {
     const result = submit(session, { type: 'assignWork', player: me, area, resource, count });
@@ -585,6 +680,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
           onMoveClick={onMoveClick}
           moveTargets={moveTargets}
           onMoveDrop={onMoveDrop}
+          moveVia={moveVia}
           selection={source}
           plans={plans}
         />
@@ -595,7 +691,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
               <input type="checkbox" checked={showCounts} onChange={(e) => setShowCounts(e.target.checked)} />
               Tokens / limits
             </label>
-            {(source !== null || (planning && (previews.length > 0 || conflicts.length > 0 || idle.length > 0))) && (
+            {(source !== null || (planning && (previews.length > 0 || conflicts.length > 0 || idle.length > 0 || unrest !== null))) && (
               <PlanPanel
                 source={source}
                 details={source === null ? null : details(source)}
@@ -603,8 +699,10 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                 state={{ tokens: source === null ? 0 : tokensAt(state, source, me), left: source === null ? 0 : left(source) }}
                 conversion={source === null ? null : conversionOption(source)}
                 work={source === null ? null : workOption(source)}
+                stability={source === null ? null : stabilityOption(source)}
                 previews={previews}
                 conflicts={conflicts.map((e) => ({ area: e.area, text: describeConflict(e)! }))}
+                unrest={unrest}
                 idle={idle}
                 areaName={areaName}
                 onConvert={convert}
@@ -673,6 +771,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   cap={STARTING_TOKEN_CAP}
                   names={names}
                   support={supportSummary(state, map, session.content, me)}
+                  stability={{ civ: civInstability(state, me), overextension: overextension(state, me), free: OVEREXTENSION_FREE, capital: capitalOf(state, me) }}
                   planned={myOrders.length > 0 || state.conversions.some((c) => c.player === me)}
                   onRename={rename}
                   onShow={showOnMap}

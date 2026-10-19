@@ -1,5 +1,6 @@
 import type { Content } from './content';
 import { emit } from './context';
+import { BUREAUCRACY } from './instability';
 import type { AreaId, GameMap, ResourceId } from './map/types';
 import { settlementAt, tierRules } from './settlements';
 import type { Command, Context, GameState, PlayerId, Settlement } from './types';
@@ -68,8 +69,10 @@ export function validateWork(ctx: Pick<Context, 'state' | 'map' | 'content'>, co
   const here = settlementAt(state, command.area);
   if (!here || here.player !== command.player) return 'You have no settlement there';
   if (!Number.isInteger(command.count) || command.count < 0) return 'Manpower must be a whole number, 0 or more';
-  if (!map.areas[command.area]!.resources.includes(command.resource)) return 'That resource is not in this area';
-  if (!usable(state, content, command.player, command.resource)) return 'Your civilization cannot gather that resource yet';
+  if (command.resource !== BUREAUCRACY) {
+    if (!map.areas[command.area]!.resources.includes(command.resource)) return 'That resource is not in this area';
+    if (!usable(state, content, command.player, command.resource)) return 'Your civilization cannot gather that resource yet';
+  }
   const others = (here.work ?? []).filter((w) => w.resource !== command.resource).reduce((sum, w) => sum + w.count, 0);
   if (others + command.count > manpower(here)) return `Only ${manpower(here) - others} manpower free in this settlement`;
   return null;

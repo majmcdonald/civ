@@ -11,8 +11,8 @@ Read both before design or build work. When a decision is made in conversation, 
 
 ## Current status
 
-- Design: core systems decided (v0.11); numbers untuned.
-- Build: Phases 0–2 done. **Phase 3 in progress** — core loop (steps 1–5 of 7 done: tokens, movement and growth, settlements, conflict, food and manpower; minimal AI and save/load from step 7 done early).
+- Design: core systems decided (v0.12); numbers untuned.
+- Build: Phases 0–2 done. **Phase 3 in progress** — core loop (steps 1–6 of 7 done: tokens, movement and growth, settlements, conflict, food and manpower, instability; minimal AI and save/load from step 7 done early).
 - Economy simulation: `sim/phase0/sim.ts` (`node sim/phase0/sim.ts [cap|settle|towns|rare|sweep]`). Kept and extended as systems are designed; re-run it when economy-affecting rules change.
 
 ## Stack and architecture

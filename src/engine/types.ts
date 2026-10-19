@@ -1,5 +1,6 @@
 import type { EraId } from '../content/types';
 import type { Content } from './content';
+import type { InstabilitySource } from './instability';
 import type { AreaId, GameMap, MapType, ResourceId, RoomToExpand } from './map/types';
 import type { ResolutionStepId } from './phases';
 import type { RngState } from './rng';
@@ -56,6 +57,10 @@ export interface PlayerState {
   tokenCap: number;
   // Areas a token moves per turn (design doc §4); transport advances raise it.
   movement: number;
+  // Civ-wide instability meter, added to every settlement's local meter (design doc §10).
+  instability: number;
+  // The capital's area: the first settlement, then the largest remaining (design doc §10).
+  capital: AreaId | null;
   // Settlement tiers the civilization can build (design doc §5).
   tiers: SettlementTier[];
   // Advances the civilization knows. Until discovery exists, the farming advances are known from
@@ -63,8 +68,8 @@ export interface PlayerState {
   known: string[];
 }
 
-// Manpower on one resource of the settlement's area (design doc §6, Manpower). Standing orders,
-// most recently changed last; manpower not listed is unassigned.
+// Manpower on one resource of the settlement's area, or on Bureaucracy ('bureaucracy') (design doc
+// §6, Manpower). Standing orders, most recently changed last; manpower not listed is unassigned.
 export interface Work {
   resource: ResourceId;
   count: number;
@@ -86,6 +91,8 @@ export interface Settlement {
   tier: SettlementTier;
   name?: string;
   work?: Work[];
+  // Local instability meter (design doc §10); absent means 0.
+  instability?: number;
 }
 
 // A founding (no settlement in the area) or an upgrade to the next tier, ordered in allocation.
@@ -156,6 +163,9 @@ export type GameEvent =
   | { type: 'settlementDropped'; player: PlayerId; area: AreaId; tier: SettlementTier | null; refugees: number; lost: number }
   | { type: 'goodsProduced'; player: PlayerId; area: AreaId; resource: ResourceId; count: number }
   | { type: 'foodSupport'; player: PlayerId; area: AreaId; count: number }
+  | { type: 'instabilityChanged'; player: PlayerId; area: AreaId | null; amount: number; source: InstabilitySource }
+  | { type: 'settlementCollapsed'; player: PlayerId; area: AreaId; tier: SettlementTier }
+  | { type: 'capitalMoved'; player: PlayerId; area: AreaId | null }
   | { type: 'urbanGrowth'; player: PlayerId; from: AreaId; to: AreaId; count: number }
   | { type: 'conflict'; area: AreaId; losses: TokenCount[] }
   | {

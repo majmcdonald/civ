@@ -225,6 +225,8 @@ interface IsoMapProps {
   onMoveClick?: (from: AreaId, to: AreaId, button: ClickButton, shift: boolean) => void;
   moveTargets?: (area: AreaId) => AreaId[];
   onMoveDrop?: (from: AreaId, to: AreaId, all: boolean) => void;
+  // The settlement a move passes through, if any; its arrow is drawn through the settlement.
+  moveVia?: (from: AreaId, to: AreaId) => AreaId | null;
   selection?: AreaId | null;
   // Planned settlement conversions, drawn as translucent pieces. Like real pieces, they let clicks
   // through to the area.
@@ -260,8 +262,9 @@ function areaAt(x: number, y: number): AreaId | null {
 
 // A straight arrow between two area centers, starting and ending short of them so the token stacks
 // and count badges stay visible. The count sits in a pill on the shaft, drawn in the arrow's own
-// colors so it reads as part of it. Arrows in opposite directions sit side by side.
-function moveArrow(a: Point, b: Point): { d: string; mid: Point } {
+// colors so it reads as part of it. Arrows in opposite directions sit side by side. `startAt`
+// overrides the clearance at the start (0 starts at the center, for the leg out of a settlement).
+function moveArrow(a: Point, b: Point, startAt?: number): { d: string; mid: Point } {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
   const len = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -278,6 +281,7 @@ function moveArrow(a: Point, b: Point): { d: string; mid: Point } {
     from = len * 0.35;
     to = len * 0.2;
   }
+  if (startAt !== undefined) from = startAt;
   const s: Point = [a[0] + ux * from + px, a[1] + uy * from + py];
   const e: Point = [b[0] - ux * to + px, b[1] - uy * to + py];
   const shaft = 0.5;
@@ -296,6 +300,27 @@ function moveArrow(a: Point, b: Point): { d: string; mid: Point } {
   return { d: `M${pts.map((p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`).join('L')}Z`, mid: [s[0] + (n[0] - s[0]) * 0.7, s[1] + (n[1] - s[1]) * 0.7] };
 }
 
+// The first leg of a move through a settlement: a plain shaft from the source to the settlement's
+// center, offset like the arrow so the two legs meet.
+function moveLeg(a: Point, b: Point): string {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const from = 1 / Math.sqrt((ux / 7) ** 2 + (uy / 6) ** 2);
+  const s: Point = [a[0] + ux * from - uy * 1.2, a[1] + uy * from + ux * 1.2];
+  const e: Point = [b[0] - uy * 1.2, b[1] + ux * 1.2];
+  const w = 0.5;
+  const pts: Point[] = [
+    [s[0] - uy * w, s[1] + ux * w],
+    [e[0] - uy * w, e[1] + ux * w],
+    [e[0] + uy * w, e[1] - ux * w],
+    [s[0] + uy * w, s[1] - ux * w],
+  ];
+  return `M${pts.map((p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`).join('L')}Z`;
+}
+
 export interface IsoMapHandle {
   home: () => View;
   setView: (view: View) => void;
@@ -310,7 +335,7 @@ export interface View {
   zoom: number;
 }
 
-export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hovered, onHover, hideTerrainArt = false, handle, showStarts = true, onAreaClick, moves = [], onMoveClick, moveTargets, onMoveDrop, selection = null, plans = [] }: IsoMapProps) {
+export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hovered, onHover, hideTerrainArt = false, handle, showStarts = true, onAreaClick, moves = [], onMoveClick, moveTargets, onMoveDrop, moveVia, selection = null, plans = [] }: IsoMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const onHoverRef = useRef(onHover);
   onHoverRef.current = onHover;
@@ -421,6 +446,20 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hov
     if (d.move) onMoveClick?.(d.move[0], d.move[1], button, event.shiftKey);
     else if (pointerArea.current !== null) onAreaClick?.(pointerArea.current, button);
   };
+  // A move's shapes: one arrow, or a leg to the settlement it passes through and an arrow on from
+  // its center.
+  const movePaths = (from: AreaId, to: AreaId): { legs: string[]; mid: Point } => {
+    const a = project(map.areas[from]!.center);
+    const b = project(map.areas[to]!.center);
+    const via = moveVia?.(from, to) ?? null;
+    if (via === null) {
+      const arrow = moveArrow(a, b);
+      return { legs: [arrow.d], mid: arrow.mid };
+    }
+    const v = project(map.areas[via]!.center);
+    const arrow = moveArrow(v, b, 0);
+    return { legs: [moveLeg(a, v), arrow.d], mid: arrow.mid };
+  };
   const onPointerCancel = () => {
     drag.current = null;
     setTokenDrag(null);
@@ -458,6 +497,21 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hov
       items.push({ y: at[1], key, node: <g key={key} transform={`translate(${at[0]} ${at[1]}) scale(${size})`}>{node}</g> });
     for (const s of pieces.settlements) {
       place(`s${s.area}`, project(map.areas[s.area]!.center), <use href={`#piece-${s.tier}`} color={CIV_COLORS[s.civ]} />, s.tier === 'town' ? 0.62 : 0.75);
+      // Close to collapse: a warning mark above the piece.
+      if (s.risk) {
+        const [cx, cy] = project(map.areas[s.area]!.center);
+        place(
+          `u${s.area}`,
+          [cx + 6, cy - 12],
+          <g>
+            <title>Close to collapse</title>
+            <circle r={2.6} fill="#a3301c" stroke="#f6eedb" strokeWidth={0.6} />
+            <text y={1.3} fontSize={3.8} fontWeight={700} fill="#f6eedb" textAnchor="middle">
+              !
+            </text>
+          </g>,
+        );
+      }
     }
     // Resource markers sit to the left of the area's pieces.
     for (const area of map.areas) {
@@ -510,16 +564,16 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hov
         });
       }
     }
-    // Names go on top of everything, just below their settlement.
+    // Names (and the capital's star) go on top of everything, just below their settlement.
     for (const s of pieces.settlements) {
-      if (!s.name) continue;
+      if (!s.name && !s.capital) continue;
       const [cx, cy] = project(map.areas[s.area]!.center);
       items.push({
         y: Infinity,
         key: `n${s.area}`,
         node: (
           <g key={`n${s.area}`} transform={`translate(${cx} ${cy + (s.tier === 'town' ? 4.5 : 3)}) scale(0.6)`}>
-            <SettlementLabel name={s.name} />
+            <SettlementLabel {...(s.name ? { name: s.name } : {})} capital={Boolean(s.capital)} />
           </g>
         ),
       });
@@ -686,18 +740,26 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hov
         );
       })}
       {tokenDrag?.over != null && (
-        <path d={moveArrow(project(map.areas[tokenDrag.from]!.center), project(map.areas[tokenDrag.over]!.center)).d} fill={MOVE_FILL} stroke={MOVE_INK} strokeWidth={0.35} opacity={0.55} pointerEvents="none" />
+        <g opacity={0.55} pointerEvents="none">
+          {movePaths(tokenDrag.from, tokenDrag.over).legs.map((d, i) => (
+            <path key={i} d={d} fill={MOVE_FILL} stroke={MOVE_INK} strokeWidth={0.35} strokeLinejoin="round" />
+          ))}
+        </g>
       )}
       {moves.map((m) => {
-        const { d, mid } = moveArrow(project(map.areas[m.from]!.center), project(map.areas[m.to]!.center));
+        const { legs, mid } = movePaths(m.from, m.to);
         const label = `+${m.count}`;
         const width = 2.4 + label.length * 2.1;
         return (
           <g key={`${m.from}-${m.to}`} data-move={`${m.from}-${m.to}`} className="iso-move">
             <title>{`Planned move: ${m.count} token${m.count === 1 ? '' : 's'}. Right-click to take one back, Shift-right-click to cancel`}</title>
             {/* A wider invisible outline makes the thin arrow easier to click. */}
-            <path d={d} fill="none" stroke="transparent" strokeWidth={3} pointerEvents="stroke" />
-            <path d={d} fill={MOVE_FILL} stroke={MOVE_INK} strokeWidth={0.35} strokeLinejoin="round" />
+            {legs.map((d, i) => (
+              <path key={`h${i}`} d={d} fill="none" stroke="transparent" strokeWidth={3} pointerEvents="stroke" />
+            ))}
+            {legs.map((d, i) => (
+              <path key={i} d={d} fill={MOVE_FILL} stroke={MOVE_INK} strokeWidth={0.35} strokeLinejoin="round" />
+            ))}
             <rect x={mid[0] - width / 2} y={mid[1] - 1.9} width={width} height={3.8} rx={1.9} fill={MOVE_FILL} stroke={MOVE_INK} strokeWidth={0.35} />
             <text x={mid[0]} y={mid[1] + 1.05} fontSize={3} fontWeight={700} fontFamily="var(--font-display)" fill="#f4fbef" textAnchor="middle">
               {label}

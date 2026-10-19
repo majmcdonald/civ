@@ -1,5 +1,6 @@
 import { resolveConflict } from './conflict';
 import { emit } from './context';
+import { resolveInstability, runBureaucracy, updateCapitals } from './instability';
 import { resolveGrowth, resolveMovement, resolveSurplus } from './population';
 import { runResources } from './resources';
 import { resolveConversion, resolveSupport, resolveUrbanGrowth } from './settlements';
@@ -28,11 +29,14 @@ export type ResolutionStepId = (typeof RESOLUTION_STEPS)[number];
 const resolutionSteps: Record<ResolutionStepId, (ctx: Context) => void> = {
   movement: resolveMovement,
   conflict: resolveConflict,
-  conversion: resolveConversion,
+  conversion: (ctx) => {
+    resolveConversion(ctx);
+    updateCapitals(ctx);
+  },
   food: () => {},
   calamities: () => {},
   support: resolveSupport,
-  instability: () => {},
+  instability: resolveInstability,
   growth: (ctx) => {
     resolveGrowth(ctx);
     resolveUrbanGrowth(ctx);
@@ -44,7 +48,11 @@ const resolutionSteps: Record<ResolutionStepId, (ctx: Context) => void> = {
   ast: () => {},
 };
 
-export { runResources };
+// Resources phase: goods are gathered and Bureaucracy calms (design doc §6, §10).
+export function runResourcesPhase(ctx: Context): void {
+  runResources(ctx);
+  runBureaucracy(ctx);
+}
 
 export function runResolution(ctx: Context): void {
   for (const step of RESOLUTION_STEPS) {

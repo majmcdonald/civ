@@ -104,6 +104,7 @@ function attackSettlement(ctx: Context, settlement: Settlement): void {
       settlement.tier = below.id;
       settlement.player = winner.player;
       resetWork(ctx, settlement);
+      delete settlement.instability;
       adjust(state, area, winner.player, -winner.count);
     } else {
       state.settlements = state.settlements.filter((s) => s !== settlement);

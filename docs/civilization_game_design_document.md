@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.11  
+**Version:** 0.12  
 **Date:** October 18, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -279,7 +279,7 @@ Manpower is a settlement's labor. Every unit is spent each turn on exactly one a
 | Assignment | Work | Effect | Favors figures |
 |---|---|---|---|
 | **Production** | Farming, mining, building | One of the area's resources per unit | — |
-| **Bureaucracy** | Works for the state | Adds stability | Leader, Reformer, Diplomat |
+| **Bureaucracy** | Works for the state | Lowers instability, 1 per unit per turn: its own settlement first, then the civ-wide meter (§10) | Leader, Reformer, Diplomat |
 | **High Learning** | Schools, R&D | Adds discovery progress | Scholar, Innovator, Thinker |
 | **Artists** | Arts | Slight stability; larger gain in culture points (victory points) | Artist, Prophet |
 | **Wonders** | Construction | Progress toward a wonder | — |
@@ -392,6 +392,38 @@ The ruler holds two direct levers. Everything else is indirect.
 | Disasters (pending calamity tuning) | | Manpower in Bureaucracy (and, slightly, Artists) |
 
 - **No natural decay.** A meter falls only when a stabilizer is active.
+
+### First version (Phase 3)
+
+Built before most sources and stabilizers exist; the rest arrive in Phase 4. Starting numbers, to be tuned.
+
+| Item | Meter | Value |
+|---|---|---|
+| Overextension | Civ-wide | +1 per turn for each settlement beyond 6 |
+| Settlement losses | Civ-wide | +1 per tier lost to support failure (a drop or dissolve) or capture (the loser loses the whole settlement: village 1, town 2, city 3, metropolis 4). **Collapse does not count**: it is already the result of instability, and counting it would turn a collapse at the edge into a cascade |
+| Lost support | Local, on the settlement that dropped | +2 (none if it dissolved) |
+| Nearby conflict | Local | +1 for each settlement in or adjacent to an area where its civilization's tokens or settlement fought |
+| Bureaucracy | Local first, the rest civ-wide | −1 per unit per turn; the capital has 1 free unit |
+| Threshold | Local + civ-wide | Village 8, town 10, city 12, metropolis 14, lowered by distance from the capital (below) |
+| Collapse | — | One tier (§5, Tier drop, with refugees); the local meter is halved, rounded down; at most one drop per turn |
+
+- **Capital.** A civilization's first settlement is its capital. It has **one free, invisible Bureaucracy unit** on top of its manpower, so a civilization can hold 7 settlements before overextension outruns it. When the capital is lost, the largest remaining settlement becomes the capital at once, nearest the old capital first (lower area numbers break ties); nothing else happens. The capital is marked with a gold star on the map.
+- **Distance from the capital lowers the threshold** by 1 for every 2 land moves beyond 2, by at most 4, and never below half the tier's base. A settlement with no land route to the capital counts as the farthest band. So as the civ-wide meter rises, **the far edge collapses first**; each collapse removes a settlement, which slows overextension, and the core settles close to its limit.
+
+  | Distance | Village | Town | City | Metropolis |
+  |---|---|---|---|---|
+  | 0–2 | 8 | 10 | 12 | 14 |
+  | 3–4 | 7 | 9 | 11 | 13 |
+  | 5–6 | 6 | 8 | 10 | 12 |
+  | 7–8 | 5 | 7 | 9 | 11 |
+  | 9+ or no land route | 4 | 6 | 8 | 10 |
+
+  Example: civ-wide meter 6, 9 settlements. Villages 5 or more moves out collapse; the meter stays at 6. Next turn overextension adds +1 (7 settlements, so +1 beyond the free 6), and villages 3–4 moves out (threshold 7) collapse. With 6 left, overextension stops and the meter holds at 7, below the core's 8.
+- **Bureaucracy calms locally first.** Each unit removes 1 from its own settlement's meter; what is not needed there comes off the civ-wide meter. Example: a town with 1 unit, local 0 and civ-wide 3 lowers the civ-wide meter to 2. Meters never go below 0.
+- **Timing.** Bureaucracy works in the resources phase, like production, so a change made in allocation counts from next turn. Resolution step 7 adds the turn's sources, then checks collapse; tiers lost to collapse add to the civ-wide meter after the check, counting toward next turn.
+- **No settlements, no state.** A civilization left with no settlements at the end of step 7 has its civ-wide meter reset to 0, so a full collapse becomes a dark age it can rebuild from instead of a permanent lockout (a new village counts the civ-wide meter the turn it is founded). A surviving settlement keeps the meter; it must be brought down with Bureaucracy.
+- **Capture** starts the captured settlement's local meter at 0 for its new owner (the nearby-conflict +1 still applies).
+- **Interface.** Selecting a settlement shows "Instability 4 + 3 of 10" (local + civ-wide of threshold), why its threshold is what it is ("4 areas from the capital"), last turn's changes, and a Bureaucracy row beside the area's resources. While overextension outruns the civilization's Bureaucracy, the planning panel warns that unrest is rising and the farthest settlements will collapse first. Settlements within 2 of collapse carry a warning mark on the map. The Civilization overview has a Stability card (civ-wide meter, overextension, Bureaucracy, settlements close to collapse) and an instability column. The turn report names each collapse.
 
 ### Collapse
 
@@ -583,7 +615,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 - [ ] Market starting prices and price-change rate
 - [ ] Conflict state duration
 - [ ] Settlement attack thresholds and defense values (set when settlements were worth 6/12/24/48 tokens; now 6/12/20/30)
-- [ ] Instability thresholds, source and stabilizer magnitudes, partial-reset amount
+- [ ] Instability thresholds, source and stabilizer magnitudes, partial-reset amount (first-version values in §10)
 - [ ] Calamity exposure rate and condition weights
 - [ ] Figure emergence odds
 - [ ] AST track lengths, gate requirements, settlement point values
@@ -602,6 +634,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.12 (October 19, 2026):** Instability, first version: overextension (+1 civ-wide per turn per settlement beyond 6), settlement losses (+1 civ-wide per tier lost), lost support (+2 local) and nearby conflict (+1 local). Bureaucracy is a manpower assignment in any settlement: −1 per unit per turn, its own meter first, the rest civ-wide; it works in the resources phase. Collapse thresholds rise by tier (village 8, town 10, city 12, metropolis 14) and fall with distance from the capital (−1 per 2 land moves beyond 2, at most −4, never below half); collapse drops one tier and halves the local meter, and does not count as a loss. The capital is the first settlement, has one free Bureaucracy unit, and passes to the largest remaining settlement when lost. A civilization with no settlements left has its civ-wide meter reset to 0. The planning panel warns while overextension outruns Bureaucracy. War, food, and the other sources and stabilizers wait for their systems.
 - **0.11 (October 19, 2026):** Moves are planned by drag and drop: a drag sends one token, Shift-drag sends all; right-click an arrow takes one back, Shift-right-click cancels it. A drag starting off your tokens pans. A single click selects any land area and shows its details, plus its actions in allocation; the hover box stays. Each civilization has a movement range, starting at 1 and raised by transport discoveries. Settlement step: leaving one of your own settlements entered during a move costs nothing, once per move (plains → own village → hills is one move).
 - **0.10 (October 18, 2026):** Food is a special resource found only in some areas, not a base need: nothing eats by default. Any settlement can produce it with production manpower once the farming technology for that resource is discovered. Food is gathered by production manpower and traded on the market like any other good; it substitutes for support tokens. Goods last one turn; storage arrives later through advances such as granaries. Food is placed by chance from terrain and features (floodplains always), and every start has a food area within reach (grain is added if none was rolled). Food goods are named (grain, fish), each with its own price; any of them counts for support. 1 manpower gathers 1 food and 1 food replaces 1 support token for every food good; goods differ through advances (plough and irrigation for grain, boats and nets for fish) and storage. Food supports its own settlement or an adjacent one of the same civilization, assigned by the engine after support tokens. Manpower assignments are standing orders, taking effect in the next resources phase; new settlements start on their area's food. Added open questions on the earlier growth, store, and instability roles of food. Growth replaces the original's rule (+1 / +2 per area) with 0.5 per loose token, boosted by resources and discoveries; each area keeps its fractional progress until it makes a whole token, losing it when the civilization's last token there leaves or dies; a full area keeps its progress but gains none. The expansion window and cap pacing must be re-simulated.
 - **0.9 (October 16, 2026):** The undo button also clears planned foundings and upgrades. Ghost settlements ignore clicks; a planned founding or upgrade is undone with the planning panel's "Unfound village" / "Cancel upgrade" button. Conflict losses follow the original's removal rule: sides take turns removing one token until the area is within its limit or one side is left; the side with the least power (sum of token strength) removes first. Rounds run weakest first; equal power removes together; three or more sides follow the same order. A settlement attacked at or above its threshold fights as its defense value in tokens under the removal rule until one side is eliminated. Surviving attackers garrison a captured town or larger and are removed; a captured village is destroyed and survivors stay up to the area's limit. Capture releases no refugees. The defender's own tokens moved into an attacked settlement's area add their power to its defense. Several attackers on one settlement fight it and each other in a single fight, after attackers below the threshold are destroyed. A captured settlement keeps its name. If the last tokens on both sides of a settlement fight fall together, the settlement holds.
