@@ -79,7 +79,7 @@ describe('founding', () => {
     place(game, b, 'p1', 2);
     const events = found(game, area);
     expect(eventsOfType(events, 'settlementBuilt')).toEqual([{ type: 'settlementBuilt', player: 'p1', area, tier: 'village', from: [{ area, count: 6 }] }]);
-    expect(settlementAt(game.state, area)).toEqual({ area, player: 'p1', tier: 'village' });
+    expect(settlementAt(game.state, area)).toMatchObject({ area, player: 'p1', tier: 'village' });
     expect(tokensAt(game.state, area, 'p1')).toBe(0);
     expect(game.state.conversions).toEqual([]);
   });
@@ -166,7 +166,7 @@ describe('support', () => {
     settle(game, village, 'village');
     settle(game, town, 'town');
     place(game, shared, 'p1', 3);
-    const support = assignSupport(game.state, map);
+    const support = assignSupport(game.state, map, game.content);
     expect(support.get(town)).toBe(3);
     expect(support.get(village)).toBe(0);
   });
@@ -285,7 +285,7 @@ describe('support summary', () => {
     const away = landNeighbors(map, b).find((n) => n !== area && !map.areas[area]!.neighbors.includes(n))!;
     play(game, { type: 'orderMove', player: 'p1', from: b, to: away, count: 2 });
     const summary = supportSummary(game.state, map, game.content, 'p1');
-    expect(summary.settlements).toEqual([{ area, tier: 'village', support: 0, needed: 2 }]);
+    expect(summary.settlements).toEqual([{ area, tier: 'village', support: 0, food: 0, needed: 2 }]);
   });
 
   it('counts village sites with 8 free tokens in reach', () => {

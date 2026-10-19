@@ -782,6 +782,18 @@
   cursor: pointer;
 }
 
+.game-plan-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  margin-bottom: 0.2rem;
+}
+
+.game-plan-area strong {
+  color: var(--ink);
+}
+
 .game-plan-convert {
   display: flex;
   flex-direction: column;
@@ -805,6 +817,41 @@
   font-style: normal;
   font-size: 0.85rem;
   color: #a3301c;
+}
+
+.game-plan-work {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0.1rem 0 0.3rem;
+}
+
+.game-plan-work-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.game-plan-work-row button {
+  width: 1.6rem;
+  padding: 0 0.3rem;
+  line-height: 1.3;
+}
+
+.game-plan-work-row button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.game-plan-work-row b {
+  min-width: 1ch;
+  text-align: center;
+}
+
+.game-plan-work small {
+  font-size: 0.75rem;
+  opacity: 0.75;
 }
 
 .game-plan-locked {

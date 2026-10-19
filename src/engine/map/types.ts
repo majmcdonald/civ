@@ -13,6 +13,8 @@ export const TERRAINS: readonly Terrain[] = ['plains', 'forest', 'hills', 'mount
 export type Feature = 'river' | 'floodplain' | 'coastal' | 'volcanic';
 
 export type AreaId = number;
+// A resource's content id (design doc §6), e.g. 'grain'.
+export type ResourceId = string;
 export type Point = [number, number];
 
 export interface MapOptions {
@@ -29,6 +31,8 @@ export interface MapArea {
   features: Feature[];
   // Starting population limit; 0 for sea areas.
   limit: number;
+  // Resources in the area; only food is placed so far (design doc §4, Procedural maps).
+  resources: ResourceId[];
   neighbors: AreaId[];
   // A point inside the area, for labels and pieces.
   center: Point;

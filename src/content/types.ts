@@ -35,7 +35,17 @@ export interface Advance {
   effects: Effect[];
 }
 
+// A good gathered by production manpower (design doc §6). Usable once its civilization knows the
+// required advance; food goods can stand in for support tokens.
+export interface Resource {
+  id: string;
+  name: string;
+  food: boolean;
+  requires: string;
+}
+
 export interface ContentBundle {
   eras: Era[];
   advances: Advance[];
+  resources: Resource[];
 }

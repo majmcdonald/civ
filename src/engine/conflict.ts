@@ -2,6 +2,7 @@ import type { Content } from './content';
 import { emit } from './context';
 import type { AreaId, GameMap } from './map/types';
 import { adjust, tokensAt } from './population';
+import { resetWork } from './resources';
 import { projectTurn, settlementAt, TIERS, tierRules } from './settlements';
 import type { Context, GameEvent, GameState, PlayerId, Settlement, TokenCount } from './types';
 
@@ -102,6 +103,7 @@ function attackSettlement(ctx: Context, settlement: Settlement): void {
     if (below) {
       settlement.tier = below.id;
       settlement.player = winner.player;
+      resetWork(ctx, settlement);
       adjust(state, area, winner.player, -winner.count);
     } else {
       state.settlements = state.settlements.filter((s) => s !== settlement);

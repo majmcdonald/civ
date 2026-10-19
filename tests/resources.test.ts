@@ -1,0 +1,230 @@
+import { describe, expect, it } from 'vitest';
+import { content } from '../src/content';
+import { generateMap, mapFor, MAP_TYPES, settlementAt, supportSummary, type AreaId, type Context, type GameMap, type Session, type SettlementTier } from '../src/engine';
+import { resolveConflict } from '../src/engine/conflict';
+import { dropTier } from '../src/engine/settlements';
+import { endPhaseAll, eventsOfType, expectRejected, newGame, play, testContent } from './harness';
+
+function toAllocation(game: Session): void {
+  while (game.state.phase !== 'allocation') endPhaseAll(game);
+}
+
+const land = (map: GameMap, area: AreaId) => map.areas[area]!.neighbors.filter((n) => map.areas[n]!.kind === 'land').sort((a, b) => a - b);
+
+// An empty board around a grain area with at least two land neighbours, and a land area with no food.
+function scene() {
+  const game = newGame({ unlockedTiers: ['village', 'town'] });
+  const map = mapFor(game.setup);
+  game.state.stacks = [];
+  const grain = map.areas.find((a) => a.resources.includes('grain') && land(map, a.id).length >= 2)!.id;
+  const [b, c] = land(map, grain) as [AreaId, AreaId];
+  const barren = map.areas.find((a) => a.kind === 'land' && a.resources.length === 0 && land(map, a.id).length >= 2)!.id;
+  return { game, map, grain, b, c, barren };
+}
+
+function place(game: Session, area: AreaId, player: string, count: number): void {
+  game.state.stacks = game.state.stacks.filter((s) => !(s.area === area && s.player === player));
+  game.state.stacks.push({ area, player, count });
+  game.state.stacks.sort((a, b) => a.area - b.area || (a.player < b.player ? -1 : 1));
+}
+
+function settle(game: Session, area: AreaId, tier: SettlementTier, work: { resource: string; count: number }[] = [], player = 'p1'): void {
+  game.state.settlements.push({ area, player, tier, work });
+  game.state.settlements.sort((a, b) => a.area - b.area);
+}
+
+function context(game: Session): Context {
+  return { state: JSON.parse(JSON.stringify(game.state)), content: testContent(), map: mapFor(game.setup), events: [], refugees: [] };
+}
+
+describe('food on the map', () => {
+  const maps = [1, 2, 3].flatMap((seed) => MAP_TYPES.map((type) => generateMap({ seed, civilizations: 5, type, room: 'standard' })));
+
+  it('places grain and fish only where the odds allow', () => {
+    for (const map of maps) {
+      for (const area of map.areas) {
+        if (area.kind === 'sea') expect(area.resources).toEqual([]);
+        if (area.features.includes('floodplain')) expect(area.resources).toEqual(['grain']);
+        if (area.resources.includes('fish')) expect(area.features).toContain('coastal');
+        if ((area.terrain === 'mountains' || area.terrain === 'desert') && !area.features.includes('floodplain')) expect(area.resources).not.toContain('grain');
+        expect(area.resources.length).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('gives every start food within 3 land moves', () => {
+    for (const map of maps) {
+      for (const start of map.starts) {
+        const seen = new Set([start]);
+        let frontier = [start];
+        for (let d = 0; d < 3; d++) frontier = frontier.flatMap((a) => land(map, a).filter((n) => !seen.has(n) && seen.add(n)));
+        expect([...seen].some((a) => map.areas[a]!.resources.length > 0)).toBe(true);
+      }
+    }
+  });
+
+  it('places food on a minority of land, every good defined in content', () => {
+    const ids = new Set(content.resources.map((r) => r.id));
+    for (const map of maps) {
+      const landAreas = map.areas.filter((a) => a.kind === 'land');
+      const withFood = landAreas.filter((a) => a.resources.length > 0);
+      expect(withFood.length / landAreas.length).toBeGreaterThan(0.05);
+      expect(withFood.length / landAreas.length).toBeLessThan(0.5);
+      for (const a of withFood) for (const r of a.resources) expect(ids.has(r)).toBe(true);
+    }
+  });
+});
+
+describe('the farming stand-in', () => {
+  it('has every civilization know the advances its resources need from turn 1', () => {
+    const game = newGame();
+    for (const p of game.state.players) expect(p.known).toEqual(['agriculture', 'fishing']);
+  });
+});
+
+describe('manpower', () => {
+  it('assigns new manpower on founding and upgrading', () => {
+    const { game, grain, b, c } = scene();
+    place(game, grain, 'p1', 6);
+    place(game, b, 'p1', 4);
+    place(game, c, 'p1', 3);
+    toAllocation(game);
+    play(game, { type: 'orderConversion', player: 'p1', area: grain, ordered: true });
+    endPhaseAll(game);
+    expect(settlementAt(game.state, grain)).toMatchObject({ tier: 'village', work: [{ resource: 'grain', count: 1 }] });
+    place(game, b, 'p1', 9);
+    toAllocation(game);
+    play(game, { type: 'orderConversion', player: 'p1', area: grain, ordered: true });
+    endPhaseAll(game);
+    expect(settlementAt(game.state, grain)).toMatchObject({ tier: 'town', work: [{ resource: 'grain', count: 2 }] });
+  });
+
+  it('leaves manpower unassigned in an area without food', () => {
+    const { game, barren } = scene();
+    place(game, barren, 'p1', 6);
+    for (const n of land(mapFor(game.setup), barren)) place(game, n, 'p1', 2);
+    toAllocation(game);
+    play(game, { type: 'orderConversion', player: 'p1', area: barren, ordered: true });
+    endPhaseAll(game);
+    expect(settlementAt(game.state, barren)).toMatchObject({ tier: 'village', work: [] });
+  });
+
+  it('takes assignments only in allocation, for the player’s own settlement, within its manpower', () => {
+    const { game, grain, barren } = scene();
+    settle(game, grain, 'town');
+    settle(game, barren, 'village', [], 'ai1');
+    const command = { type: 'assignWork' as const, player: 'p1', area: grain, resource: 'grain', count: 1 };
+    expectRejected(game, command, /allocation phase/);
+    toAllocation(game);
+    expectRejected(game, { ...command, area: barren }, /no settlement there/);
+    expectRejected(game, { ...command, resource: 'fish' }, /not in this area/);
+    expectRejected(game, { ...command, count: 3 }, /Only 2 manpower free/);
+    expectRejected(game, { ...command, count: 0.5 }, /whole number/);
+    play(game, { ...command, count: 2 });
+    expect(settlementAt(game.state, grain)!.work).toEqual([{ resource: 'grain', count: 2 }]);
+    play(game, { ...command, count: 0 });
+    expect(settlementAt(game.state, grain)!.work).toEqual([]);
+  });
+
+  it('refuses resources the civilization cannot gather yet', () => {
+    const { game, grain } = scene();
+    settle(game, grain, 'village');
+    game.state.players[0]!.known = [];
+    toAllocation(game);
+    expectRejected(game, { type: 'assignWork', player: 'p1', area: grain, resource: 'grain', count: 1 }, /cannot gather/);
+  });
+
+  it('drops unassigned manpower first, then the most recent assignment, when a settlement drops a tier', () => {
+    const { game, grain } = scene();
+    settle(game, grain, 'town', [{ resource: 'grain', count: 1 }]);
+    const ctx = context(game);
+    dropTier(ctx, settlementAt(ctx.state, grain)!);
+    expect(settlementAt(ctx.state, grain)).toMatchObject({ tier: 'village', work: [{ resource: 'grain', count: 1 }] });
+    game.state.settlements = [];
+    settle(game, grain, 'city', [{ resource: 'grain', count: 3 }]);
+    const ctx2 = context(game);
+    dropTier(ctx2, settlementAt(ctx2.state, grain)!);
+    expect(settlementAt(ctx2.state, grain)!.work).toEqual([{ resource: 'grain', count: 2 }]);
+  });
+
+  it('resets a captured settlement’s assignments for its new owner', () => {
+    const { game, grain } = scene();
+    settle(game, grain, 'town', [], 'ai1');
+    place(game, grain, 'p1', 13);
+    const ctx = context(game);
+    resolveConflict(ctx);
+    expect(settlementAt(ctx.state, grain)).toMatchObject({ player: 'p1', tier: 'village', work: [{ resource: 'grain', count: 1 }] });
+  });
+});
+
+describe('goods', () => {
+  it('are gathered in the next resources phase from standing assignments, and last one turn', () => {
+    const { game, grain, b } = scene();
+    settle(game, grain, 'village', [{ resource: 'grain', count: 1 }]);
+    place(game, b, 'p1', 2);
+    toAllocation(game);
+    expect(game.state.goods).toEqual([]);
+    const events = endPhaseAll(game);
+    expect(eventsOfType(events, 'goodsProduced')).toEqual([{ type: 'goodsProduced', player: 'p1', area: grain, resource: 'grain', count: 1 }]);
+    expect(game.state.goods).toEqual([{ area: grain, player: 'p1', resource: 'grain', count: 1 }]);
+    // Unassigned now: next turn's resources phase gathers nothing and this turn's grain is gone.
+    toAllocation(game);
+    play(game, { type: 'assignWork', player: 'p1', area: grain, resource: 'grain', count: 0 });
+    endPhaseAll(game);
+    expect(game.state.goods).toEqual([]);
+  });
+
+  it('are not gathered when the civilization cannot use the resource', () => {
+    const { game, grain } = scene();
+    settle(game, grain, 'village', [{ resource: 'grain', count: 1 }]);
+    game.state.players[0]!.known = [];
+    toAllocation(game);
+    expect(eventsOfType(endPhaseAll(game), 'goodsProduced')).toEqual([]);
+  });
+});
+
+describe('food as support', () => {
+  it('covers missing support tokens, 1 food per token', () => {
+    const { game, grain, b } = scene();
+    settle(game, grain, 'village');
+    place(game, b, 'p1', 1);
+    game.state.goods = [{ area: grain, player: 'p1', resource: 'grain', count: 1 }];
+    toAllocation(game);
+    const events = endPhaseAll(game);
+    expect(settlementAt(game.state, grain)).toBeDefined();
+    expect(eventsOfType(events, 'foodSupport')).toEqual([{ type: 'foodSupport', player: 'p1', area: grain, count: 1 }]);
+  });
+
+  it('is not enough when tokens and food together fall short', () => {
+    const { game, grain } = scene();
+    settle(game, grain, 'village');
+    game.state.goods = [{ area: grain, player: 'p1', resource: 'grain', count: 1 }];
+    toAllocation(game);
+    endPhaseAll(game);
+    expect(settlementAt(game.state, grain)).toBeUndefined();
+  });
+
+  it('comes from an adjacent settlement of the same civilization, not a farther one or a rival', () => {
+    const { game, map, grain, b } = scene();
+    settle(game, grain, 'village');
+    place(game, b, 'p1', 1);
+    const near = land(map, grain).find((n) => n !== b)!;
+    const far = map.areas.find((a) => a.kind === 'land' && a.id !== grain && !map.areas[grain]!.neighbors.includes(a.id) && !a.neighbors.includes(b))!.id;
+    game.state.goods = [{ area: far, player: 'p1', resource: 'grain', count: 5 }];
+    expect(supportSummary(game.state, map, game.content, 'p1').settlements[0]).toMatchObject({ support: 1, food: 0 });
+    game.state.goods = [{ area: near, player: 'ai1', resource: 'grain', count: 5 }];
+    expect(supportSummary(game.state, map, game.content, 'p1').settlements[0]).toMatchObject({ support: 1, food: 0 });
+    game.state.goods = [{ area: near, player: 'p1', resource: 'fish', count: 5 }];
+    expect(supportSummary(game.state, map, game.content, 'p1').settlements[0]).toMatchObject({ support: 2, food: 1 });
+  });
+
+  it('goes to larger settlements first, after support tokens', () => {
+    const { game, map, grain, b } = scene();
+    settle(game, grain, 'town');
+    settle(game, b, 'village');
+    game.state.goods = [{ area: b, player: 'p1', resource: 'grain', count: 3 }];
+    const summary = supportSummary(game.state, map, game.content, 'p1').settlements;
+    expect(summary.find((s) => s.area === grain)).toMatchObject({ support: 3, food: 3 });
+    expect(summary.find((s) => s.area === b)).toMatchObject({ support: 0, food: 0 });
+  });
+});

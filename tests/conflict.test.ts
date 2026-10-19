@@ -121,7 +121,7 @@ describe('attacking a settlement', () => {
     settle(game, area, 'town', 'ai1', 'Ur');
     place(game, area, 'p1', 13);
     const ctx = conflict(game);
-    expect(settlementAt(ctx.state, area)).toEqual({ area, player: 'p1', tier: 'village', name: 'Ur' });
+    expect(settlementAt(ctx.state, area)).toMatchObject({ area, player: 'p1', tier: 'village', name: 'Ur' });
     expect(at(ctx, area, 'p1')).toBe(0);
     expect(eventsOfType(ctx.events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: 'p1', survivors: 5 });
   });

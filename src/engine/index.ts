@@ -8,7 +8,8 @@ export { startSession, submit, toJsonLines, type LogLine, type Session } from '.
 export * from './types';
 export * from './map';
 export { mapFor, mapOptions } from './world';
-export { looseTokens, STARTING_TOKEN_CAP, tokensAt } from './population';
+export { BASE_MOVEMENT, GROWTH_PER_TOKEN, looseTokens, reachable, STARTING_TOKEN_CAP, tokensAt } from './population';
+export { assigned, manpower, usable } from './resources';
 export {
   assignSupport,
   conversionCost,

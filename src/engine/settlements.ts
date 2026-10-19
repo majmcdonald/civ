@@ -3,6 +3,7 @@ import { clone, emit } from './context';
 import type { Content } from './content';
 import type { AreaId, GameMap } from './map/types';
 import { adjust, areaTotals, looseLimit, looseTokens, resolveMovement, tokensAt } from './population';
+import { addManpower, foodAt, resetWork, trimWork } from './resources';
 import type { Command, Context, GameState, PlayerId, Settlement, SettlementTier, TokenSource } from './types';
 
 // Settlements: founding, upgrading, support, tier drop, and urban growth (design doc §5).
@@ -19,13 +20,15 @@ export interface TierRules {
   // as (design doc §11).
   attack: number;
   defense: number;
+  // Base manpower (design doc §5, Tier abilities).
+  manpower: number;
 }
 
 export const TIERS: readonly TierRules[] = [
-  { id: 'village', name: 'Village', value: 6, support: 2, urbanGrowth: 0, attack: 7, defense: 6 },
-  { id: 'town', name: 'Town', value: 12, support: 3, urbanGrowth: 1, attack: 10, defense: 9 },
-  { id: 'city', name: 'City', value: 20, support: 4, urbanGrowth: 2, attack: 15, defense: 14 },
-  { id: 'metropolis', name: 'Metropolis', value: 30, support: 6, urbanGrowth: 3, attack: 22, defense: 21 },
+  { id: 'village', name: 'Village', value: 6, support: 2, urbanGrowth: 0, attack: 7, defense: 6, manpower: 1 },
+  { id: 'town', name: 'Town', value: 12, support: 3, urbanGrowth: 1, attack: 10, defense: 9, manpower: 2 },
+  { id: 'city', name: 'City', value: 20, support: 4, urbanGrowth: 2, attack: 15, defense: 14, manpower: 3 },
+  { id: 'metropolis', name: 'Metropolis', value: 30, support: 6, urbanGrowth: 3, attack: 22, defense: 21, manpower: 4 },
 ];
 
 export const NAME_MAX_LENGTH = 32;
@@ -147,9 +150,14 @@ export function resolveConversion(ctx: Context): void {
     }
     for (const f of from) adjust(state, f.area, order.player, -f.count);
     const here = settlementAt(state, order.area);
-    if (here) here.tier = tier.id;
-    else {
-      state.settlements.push({ area: order.area, player: order.player, tier: tier.id });
+    if (here) {
+      const before = tierRules(here.tier).manpower;
+      here.tier = tier.id;
+      addManpower(ctx, here, tier.manpower - before);
+    } else {
+      const built: Settlement = { area: order.area, player: order.player, tier: tier.id };
+      resetWork(ctx, built);
+      state.settlements.push(built);
       state.settlements.sort((a, b) => a.area - b.area);
     }
     emit(ctx, { type: 'settlementBuilt', player: order.player, area: order.area, tier: tier.id, from });
@@ -158,12 +166,17 @@ export function resolveConversion(ctx: Context): void {
 }
 
 // Support each settlement receives: loose tokens of its civilization in adjacent unsettled areas,
-// one settlement per token. Larger tiers claim first, then lower area ids (design doc §5). Also
-// returns the tokens left over, by "area:player".
-export function allocateSupport(state: GameState, map: GameMap): { support: Map<AreaId, number>; spare: Map<string, number> } {
+// one settlement per token. Larger tiers claim first, then lower area ids (design doc §5). Then
+// food covers what tokens could not, 1 food per token, from the settlement's own goods or those of
+// its civilization's adjacent settlements, in the same order (design doc §6, Food). `support`
+// counts both; `fed` is the food part. Also returns the tokens left over, by "area:player".
+export function allocateSupport(state: GameState, map: GameMap, content: Content): { support: Map<AreaId, number>; fed: Map<AreaId, number>; spare: Map<string, number> } {
   const spare = new Map(state.stacks.map((s) => [`${s.area}:${s.player}`, s.count]));
   const order = [...state.settlements].sort((a, b) => tierRules(b.tier).value - tierRules(a.tier).value || a.area - b.area);
   const support = new Map<AreaId, number>();
+  const fed = new Map<AreaId, number>();
+  const food = new Map<string, number>();
+  const foodLeft = (area: AreaId, player: PlayerId) => food.get(`${area}:${player}`) ?? foodAt(state, content, area, player);
   for (const s of order) {
     const need = tierRules(s.tier).support;
     let got = 0;
@@ -178,16 +191,34 @@ export function allocateSupport(state: GameState, map: GameMap): { support: Map<
     }
     support.set(s.area, got);
   }
-  return { support, spare };
+  for (const s of order) {
+    const need = tierRules(s.tier).support;
+    let got = 0;
+    for (const a of [s.area, ...[...map.areas[s.area]!.neighbors].sort((x, y) => x - y)]) {
+      if (support.get(s.area)! + got === need) break;
+      const take = Math.min(foodLeft(a, s.player), need - support.get(s.area)! - got);
+      if (take <= 0) continue;
+      food.set(`${a}:${s.player}`, foodLeft(a, s.player) - take);
+      got += take;
+    }
+    if (got === 0) continue;
+    fed.set(s.area, got);
+    support.set(s.area, support.get(s.area)! + got);
+  }
+  return { support, fed, spare };
 }
 
-export function assignSupport(state: GameState, map: GameMap): Map<AreaId, number> {
-  return allocateSupport(state, map).support;
+export function assignSupport(state: GameState, map: GameMap, content: Content): Map<AreaId, number> {
+  return allocateSupport(state, map, content).support;
 }
 
 // Resolution step 6: a settlement short of support drops one tier.
 export function resolveSupport(ctx: Context): void {
-  const support = assignSupport(ctx.state, ctx.map);
+  const { support, fed } = allocateSupport(ctx.state, ctx.map, ctx.content);
+  for (const s of ctx.state.settlements) {
+    const count = fed.get(s.area);
+    if (count) emit(ctx, { type: 'foodSupport', player: s.player, area: s.area, count });
+  }
   const short = ctx.state.settlements.filter((s) => support.get(s.area)! < tierRules(s.tier).support);
   for (const s of short) dropTier(ctx, s);
 }
@@ -198,8 +229,10 @@ export function dropTier(ctx: Context, settlement: Settlement): void {
   const i = TIERS.indexOf(tierRules(settlement.tier));
   const freed = conversionCost(settlement.tier);
   const below = TIERS[i - 1];
-  if (below) settlement.tier = below.id;
-  else state.settlements = state.settlements.filter((s) => s !== settlement);
+  if (below) {
+    settlement.tier = below.id;
+    trimWork(settlement);
+  } else state.settlements = state.settlements.filter((s) => s !== settlement);
   const placed = placeRefugees(ctx, settlement.player, settlement.area, freed, !below);
   emit(ctx, { type: 'settlementDropped', player: settlement.player, area: settlement.area, tier: below?.id ?? null, refugees: placed, lost: freed - placed });
 }
@@ -297,7 +330,7 @@ export function previewConversions(state: GameState, map: GameMap, content: Cont
   const orders = state.conversions.filter((o) => o.player === player);
   const tiers = new Map(orders.map((o) => [o.area, nextTier(state, o.area)?.id ?? 'metropolis']));
   const projected = projectTurn(state, map, content);
-  const support = assignSupport(projected.state, map);
+  const support = assignSupport(projected.state, map, content);
   return orders.map((o) => {
     const tier = tiers.get(o.area)!;
     const preview: ConversionPreview = { area: o.area, tier, built: false, from: [], leftover: 0, support: 0, needed: tierRules(tier).support };
@@ -322,7 +355,8 @@ export interface SupportSummary {
   supplied: number;
   // Loose tokens not supporting any settlement.
   free: number;
-  settlements: { area: AreaId; tier: SettlementTier; support: number; needed: number }[];
+  // Support counts food; `food` is the part food covers.
+  settlements: { area: AreaId; tier: SettlementTier; support: number; food: number; needed: number }[];
   // Unsettled areas where a new village would have its 6 tokens and 2 support from free tokens
   // alone: at least 8 free tokens in the area and its neighbors.
   villageSites: AreaId[];
@@ -330,11 +364,11 @@ export interface SupportSummary {
 
 export function supportSummary(state: GameState, map: GameMap, content: Content, player: PlayerId): SupportSummary {
   const projected = projectTurn(state, map, content).state;
-  const { support, spare } = allocateSupport(projected, map);
+  const { support, fed, spare } = allocateSupport(projected, map, content);
   const free = (area: AreaId) => spare.get(`${area}:${player}`) ?? 0;
   const settlements = projected.settlements
     .filter((s) => s.player === player)
-    .map((s) => ({ area: s.area, tier: s.tier, support: support.get(s.area)!, needed: tierRules(s.tier).support }));
+    .map((s) => ({ area: s.area, tier: s.tier, support: support.get(s.area)!, food: fed.get(s.area) ?? 0, needed: tierRules(s.tier).support }));
   const villageCost = TIERS[0]!.value + TIERS[0]!.support;
   const villageSites = map.areas
     .filter((a) => a.kind === 'land' && !settlementAt(projected, a.id) && !projected.stacks.some((s) => s.area === a.id && s.player !== player))

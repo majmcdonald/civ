@@ -2,13 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { content as contentBundle } from '../../content';
 import {
   aiCommands,
+  assigned,
   conversionCost,
   hooks,
   loadContent,
+  manpower,
   mapFor,
   nextTier,
   previewConflicts,
   previewConversions,
+  reachable,
   saveGame,
   settlementAt,
   startSession,
@@ -18,6 +21,7 @@ import {
   TIERS,
   tokensAt,
   tokensInReach,
+  usable,
   type AreaId,
   type ConflictEvent,
   type Content,
@@ -144,6 +148,7 @@ function turnReport(events: GameEvent[], me: string, conflict: (e: ConflictEvent
     if (e.type === 'settlementBuilt') lines.push(`${tierRules(e.tier).name} ${e.tier === 'village' ? 'founded' : 'built'}`);
     if (e.type === 'conversionFailed') lines.push(`Not built: ${e.reason}`);
     if (e.type === 'settlementDropped') lines.push(e.tier ? `A settlement dropped to ${e.tier} for lack of support` : 'A village dissolved for lack of support');
+    if (e.type === 'foodSupport') lines.push(`Food stood in for ${plural(e.count, 'support token')}`);
   }
   return lines;
 }
@@ -167,31 +172,60 @@ function usesText(p: ConversionPreview): string {
   return `Uses ${parts.join(', ')} · support ${p.support} of ${p.needed}`;
 }
 
+// A settlement's manpower and what its area offers (design doc §6, Manpower).
+interface WorkOption {
+  total: number;
+  free: number;
+  rows: { resource: string; count: number; usable: boolean }[];
+}
+
+// What the panel shows about any selected land area.
+interface AreaDetails {
+  title: string;
+  facts: string;
+  stacks: { name: string; count: number; mine: boolean }[];
+}
+
 interface PlanPanelProps {
   source: AreaId | null;
+  details: AreaDetails | null;
+  planning: boolean;
   state: { tokens: number; left: number };
   conversion: ConversionOption | null;
+  work: WorkOption | null;
   previews: ConversionPreview[];
   conflicts: { area: AreaId; text: string }[];
+  // Settlements with manpower free and a resource it could gather.
+  idle: { area: AreaId; count: number }[];
   areaName: (area: AreaId) => string;
   onConvert: (area: AreaId, ordered: boolean) => void;
+  onWork: (area: AreaId, resource: string, count: number) => void;
   onSelect: (area: AreaId) => void;
 }
 
-// Allocation planning for the selected area (moves, founding, upgrading) and the turn's planned
-// settlements, each with what will happen if the turn resolved now.
-function PlanPanel({ source, state, conversion, previews, conflicts, areaName, onConvert, onSelect }: PlanPanelProps) {
-  const others = previews.filter((p) => p.area !== source);
+// The selected area's details, and in allocation its actions (moves, founding, upgrading,
+// manpower) and the turn's planned settlements, each with what will happen if the turn resolved now.
+function PlanPanel({ source, details, planning, state, conversion, work, previews, conflicts, idle, areaName, onConvert, onWork, onSelect }: PlanPanelProps) {
+  const others = planning ? previews.filter((p) => p.area !== source) : [];
+  const idleElsewhere = planning ? idle.filter((i) => i.area !== source) : [];
   return (
     <div className="game-plan" aria-live="polite">
-      {source !== null && (
+      {details && (
+        <div className="game-plan-area">
+          <strong>{details.title}</strong>
+          <span>{details.facts}</span>
+          {details.stacks.length > 0 && <span>{details.stacks.map((s) => `${s.mine ? 'Your tokens' : s.name}: ${s.count}`).join(' · ')}</span>}
+        </div>
+      )}
+      {source !== null && planning && (
         <>
+          {work && <WorkRow area={source} work={work} onWork={onWork} />}
           {state.tokens > 0 && (
             <>
               <strong>
                 {state.left} of {plural(state.tokens, 'token')} left to move
               </strong>
-              <span>Click a neighbour to send one · right-click to take one back · Esc when done</span>
+              <span>Drag to a highlighted area to send one · Shift-drag sends all · right-click an arrow to take one back</span>
             </>
           )}
           {conversion && <ConversionRow area={source} option={conversion} onConvert={onConvert} />}
@@ -215,6 +249,18 @@ function PlanPanel({ source, state, conversion, previews, conflicts, areaName, o
           })}
         </ul>
       )}
+      {idleElsewhere.length > 0 && (
+        <ul className="game-plan-list">
+          <li className="game-plan-head">Manpower with nothing to do</li>
+          {idleElsewhere.map((i) => (
+            <li key={i.area} className="warn">
+              <button type="button" className="game-plan-link" onClick={() => onSelect(i.area)}>
+                {areaName(i.area)} · {i.count} unassigned
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {conflicts.length > 0 && (
         <ul className="game-plan-list game-plan-conflicts">
           <li className="game-plan-head">Fights if the turn resolved now</li>
@@ -223,6 +269,30 @@ function PlanPanel({ source, state, conversion, previews, conflicts, areaName, o
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function WorkRow({ area, work, onWork }: { area: AreaId; work: WorkOption; onWork: (area: AreaId, resource: string, count: number) => void }) {
+  return (
+    <div className="game-plan-work">
+      <strong>
+        Manpower: {work.total - work.free} of {work.total} working
+      </strong>
+      {work.rows.length === 0 && <span>Nothing to gather in this area yet</span>}
+      {work.rows.map((r) => (
+        <span key={r.resource} className="game-plan-work-row" title={r.usable ? '1 per manpower, gathered at the start of next turn' : 'Your civilization cannot gather this yet'}>
+          <span>{capitalize(r.resource)}</span>
+          <button type="button" aria-label={`Less ${r.resource}`} disabled={r.count === 0} onClick={() => onWork(area, r.resource, r.count - 1)}>
+            −
+          </button>
+          <b>{r.count}</b>
+          <button type="button" aria-label={`More ${r.resource}`} disabled={!r.usable || work.free === 0} onClick={() => onWork(area, r.resource, r.count + 1)}>
+            +
+          </button>
+        </span>
+      ))}
+      {work.rows.length > 0 && <small>Changes take effect next turn</small>}
     </div>
   );
 }
@@ -284,7 +354,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     mapHandle.current?.focus(mapFor(session.setup).starts[HUMAN]!);
   }, [session]);
 
-  // Escape closes any status screen and returns to the map, and finishes movement planning.
+  // Escape closes any status screen and returns to the map, and clears the selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -301,8 +371,8 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   const pieces = useMemo<MapPieces>(() => {
     const civ = new Map(state.players.map((p, i) => [p.id, i]));
     return {
-      stacks: state.stacks.map((s) => ({ area: s.area, civ: civ.get(s.player)!, count: s.count })),
-      settlements: state.settlements.map((s) => ({ area: s.area, civ: civ.get(s.player)!, tier: pieceTier(s.tier), ...(s.name ? { name: s.name } : {}) })),
+      stacks: state.stacks.map((s) => ({ area: s.area, civ: civ.get(s.player)!, count: s.count, ...(s.growth ? { growth: s.growth } : {}) })),
+      settlements: state.settlements.map((s) => ({ area: s.area, civ: civ.get(s.player)!, tier: pieceTier(s.tier), ...(s.name ? { name: s.name } : {}), work: s.work ?? [] })),
       roads: [],
     };
   }, [state]);
@@ -361,17 +431,19 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     setVersion((v) => v + 1);
   };
 
-  // Movement planning (design doc §4): click one of your areas, then click a neighbour once per
-  // token to send; right-click takes one back. Each change is an order to the engine.
+  // Movement planning (design doc §4): drag tokens from one of your areas to an area in reach to
+  // send one, Shift-drag for all; right-click an arrow to take one back, Shift-right-click to cancel
+  // it. Each change is an order to the engine.
   const me = state.players[HUMAN]!.id;
   const planning = state.phase === 'allocation';
   const myOrders = state.orders.filter((o) => o.player === me);
-  // Read from the live session so quick repeated clicks build on each other before a re-render.
+  // Read from the live session so quick repeated changes build on each other before a re-render.
   const planned = (from: AreaId, to: AreaId) =>
     session.state.orders.find((o) => o.player === me && o.from === from && o.to === to)?.count ?? 0;
-  const left = (from: AreaId) => tokensAt(state, from, me) - myOrders.filter((o) => o.from === from).reduce((sum, o) => sum + o.count, 0);
-  const source = planning ? selected : null;
-  const targets = source === null || tokensAt(state, source, me) === 0 ? [] : map.areas[source]!.neighbors.filter((n) => map.areas[n]!.kind === 'land');
+  const left = (from: AreaId) =>
+    tokensAt(session.state, from, me) - session.state.orders.filter((o) => o.player === me && o.from === from).reduce((sum, o) => sum + o.count, 0);
+  const source = selected;
+  const moveTargets = (area: AreaId) => (planning && left(area) > 0 ? reachable(session.state, map, me, area) : []);
 
   // Names from the state before resolution, so the report can name a settlement that was destroyed.
   const areaName = (area: AreaId) => names.get(area) ?? capitalize(map.areas[area]!.terrain!);
@@ -386,15 +458,33 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   // Settlement conversions (design doc §5): previewed with this turn's planned moves.
   const previews = useMemo(() => (planning ? previewConversions(state, map, session.content, me) : []), [planning, state, map, session, me]);
   const plans: PlannedSettlement[] = previews.map((p) => ({ area: p.area, civ: HUMAN, tier: pieceTier(p.tier) }));
-  // An area can be selected to move from, to upgrade its settlement, or to found one with tokens in reach.
-  const selectable = (area: AreaId) => {
-    if (map.areas[area]!.kind !== 'land') return false;
+  const details = (area: AreaId): AreaDetails => {
+    const a = map.areas[area]!;
     const here = settlementAt(state, area);
-    if (here) return here.player === me;
-    return tokensInReach(state, map, me, area) > 0;
+    const title = here ? `${names.get(area) ?? 'Unnamed'} – ${tierRules(here.tier).name} of ${who(here.player)}` : capitalize(a.terrain!);
+    const facts = [here ? capitalize(a.terrain!) : '', ...a.features, `limit ${a.limit}`, ...a.resources].filter(Boolean).join(' · ');
+    const stacks = state.stacks.filter((st) => st.area === area).map((st) => ({ name: who(st.player), count: st.count, mine: st.player === me }));
+    return { title, facts, stacks };
   };
   const convert = (area: AreaId, ordered: boolean) => {
     const result = submit(session, { type: 'orderConversion', player: me, area, ordered });
+    if (!result.ok) setNotice(result.reason);
+    setVersion((v) => v + 1);
+  };
+
+  // Manpower (design doc §6): standing assignments, changed in allocation.
+  const workOption = (area: AreaId): WorkOption | null => {
+    const here = settlementAt(state, area);
+    if (!here || here.player !== me) return null;
+    const work = here.work ?? [];
+    const rows = map.areas[area]!.resources.map((resource) => ({ resource, count: work.find((w) => w.resource === resource)?.count ?? 0, usable: usable(state, session.content, me, resource) }));
+    return { total: manpower(here), free: manpower(here) - assigned(here), rows };
+  };
+  const idle = state.settlements
+    .filter((s) => s.player === me && assigned(s) < manpower(s) && map.areas[s.area]!.resources.some((r) => usable(state, session.content, me, r)))
+    .map((s) => ({ area: s.area, count: manpower(s) - assigned(s) }));
+  const assignWork = (area: AreaId, resource: string, count: number) => {
+    const result = submit(session, { type: 'assignWork', player: me, area, resource, count });
     if (!result.ok) setNotice(result.reason);
     setVersion((v) => v + 1);
   };
@@ -415,6 +505,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   const conversionOption = (area: AreaId): ConversionOption | null => {
     const here = settlementAt(state, area);
     if (here && here.player !== me) return null;
+    if (!here && tokensInReach(state, map, me, area) === 0) return null;
     const tier = nextTier(state, area);
     if (!tier) return null;
     const ordered = previews.find((p) => p.area === area) ?? null;
@@ -422,30 +513,23 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     return { tier: tier.id, upgrade: Boolean(here), cost: conversionCost(tier.id), unlocked, ordered };
   };
 
+  // A click selects any land area; clicking it again, or the sea, clears the selection.
   const onAreaClick = (area: AreaId, button: ClickButton) => {
-    if (source !== null && targets.includes(area)) {
-      const count = planned(source, area);
-      if (button === 'primary') order(source, area, count + 1);
-      else if (count > 0) order(source, area, count - 1);
-      return;
-    }
     if (button !== 'primary') return;
-    if (area === source || !selectable(area)) {
-      setSelected(null);
-      return;
-    }
-    if (!planning) {
-      setNotice('Moves and settlements are ordered in the Allocation phase');
-      return;
-    }
-    setSelected(area);
+    setSelected(area === selected || map.areas[area]!.kind !== 'land' ? null : area);
   };
 
-  // Clicking a planned move reopens planning from its source; right-click takes one token back.
-  const onMoveClick = (from: AreaId, to: AreaId, button: ClickButton) => {
+  const onMoveDrop = (from: AreaId, to: AreaId, all: boolean) => {
+    if (left(from) === 0) return;
+    order(from, to, planned(from, to) + (all ? left(from) : 1));
+  };
+
+  // Clicking a planned move selects its source; right-click takes one token back, Shift-right-click
+  // cancels the move.
+  const onMoveClick = (from: AreaId, to: AreaId, button: ClickButton, shift: boolean) => {
     if (!planning) return;
     if (button === 'primary') setSelected(from);
-    else order(from, to, planned(from, to) - 1);
+    else order(from, to, shift ? 0 : planned(from, to) - 1);
   };
 
   return (
@@ -499,7 +583,9 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
           onAreaClick={onAreaClick}
           moves={myOrders}
           onMoveClick={onMoveClick}
-          selection={source === null ? null : { area: source, targets }}
+          moveTargets={moveTargets}
+          onMoveDrop={onMoveDrop}
+          selection={source}
           plans={plans}
         />
 
@@ -509,15 +595,20 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
               <input type="checkbox" checked={showCounts} onChange={(e) => setShowCounts(e.target.checked)} />
               Tokens / limits
             </label>
-            {planning && (source !== null || previews.length > 0 || conflicts.length > 0) && (
+            {(source !== null || (planning && (previews.length > 0 || conflicts.length > 0 || idle.length > 0))) && (
               <PlanPanel
                 source={source}
+                details={source === null ? null : details(source)}
+                planning={planning}
                 state={{ tokens: source === null ? 0 : tokensAt(state, source, me), left: source === null ? 0 : left(source) }}
                 conversion={source === null ? null : conversionOption(source)}
+                work={source === null ? null : workOption(source)}
                 previews={previews}
                 conflicts={conflicts.map((e) => ({ area: e.area, text: describeConflict(e)! }))}
+                idle={idle}
                 areaName={areaName}
                 onConvert={convert}
+                onWork={assignWork}
                 onSelect={(area) => {
                   setSelected(area);
                   mapHandle.current?.focus(area);
@@ -541,11 +632,12 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                     {hoveredSettlement && `${names.get(hoveredSettlement.area) ?? 'Unnamed'} – ${hoveredSettlement.tier === 'town' ? 'Town' : 'Village'} · `}
                     {hoveredArea.terrain!.charAt(0).toUpperCase() + hoveredArea.terrain!.slice(1)}
                     {hoveredArea.features.length > 0 && ` · ${hoveredArea.features.join(', ')}`} · limit {hoveredArea.limit}
+                    {hoveredArea.resources.length > 0 && ` · ${hoveredArea.resources.join(', ')}`}
                     {tokensAt(state, hoveredArea.id, me) > 0 && ` · ${tokensAt(state, hoveredArea.id, me)} of your tokens`}
                   </>
                 )
               ) : (
-                <span className="game-hint">{planning ? 'Click one of your areas to plan moves or settlements' : 'Drag to pan · scroll to zoom'}</span>
+                <span className="game-hint">{planning ? 'Drag your tokens to move them (Shift-drag for all) · click an area for details and actions' : 'Drag to pan · scroll to zoom · click an area for details'}</span>
               )}
             </div>
             <div className="game-turn-panel">

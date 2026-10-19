@@ -1,7 +1,7 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.9  
-**Date:** October 16, 2026  
+**Version:** 0.11  
+**Date:** October 18, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
 > This is a living design document. Sections marked **Decided** are current design commitments (still subject to playtesting). Items under **Open** and **Tuning** are unresolved. Ideas documented here do not become rules until they are moved into a Decided section.
@@ -99,7 +99,19 @@ Four phases. All players act simultaneously within each phase.
 
 - Size scales with the civilization count and room to expand (§2): about **64 land areas per civilization** on a standard map (Phase 0), plus sea areas. The map type (§2) sets the land and sea layout. Rivers and fault chains scale with the land.
 - **Starting positions use fair spacing.** Starts are placed as far apart as possible by travel distance, and each must pass a quality check: enough total area limit within about 3 moves and no more than a set share of mountains or desert. Among passing layouts, the generator prefers balanced nearby land (each start's share of the land closer to it than to any other start). If no layout passes, the generator re-rolls. On the continents type, the check applies per landmass. The original used hand-tuned printed starting regions instead.
-- Resources are not placed until their categories are decided (§6, §17).
+- **Food resources** are placed by chance per area, from terrain and features (starting odds; tuning):
+
+  | Area | Chance of food |
+  |---|---|
+  | Floodplain | Always (grain) |
+  | Plains with a river | 50% (grain) |
+  | Plains | 20% (grain) |
+  | Coastal | 25% (fish) |
+  | Marsh, forest, hills | 10% |
+  | Mountains, desert without a floodplain | 0% |
+
+  Grain and fish are rolled separately; when both succeed, the likelier one is placed (one food per area). Every start gets food within reach (3 moves): if none was rolled, grain goes on the likeliest area in reach, nearest first. Food is rolled on its own random stream, so placing it changes nothing else on the map.
+- Other resources are not placed until their categories are decided (§6, §17).
 
 ### Population tokens
 
@@ -110,16 +122,23 @@ Four phases. All players act simultaneously within each phase.
   - Advances raise the cap **1–2 times per era**. Rise sizes are set when those advances are designed.
   - Support tokens are loose and count against the cap, so the cap also bounds the number of settlements (roughly cap ÷ 4–5 in Phase 0). Each era's expansion is paced by its cap rises.
 - **Each civilization starts with one token in its starting area**, as in the original. The Phase 0 simulation and the 30–40 turn expansion window assume this start.
-- **Growth is automatic**, following the original's rule: each turn, an area with 1 loose token gains 1; an area with 2 or more gains 2. Growth never exceeds the area's population limit or the civilization's token cap. Proportional growth (about +1 per N loose tokens) will be compared in the Phase 0 simulation.
+- **Growth is automatic and proportional**: each turn, an area gains **0.5 per loose token** of each civilization in it. Growth never exceeds the area's population limit or the civilization's token cap. Resources and discoveries boost the rate (e.g., +0.25 per token); boost sizes are set when those are designed.
+  - **Each area keeps its own growth progress** per civilization: fractions carry over until they make a whole token. Example: an area with 1 token shows "1 +½" after one turn and holds 2 tokens the next. The map badge shows the progress.
+  - Progress survives moves and losses while at least one of the civilization's tokens stays in the area; when its last token leaves or dies, the progress is lost. Progress is never shared between civilizations.
+  - **A full area gains no progress but keeps what it has**; growth resumes from it when room opens. When only part of a turn's growth fits (under the area limit or the token cap), whole tokens beyond the room are lost and the leftover fraction is kept. Example: hills, limit 3, holding 3 with ½ progress stays at ½; after 1 token leaves, the next turn adds 2 × 0.5 + ½ = 1.5, so 1 token and ½ carried over. As in the original, a full area simply does not grow.
+  - Compared with the original's rule (+1 for 1 token, +2 for 2 or more), this is never faster at starting limits (1–5) and about half as fast at low counts; it overtakes the original only in areas holding more than 4 tokens, so boosts gain value as limits rise.
+  - The 30–40 turn expansion window and token-cap pacing were tuned to the original's rule and must be re-simulated.
 - **Loose tokens produce nothing and need no support.** They have no manpower. They matter as growth, as support for settlements, as a source of new settlements, as armies, and as discoverers (occupying a resource area contributes to related discoveries).
 
 ### Movement
 
-- By default a token moves **one adjacent land area** per turn.
+- By default a token moves **one adjacent land area** per turn. Each civilization has a **movement range** (areas per turn), starting at 1.
 - Transport discoveries (roads, railroads, flight, and similar) extend range.
+- **Settlement step.** Stepping out of one of the civilization's own settlements (village or larger) entered during the move costs nothing, **once per move**. Example: plains → own village → hills is a single move at range 1; plains → own village → own village ends in the second village. Rival settlements give no step (entering one is an attack, §11). Settlements count as they stand at the end of allocation; planned conversions do not. An order names only its origin and destination; the engine checks the destination is in reach.
 - **River and sea travel require discovering ships.**
 - **Orders and resolution.** Moves are ordered in allocation and all resolve at once in resolution step 1, from where tokens stood at the end of allocation, so a token moves at most once per turn. Tokens may move into an area held by another civilization; whether that leads to conflict is decided in step 2 (§11).
-- **Ordering moves (interface).** Click one of your areas; it gets a double-width blue border and its land neighbors a normal blue outline. Each click on a neighbor sends one more token, and right-click takes one back. Every planned move shows on the map as a **green arrow** carrying its token count ("+2"), and the source area's badge subtracts the tokens leaving (e.g., "4−3/4": 4 tokens, 3 leaving, limit 4). Clicking an arrow reopens planning from its source area to add or remove tokens; right-clicking it takes one back. Esc finishes planning. **Undo all moves and settlements** clears every planned move, founding, and upgrade for the turn.
+- **Ordering moves (interface).** **Drag** from one of your areas with tokens left to move: the area gets a double-width blue border and every area in reach a normal blue outline (the one under the pointer shaded, with a faint arrow). Dropping on an area in reach sends **one token**; **Shift-drag sends all** tokens left to move. Dropping anywhere else cancels. A drag that starts elsewhere, or outside allocation, pans the map. Every planned move shows on the map as a **green arrow** carrying its token count ("+2"), and the source area's badge subtracts the tokens leaving (e.g., "4−3/4": 4 tokens, 3 leaving, limit 4). **Right-click an arrow** to take one token back, **Shift-right-click** to cancel the move; clicking an arrow selects its source area. **Undo all moves and settlements** clears every planned move, founding, and upgrade for the turn.
+- **Selecting an area (interface).** A single click selects **any land area** (clicking it again, or the sea, clears the selection; so does Esc). The panel shows the area's details (name or terrain, holder, features, limit, food, everyone's tokens there) in any phase, and in allocation the actions it offers: tokens left to move, founding or upgrading, manpower. The hover box stays as a quick summary.
 
 ### Growth and surplus details
 
@@ -227,6 +246,8 @@ Each tier keeps the abilities of the tiers below it. Higher tiers justify their 
 - **Resources are revealed before they are usable,** and use has requirements. Example: iron is revealed by stone tools but cannot yet be used.
 - **Occupation drives discovery.** Any presence (loose tokens or settlements) in an area with a revealed resource contributes progress toward the related discovery. Example: occupying an iron area leads toward mining.
 
+- **Goods last one turn.** Goods are produced in phase 1, can be traded in phase 2, and are used in resolution; anything unused is lost at the end of the turn. Example: wheat gathered in turn 10 and not used cannot cover a support shortfall in turn 14. Storage comes later through advances (e.g., granaries for food), which may let some goods carry over or spoil slowly. The original kept commodity cards in hand between turns; this design does not.
+
 Candidate resource categories (from v0.1, not yet finalized): renewable production, extracted materials, manufactured goods, stored resources.
 
 ### Transport
@@ -237,9 +258,14 @@ Candidate resource categories (from v0.1, not yet finalized): renewable producti
 
 ### Food
 
-- Food surplus drives **growth**; deficits cause starvation and migration.
-- Food stores **buffer** shortages and calamities.
-- Food shortage raises **instability**; surplus and stores lower it.
+- **Food is a special resource**, not a base need. It appears only in some areas (e.g., wheat on a floodplain), and nothing consumes food by default: loose tokens live off the land (area limits stand for carrying capacity, as in the original) and settlements are fed by their support tokens.
+- **Any settlement can produce food**, with production manpower, once its civilization has discovered the technology that farms that resource. Example: a village on a wheat floodplain farms nothing until irrigation (or similar) is discovered, then can assign its 1 manpower to wheat.
+- **Food is a category of named goods**, each with its own market price: grain and fish to start, more later (cattle, rice). Any food good counts as food for support. As in the original, where each commodity (grain, cloth, salt) had its own cards and value.
+- **Food is a good like any other resource**: production manpower gathers it in phase 1, and it can be traded on the market in phase 2 (§7). Further uses may be added later.
+- **Food substitutes for support tokens: 1 food replaces 1 support token**, and 1 production manpower gathers 1 food. Example: a town (2 manpower, 3 support) left with 1 support token can farm with both manpower and stay a town, but does no other work that turn. A village (1 manpower, 2 support) can cover only half its own support, so settlements still need hinterland.
+- **Food in reach.** A settlement can be supported by its own food or food gathered by one of its civilization's settlements in an adjacent area (§6, Transport); farther food needs transport discoveries or the market. The engine assigns food in the support check (resolution step 6), after support tokens, larger tiers first, then lower area numbers. Example: a town 1 support short is covered by a neighbouring village's grain; fish gathered three areas away cannot help.
+- **Food goods differ through advances and storage, not base yield or conversion.** Every food good starts at 1 food per manpower and 1 support per food. Grain gains from the plough and irrigation and later keeps in granaries; fish gains from boats and nets, scales less, and spoils without salt. Historically, fishing matched or beat early farming (Jōmon, Pacific Northwest, Baltic), but grain scaled with technology and stored for years, which made it the base of early states.
+- Earlier direction, not decided now that food is a special resource (§17): food surplus drives growth; stores buffer shortages and calamities; shortage raises instability, surplus and stores lower it.
 
 ### Manpower
 
@@ -248,6 +274,7 @@ Manpower is a settlement's labor. Every unit is spent each turn on exactly one a
 - Each settlement has **whole units of manpower**: a tier base (village 1, town 2, city 3, metropolis 4) plus **advance bonuses**.
 - **Advance bonuses apply only when the related work is being done.** Example: the plow gives nothing to a town whose manpower is all mining. The bonus type (per-unit multiplier, task-tied extra unit, or other) **varies by advance** and is designed one technology at a time.
 - Loose tokens have no manpower.
+- **Assignments are standing orders.** Manpower keeps its assignment every turn until the player changes it in allocation. Assignments made in allocation produce in the next turn's resources phase (§3), so food for a support check is gathered at the start of that turn, from the previous turn's assignments. A new settlement starts on its area's food if it has any, otherwise unassigned; unassigned manpower produces nothing, and the planning panel flags it where the area has something to gather. An upgrade puts its new manpower on the area's food; a tier drop removes unassigned manpower first, then the most recently changed assignment; a captured settlement starts over as if new.
 
 | Assignment | Work | Effect | Favors figures |
 |---|---|---|---|
@@ -514,7 +541,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 | Development ratio replaced | v0.2 initially derived manpower from a population ratio that rose with development. Replaced by tier base plus advance bonuses, which keeps manpower in small, readable whole units |
 | No instability decay | Meters accumulate over a long game unless the ruler actively stabilizes |
 | Collapse cascades | Settlement losses raise the civ-wide meter, which raises every local meter, so one collapse can trigger others. Must not become routine |
-| Fast map fill | Phase 0 simulation: with the original's growth rule and no effective cap, one civilization filled a 64-area map in about 20 turns. Resolved by the token cap (55, loose tokens only, 1–2 rises per era): with two Stone Age rises, land fills around turn 36; with fewer, it may never fill, so peace is the default until cap-raising advances add pressure |
+| Fast map fill | Phase 0 simulation (before proportional growth, v0.10; to be re-run): with the original's growth rule and no effective cap, one civilization filled a 64-area map in about 20 turns. Resolved by the token cap (55, loose tokens only, 1–2 rises per era): with two Stone Age rises, land fills around turn 36; with fewer, it may never fill, so peace is the default until cap-raising advances add pressure |
 | No support cascades | Settlements are supported by tokens, not lower tiers (v0.3). Simpler and keeps token counts small, but removes tier-to-tier cascades. Fully populated settled areas restore a hinterland requirement |
 | Uneven expansion window on continents | On the continents map type, an isolated civilization may meet no one in the Stone Age while others meet early. Accepted for variety; the inland sea default keeps the 30–40 turn window predictable |
 | Low manpower ceiling | Fully populated settled areas cap how much of the map can be settled (about 40–60% in Phase 0), and high tiers are rare at small limits. Chosen for spatial decisions over density; discoveries that raise limits lift the ceiling |
@@ -531,7 +558,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 ### Design
 
 - [x] ~~How the original's growth rule extends~~ — kept unchanged (v0.3).
-- [ ] Growth variant: original rule (current) vs proportional. Compared in the Phase 0 simulation.
+- [x] ~~Growth variant: original rule vs proportional~~ — proportional, 0.5 per loose token with per-area progress (v0.10).
 - [ ] What specific transport discoveries do to movement range and goods range.
 - [ ] Conditions for absorbing independent settlements peacefully.
 - [ ] Barbarian spawn rules.
@@ -545,11 +572,12 @@ These are choices made knowingly, or risks to watch in playtesting.
 - [ ] Names for rival civilizations' settlements (generated name lists, or unnamed).
 - [ ] What happens to a settlement's name when it dissolves or is refounded.
 - [ ] Support variant: tokens only (current) vs tokens plus one lower-tier settlement in range. Compared in the Phase 0 simulation.
+- [ ] Food: whether food still drives growth, stores buffer shortages, and shortage raises instability now that food is a special resource.
 
 ### Tuning (playtesting)
 
 - [ ] Settlement conversion costs and support requirements
-- [ ] Starting limit range and resource options per terrain; terrain mix on procedural maps
+- [ ] Starting limit range and resource options per terrain; terrain mix on procedural maps; food odds per terrain and feature
 - [ ] Tier exclusive abilities and tax per tier (the town tier especially)
 - [ ] Base manpower per tier; stability, discovery, and culture yields per specialist
 - [ ] Market starting prices and price-change rate
@@ -574,6 +602,8 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.11 (October 19, 2026):** Moves are planned by drag and drop: a drag sends one token, Shift-drag sends all; right-click an arrow takes one back, Shift-right-click cancels it. A drag starting off your tokens pans. A single click selects any land area and shows its details, plus its actions in allocation; the hover box stays. Each civilization has a movement range, starting at 1 and raised by transport discoveries. Settlement step: leaving one of your own settlements entered during a move costs nothing, once per move (plains → own village → hills is one move).
+- **0.10 (October 18, 2026):** Food is a special resource found only in some areas, not a base need: nothing eats by default. Any settlement can produce it with production manpower once the farming technology for that resource is discovered. Food is gathered by production manpower and traded on the market like any other good; it substitutes for support tokens. Goods last one turn; storage arrives later through advances such as granaries. Food is placed by chance from terrain and features (floodplains always), and every start has a food area within reach (grain is added if none was rolled). Food goods are named (grain, fish), each with its own price; any of them counts for support. 1 manpower gathers 1 food and 1 food replaces 1 support token for every food good; goods differ through advances (plough and irrigation for grain, boats and nets for fish) and storage. Food supports its own settlement or an adjacent one of the same civilization, assigned by the engine after support tokens. Manpower assignments are standing orders, taking effect in the next resources phase; new settlements start on their area's food. Added open questions on the earlier growth, store, and instability roles of food. Growth replaces the original's rule (+1 / +2 per area) with 0.5 per loose token, boosted by resources and discoveries; each area keeps its fractional progress until it makes a whole token, losing it when the civilization's last token there leaves or dies; a full area keeps its progress but gains none. The expansion window and cap pacing must be re-simulated.
 - **0.9 (October 16, 2026):** The undo button also clears planned foundings and upgrades. Ghost settlements ignore clicks; a planned founding or upgrade is undone with the planning panel's "Unfound village" / "Cancel upgrade" button. Conflict losses follow the original's removal rule: sides take turns removing one token until the area is within its limit or one side is left; the side with the least power (sum of token strength) removes first. Rounds run weakest first; equal power removes together; three or more sides follow the same order. A settlement attacked at or above its threshold fights as its defense value in tokens under the removal rule until one side is eliminated. Surviving attackers garrison a captured town or larger and are removed; a captured village is destroyed and survivors stay up to the area's limit. Capture releases no refugees. The defender's own tokens moved into an attacked settlement's area add their power to its defense. Several attackers on one settlement fight it and each other in a single fight, after attackers below the threshold are destroyed. A captured settlement keeps its name. If the last tokens on both sides of a settlement fight fall together, the settlement holds.
 - **0.8 (October 16, 2026):** Conversions: the player picks the area, the engine picks the tokens at resolution (own area first, then the fullest adjacent areas). Planned conversions show on the map as ghost pieces and can be undone until resolution. Arrows carry their count; source badges show tokens leaving ("4−3/4"); Undo all moves clears the turn's moves. New settlements need their support the turn they are built, with a warning when planning; the engine assigns support tokens, larger tiers first. Refugees fill the dropped settlement's own area up to its limit, then own or empty neighbors with the most room; rival areas only as a last resort. Refugees ignore the token cap for their grace turn; any excess left after it is removed from the fullest areas. Urban growth goes to own or empty neighbors with the most room. An unsupported settlement drops one tier per turn.
 - **0.7 (October 16, 2026):** Each civilization starts with one token in its starting area, as in the original. Movement orders resolve simultaneously from end-of-allocation positions; moves are planned by clicking an area, then its neighbors, and show as clickable green arrows. Growth counts from pre-growth tokens with a fixed fill order when a limit or cap runs out; surplus removal covers single-civilization areas, leaving shared ones to conflict.

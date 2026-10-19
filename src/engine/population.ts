@@ -5,6 +5,10 @@ import type { Context, GameState, MoveOrder, PlayerId, Stack } from './types';
 // Loose tokens: movement, growth, and surplus removal (design doc §4).
 
 export const STARTING_TOKEN_CAP = 55;
+// Growth per loose token per turn (design doc §4); resources and discoveries will boost it.
+export const GROWTH_PER_TOKEN = 0.5;
+// Areas a token moves per turn before transport advances (design doc §4).
+export const BASE_MOVEMENT = 1;
 
 export function tokensAt(state: GameState, area: AreaId, player: PlayerId): number {
   return state.stacks.find((s) => s.area === area && s.player === player)?.count ?? 0;
@@ -24,6 +28,35 @@ function orderedOut(state: GameState, player: PlayerId, from: AreaId, except: Ar
   return state.orders.reduce((sum, o) => (o.player === player && o.from === from && o.to !== except ? sum + o.count : sum), 0);
 }
 
+// Land areas a player's tokens can reach from an area this turn (design doc §4, Movement). Each
+// step costs 1 movement, except that stepping out of one of the player's own settlements entered
+// on the way is free, once per move: plains → own village → hills is one step. Settlements count as
+// they stand now (planned conversions do not).
+export function reachable(state: GameState, map: GameMap, player: PlayerId, from: AreaId): AreaId[] {
+  const range = state.players.find((p) => p.id === player)?.movement ?? BASE_MOVEMENT;
+  const own = new Set(state.settlements.filter((s) => s.player === player).map((s) => s.area));
+  // Best movement left on reaching each area, with and without the free step used.
+  const best = new Map<string, number>();
+  const reached = new Set<AreaId>();
+  const queue: { area: AreaId; left: number; passed: boolean }[] = [{ area: from, left: range, passed: false }];
+  while (queue.length > 0) {
+    const { area, left, passed } = queue.shift()!;
+    const free = !passed && area !== from && own.has(area);
+    const cost = free ? 0 : 1;
+    if (left < cost) continue;
+    for (const n of map.areas[area]!.neighbors) {
+      if (map.areas[n]!.kind !== 'land' || n === from) continue;
+      const next = { area: n, left: left - cost, passed: passed || free };
+      const key = `${n}:${next.passed}`;
+      if ((best.get(key) ?? -1) >= next.left) continue;
+      best.set(key, next.left);
+      reached.add(n);
+      queue.push(next);
+    }
+  }
+  return [...reached].sort((a, b) => a - b);
+}
+
 export function validateMoveOrder(ctx: Pick<Context, 'state' | 'map'>, order: MoveOrder): string | null {
   const { state, map } = ctx;
   const player = state.players.find((p) => p.id === order.player);
@@ -34,9 +67,9 @@ export function validateMoveOrder(ctx: Pick<Context, 'state' | 'map'>, order: Mo
   const from = map.areas[order.from];
   const to = map.areas[order.to];
   if (!from || !to) return 'Unknown area';
-  if (!from.neighbors.includes(order.to)) return 'Tokens move one adjacent area per turn';
   // Rivers and seas need ships (§4), which no one has yet.
   if (to.kind !== 'land') return 'Moving by sea requires ships';
+  if (!reachable(state, map, order.player, order.from).includes(order.to)) return 'That area is out of reach this turn';
   const available = tokensAt(state, order.from, order.player) - orderedOut(state, order.player, order.from, order.to);
   if (order.count > available) return `Only ${available} token${available === 1 ? '' : 's'} left to move from that area`;
   return null;
@@ -81,16 +114,26 @@ export function areaTotals(state: GameState): Map<AreaId, number> {
   return totals;
 }
 
-// Resolution step 8: an area with 1 loose token gains 1, with 2 or more gains 2, never past the
-// area's limit or the civilization's cap. Growth is counted from the tokens present before any of
-// it is added. When the limit or cap runs out, lower area ids, then earlier players, grow first.
+// Resolution step 8: each stack gains 0.5 per token, added to the progress it carries; each whole
+// token of progress becomes a token, never past the area's limit or the civilization's cap. A
+// stack with no room gains no progress but keeps what it has; whole tokens beyond the room are
+// lost and the fraction is kept. Progress lives on the stack, so it is lost with the last token.
+// Growth is counted from the tokens present before any of it is added. When the limit or cap runs
+// out, lower area ids, then earlier players, grow first.
 export function resolveGrowth(ctx: Context): void {
   const { state, map } = ctx;
   const totals = areaTotals(state);
   const room = new Map(state.players.map((p) => [p.id, p.tokenCap - looseTokens(state, p.id)]));
   const grown = new Map<PlayerId, number>();
   for (const s of [...state.stacks]) {
-    const add = Math.min(s.count >= 2 ? 2 : 1, looseLimit(state, map, s.area) - totals.get(s.area)!, room.get(s.player)!);
+    const space = Math.min(looseLimit(state, map, s.area) - totals.get(s.area)!, room.get(s.player)!);
+    if (space <= 0) continue;
+    const progress = (s.growth ?? 0) + s.count * GROWTH_PER_TOKEN;
+    const whole = Math.floor(progress);
+    const fraction = progress - whole;
+    if (fraction > 0) s.growth = fraction;
+    else delete s.growth;
+    const add = Math.min(whole, space);
     if (add <= 0) continue;
     totals.set(s.area, totals.get(s.area)! + add);
     room.set(s.player, room.get(s.player)! - add);

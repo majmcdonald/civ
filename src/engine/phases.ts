@@ -1,6 +1,7 @@
 import { resolveConflict } from './conflict';
 import { emit } from './context';
 import { resolveGrowth, resolveMovement, resolveSurplus } from './population';
+import { runResources } from './resources';
 import { resolveConversion, resolveSupport, resolveUrbanGrowth } from './settlements';
 import type { Context } from './types';
 
@@ -43,7 +44,7 @@ const resolutionSteps: Record<ResolutionStepId, (ctx: Context) => void> = {
   ast: () => {},
 };
 
-export function runResources(_ctx: Context): void {}
+export { runResources };
 
 export function runResolution(ctx: Context): void {
   for (const step of RESOLUTION_STEPS) {

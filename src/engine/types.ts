@@ -1,6 +1,6 @@
 import type { EraId } from '../content/types';
 import type { Content } from './content';
-import type { AreaId, GameMap, MapType, RoomToExpand } from './map/types';
+import type { AreaId, GameMap, MapType, ResourceId, RoomToExpand } from './map/types';
 import type { ResolutionStepId } from './phases';
 import type { RngState } from './rng';
 
@@ -43,6 +43,8 @@ export interface Stack {
   area: AreaId;
   player: PlayerId;
   count: number;
+  // Growth progress toward the next token, kept while the stack exists (design doc §4).
+  growth?: number;
 }
 
 export interface PlayerState {
@@ -52,8 +54,29 @@ export interface PlayerState {
   endedPhase: boolean;
   // Most loose tokens the civilization may have (design doc §4).
   tokenCap: number;
+  // Areas a token moves per turn (design doc §4); transport advances raise it.
+  movement: number;
   // Settlement tiers the civilization can build (design doc §5).
   tiers: SettlementTier[];
+  // Advances the civilization knows. Until discovery exists, the farming advances are known from
+  // turn 1 (development plan, Phase 3).
+  known: string[];
+}
+
+// Manpower on one resource of the settlement's area (design doc §6, Manpower). Standing orders,
+// most recently changed last; manpower not listed is unassigned.
+export interface Work {
+  resource: ResourceId;
+  count: number;
+}
+
+// Goods gathered in the resources phase, held where they were gathered; lost at the end of the
+// turn (design doc §6).
+export interface Good {
+  area: AreaId;
+  player: PlayerId;
+  resource: ResourceId;
+  count: number;
 }
 
 // One settlement per area (design doc §5).
@@ -62,6 +85,7 @@ export interface Settlement {
   player: PlayerId;
   tier: SettlementTier;
   name?: string;
+  work?: Work[];
 }
 
 // A founding (no settlement in the area) or an upgrade to the next tier, ordered in allocation.
@@ -90,6 +114,7 @@ export interface GameState {
   orders: MoveOrder[];
   settlements: Settlement[];
   conversions: ConversionOrder[];
+  goods: Good[];
 }
 
 export type Command =
@@ -99,7 +124,9 @@ export type Command =
   // Orders (or with `ordered: false`, cancels) founding a village or upgrading the settlement here.
   | { type: 'orderConversion'; player: PlayerId; area: AreaId; ordered: boolean }
   // Names a settlement; an empty name clears it.
-  | { type: 'nameSettlement'; player: PlayerId; area: AreaId; name: string };
+  | { type: 'nameSettlement'; player: PlayerId; area: AreaId; name: string }
+  // Sets how much of a settlement's manpower works one of its area's resources; 0 unassigns it.
+  | { type: 'assignWork'; player: PlayerId; area: AreaId; resource: ResourceId; count: number };
 
 // Tokens taken from one area by a conversion.
 export interface TokenSource {
@@ -127,6 +154,8 @@ export type GameEvent =
   | { type: 'settlementBuilt'; player: PlayerId; area: AreaId; tier: SettlementTier; from: TokenSource[] }
   | { type: 'conversionFailed'; player: PlayerId; area: AreaId; reason: string }
   | { type: 'settlementDropped'; player: PlayerId; area: AreaId; tier: SettlementTier | null; refugees: number; lost: number }
+  | { type: 'goodsProduced'; player: PlayerId; area: AreaId; resource: ResourceId; count: number }
+  | { type: 'foodSupport'; player: PlayerId; area: AreaId; count: number }
   | { type: 'urbanGrowth'; player: PlayerId; from: AreaId; to: AreaId; count: number }
   | { type: 'conflict'; area: AreaId; losses: TokenCount[] }
   | {

@@ -9,6 +9,7 @@ const base: ContentBundle = {
     { id: 'bronze', name: 'Bronze Age', order: 1 },
   ],
   advances: [],
+  resources: [],
 };
 
 function errorsFor(bundle: ContentBundle, hooks = {}): string[] {
@@ -48,6 +49,15 @@ describe('content loading', () => {
   it('reports references to unknown eras', () => {
     const bundle: ContentBundle = { ...base, advances: [{ id: 'a', name: 'A', era: 'modern', effects: [] }] };
     expect(errorsFor(bundle)).toEqual(['Advance "a" references unknown era "modern"']);
+  });
+
+  it('reports duplicate resources and resources requiring unknown advances', () => {
+    const grain = { id: 'grain', name: 'Grain', food: true, requires: 'agriculture' };
+    expect(errorsFor({ ...base, resources: [grain, grain] })).toEqual([
+      'Resource "grain" requires unknown advance "agriculture"',
+      'Duplicate resource id "grain"',
+      'Resource "grain" requires unknown advance "agriculture"',
+    ]);
   });
 
   it('reports unknown hooks', () => {

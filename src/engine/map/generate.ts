@@ -1,6 +1,6 @@
 import { createRng, stepRng } from '../rng';
 import { boundaryPaths, buildGrid, hash, type HexGrid } from './grid';
-import type { AreaId, Feature, GameMap, MapArea, MapOptions, MapType, Point, River, RoomToExpand, Terrain } from './types';
+import type { AreaId, Feature, GameMap, MapArea, MapOptions, MapType, Point, River, ResourceId, RoomToExpand, Terrain } from './types';
 
 // Procedural map generator (design doc §4, Procedural maps). Deterministic: the same options
 // always give the same map. Builds a fine hex grid, raises land from a shape plus noise, groups
@@ -398,6 +398,7 @@ function tryGenerate(options: MapOptions, attempt: number): GameMap | null {
       terrain: null,
       features: [],
       limit: 0,
+      resources: [],
       neighbors: [...neighborSet].sort((a, b) => a - b),
       center: [Math.round(grid.x[centerCell]! * 100) / 100, Math.round(grid.y[centerCell]! * 100) / 100],
       outline: boundaryPaths(grid, cells, (_, n) => n < 0 || areaOf[n] !== id),
@@ -438,6 +439,7 @@ function tryGenerate(options: MapOptions, attempt: number): GameMap | null {
 
   const starts = placeStarts(areas, landAreas, civilizations, rand);
   if (!starts) return null;
+  placeFood(areas, landAreas, starts, makeRandom(seed ^ 0x5eedf00d));
 
   for (const area of areas) area.features.sort();
   return {
@@ -707,6 +709,36 @@ function placeStarts(areas: MapArea[], landAreas: MapArea[], civilizations: numb
     }
   }
   return best;
+}
+
+// Food odds per area (design doc §4, Procedural maps; tuning). Grain by terrain and features; fish
+// on any coast.
+const FISH_CHANCE = 0.25;
+
+function grainChance(area: MapArea): number {
+  if (area.features.includes('floodplain')) return 1;
+  if (area.terrain === 'plains') return area.features.includes('river') ? 0.5 : 0.2;
+  if (area.terrain === 'marsh' || area.terrain === 'forest' || area.terrain === 'hills') return 0.1;
+  return 0;
+}
+
+// Food goes on its own random stream, so placing it moves nothing else on the map. Grain and fish
+// are rolled separately; when both succeed, the likelier one is placed. A start with no food within
+// reach gets grain on its likeliest area in reach (nearest first).
+function placeFood(areas: MapArea[], landAreas: MapArea[], starts: AreaId[], rand: Random): void {
+  for (const area of landAreas) {
+    const grain = rand() < grainChance(area);
+    const fish = area.features.includes('coastal') && rand() < FISH_CHANCE;
+    const food: ResourceId | null = grain && fish ? (grainChance(area) >= FISH_CHANCE ? 'grain' : 'fish') : grain ? 'grain' : fish ? 'fish' : null;
+    if (food) area.resources.push(food);
+  }
+  for (const start of starts) {
+    const nearby = landWithin(areas, areas[start]!, START_REACH);
+    if (nearby.some((a) => a.resources.length > 0)) continue;
+    const best = nearby.filter((a) => grainChance(a) > 0).sort((a, b) => grainChance(b) - grainChance(a))[0];
+    // Starts are plains, forest, or hills, so the start itself always qualifies.
+    best?.resources.push('grain');
+  }
 }
 
 // Each land area's nearest start by travel distance (index into `starts`), for checking fairness.

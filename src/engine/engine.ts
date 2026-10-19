@@ -1,7 +1,8 @@
 import type { Content } from './content';
 import { clone, emit } from './context';
 import { runResolution, runResources } from './phases';
-import { setMoveOrder, STARTING_TOKEN_CAP, validateMoveOrder } from './population';
+import { BASE_MOVEMENT, setMoveOrder, STARTING_TOKEN_CAP, validateMoveOrder } from './population';
+import { setWork, validateWork } from './resources';
 import { nameSettlement, setConversionOrder, TIERS, validateConversionOrder, validateName } from './settlements';
 import { createRng } from './rng';
 import { mapFor, validateMap } from './world';
@@ -16,10 +17,10 @@ import {
   type Phase,
 } from './types';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 5;
 
 interface CommandHandler<C extends Command> {
-  validate(ctx: Pick<Context, 'state' | 'map'>, command: C): string | null;
+  validate(ctx: Pick<Context, 'state' | 'map' | 'content'>, command: C): string | null;
   execute(ctx: Context, command: C): void;
 }
 
@@ -69,6 +70,14 @@ const handlers: CommandHandlers = {
       nameSettlement(ctx, command);
     },
   },
+  assignWork: {
+    validate(ctx, command) {
+      return validateWork(ctx, command);
+    },
+    execute(ctx, command) {
+      setWork(ctx, command);
+    },
+  },
 };
 
 export function validateSetup(setup: GameSetup, content: Content): string | null {
@@ -88,13 +97,16 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
   if (problem) return { ok: false, reason: problem };
 
   const map = mapFor(setup);
+  // Stand-in until discovery exists (development plan, Phase 3): every civilization knows the
+  // advances its resources need.
+  const known = [...new Set(content.resources.map((r) => r.requires))];
   const state: GameState = {
     schemaVersion: SCHEMA_VERSION,
     setup: clone(setup),
     rng: createRng(setup.seed),
     turn: 1,
     phase: 'resources',
-    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, tiers: [...(setup.unlockedTiers ?? ['village'])] })),
+    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, tiers: [...(setup.unlockedTiers ?? ['village'])], known: [...known] })),
     // Each civilization starts with one token in its starting area (design doc §4).
     stacks: setup.players
       .map((p, i) => ({ area: map.starts[i]!, player: p.id, count: 1 }))
@@ -102,6 +114,7 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
     orders: [],
     settlements: [],
     conversions: [],
+    goods: [],
   };
   const ctx: Context = { state, content, map, events: [], refugees: [] };
   emit(ctx, { type: 'gameStarted', seed: setup.seed, players: setup.players.map((p) => p.id) });
@@ -115,7 +128,7 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
 export function applyCommand(state: GameState, command: Command, content: Content): ApplyResult {
   const handler = handlers[command.type] as CommandHandler<Command>;
   const map = mapFor(state.setup);
-  const problem = handler.validate({ state, map }, command);
+  const problem = handler.validate({ state, map, content }, command);
   if (problem) return { ok: false, reason: problem };
 
   const ctx: Context = { state: clone(state), content, map, events: [], refugees: [] };

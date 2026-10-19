@@ -50,7 +50,7 @@ export function aiCommands(state: GameState, content: Content, player: PlayerId)
     else issue({ type: 'orderConversion', player, area: site, ordered: false });
   }
 
-  const { spare } = allocateSupport(current, map);
+  const { spare } = allocateSupport(current, map, content);
   const incoming = new Map<AreaId, number>();
   const occupied = (a: AreaId) => current.stacks.filter((s) => s.area === a).reduce((sum, s) => sum + s.count, 0) + (incoming.get(a) ?? 0);
   const open = (a: AreaId) =>

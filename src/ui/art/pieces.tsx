@@ -7,8 +7,10 @@ export type SettlementTier = 'village' | 'town';
 
 // What play puts on the map, as the map screen draws it.
 export interface MapPieces {
-  stacks: { area: AreaId; civ: number; count: number }[];
-  settlements: { area: AreaId; civ: number; tier: SettlementTier; name?: string }[];
+  // `growth`: progress toward the next token (design doc §4).
+  stacks: { area: AreaId; civ: number; count: number; growth?: number }[];
+  // `work`: manpower on the area's resources (design doc §6).
+  settlements: { area: AreaId; civ: number; tier: SettlementTier; name?: string; work?: { resource: string; count: number }[] }[];
   roads: [AreaId, AreaId][];
 }
 
@@ -136,12 +138,20 @@ const COUNT_STYLE: Record<CountState, { fill: string; stroke: string; text: stri
   over: { fill: '#a3301c', stroke: '#3b1208', text: '#fff4e6', opacity: 1 },
 };
 
+const FRACTIONS: Record<string, string> = { '0.25': '¼', '0.5': '½', '0.75': '¾' };
+
+// Growth progress as a short fraction: ½, ¼, ¾, else two decimals (".3").
+export function fraction(progress: number): string {
+  return FRACTIONS[String(progress)] ?? progress.toFixed(2).replace(/^0/, '').replace(/0$/, '');
+}
+
 // Tokens in the area (all civilizations) over its population limit, e.g. "3/5". Over the limit
-// means conflict (design doc §11). Tokens ordered out this turn show as "4−3/4".
-export function AreaCount({ total, limit, leaving = 0 }: { total: number; limit: number; leaving?: number }) {
+// means conflict (design doc §11). Tokens ordered out this turn show as "4−3/4"; growth progress
+// toward the next token as "1/5 +½" (design doc §4).
+export function AreaCount({ total, limit, leaving = 0, progress = 0 }: { total: number; limit: number; leaving?: number; progress?: number }) {
   const state = countState(total, limit);
   const style = COUNT_STYLE[state];
-  const label = leaving > 0 ? `${total}−${leaving}/${limit}` : `${total}/${limit}`;
+  const label = (leaving > 0 ? `${total}−${leaving}/${limit}` : `${total}/${limit}`) + (progress > 0 ? ` +${fraction(progress)}` : '');
   const width = 4 + label.length * 3.4;
   return (
     <g opacity={style.opacity}>
@@ -150,6 +160,29 @@ export function AreaCount({ total, limit, leaving = 0 }: { total: number; limit:
       <text y={1.9} fontSize={5.2} fontWeight={700} fontFamily="var(--font-display)" fill={style.text} textAnchor="middle">
         {label}
       </text>
+    </g>
+  );
+}
+
+// A resource marker for an area (design doc §6): a sheaf of grain or a fish, on a small disc.
+export function ResourceIcon({ resource }: { resource: string }) {
+  return (
+    <g>
+      <circle r={3.6} fill="#fbf4e2" stroke={INK} strokeWidth={0.5} opacity={0.92} />
+      {resource === 'fish' ? (
+        <g fill="#2f6f8f" stroke="none">
+          <ellipse cx={-0.5} cy={0} rx={1.9} ry={1.05} />
+          <path d="M1.1,0 L2.6,-1.1 L2.6,1.1 Z" />
+        </g>
+      ) : (
+        <g stroke="#9a6b14" strokeWidth={0.45} fill="#d9a630" strokeLinecap="round">
+          <path d="M0,2.4 V-1.2 M-1.1,2.4 L-0.5,-0.4 M1.1,2.4 L0.5,-0.4" fill="none" />
+          <ellipse cx={0} cy={-1.8} rx={0.55} ry={1} />
+          <ellipse cx={-0.75} cy={-0.9} rx={0.5} ry={0.85} transform="rotate(-25 -0.75 -0.9)" />
+          <ellipse cx={0.75} cy={-0.9} rx={0.5} ry={0.85} transform="rotate(25 0.75 -0.9)" />
+        </g>
+      )}
+      <title>{resource.charAt(0).toUpperCase() + resource.slice(1)}</title>
     </g>
   );
 }

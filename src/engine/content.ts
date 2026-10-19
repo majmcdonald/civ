@@ -1,9 +1,10 @@
-import type { Advance, ContentBundle, Effect, Era } from '../content/types';
+import type { Advance, ContentBundle, Effect, Era, Resource } from '../content/types';
 import { hooks as defaultHooks, type HookRegistry } from './hooks';
 
 export interface Content {
   eras: readonly Era[];
   advances: readonly Advance[];
+  resources: readonly Resource[];
   hooks: HookRegistry;
 }
 
@@ -33,8 +34,15 @@ export function loadContent(bundle: ContentBundle, hooks: HookRegistry = default
     }
   }
 
+  const resourceIds = new Set<string>();
+  for (const resource of bundle.resources) {
+    if (resourceIds.has(resource.id)) errors.push(`Duplicate resource id "${resource.id}"`);
+    resourceIds.add(resource.id);
+    if (!advanceIds.has(resource.requires)) errors.push(`Resource "${resource.id}" requires unknown advance "${resource.requires}"`);
+  }
+
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, content: { eras: bundle.eras, advances: bundle.advances, hooks } };
+  return { ok: true, content: { eras: bundle.eras, advances: bundle.advances, resources: bundle.resources, hooks } };
 }
 
 function checkEffect(effect: Effect, hooks: HookRegistry): string | null {
