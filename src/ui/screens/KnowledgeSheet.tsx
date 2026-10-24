@@ -1,4 +1,4 @@
-import type { Condition, DomainId, Effect, Input } from '../../content/types';
+import type { AreaFilter, Condition, DomainId, Effect, Gathering, Input } from '../../content/types';
 import type { AdvanceView, Content, ProgressPart } from '../../engine';
 
 // Knowledge (design doc §8): the whole advance tree by domain, each advance's stage, progress, and
@@ -25,10 +25,24 @@ interface Names {
   resource: (id: string) => string;
 }
 
-function where(filter: { resource?: string; terrain?: string; feature?: string; full?: boolean } | undefined, names: Names): string {
+const either = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}` : (items[0] ?? ''));
+
+function where(filter: AreaFilter | undefined, names: Names): string {
   if (!filter) return '';
-  const parts = [filter.full ? 'at its limit' : '', filter.terrain ?? '', filter.feature ? `with ${filter.feature}` : '', filter.resource ? `with ${names.resource(filter.resource).toLowerCase()}` : ''];
+  const resources = filter.resource === undefined ? [] : [filter.resource].flat().map((r) => names.resource(r).toLowerCase());
+  const parts = [
+    filter.full ? 'at its limit' : '',
+    filter.terrain === undefined ? '' : either([filter.terrain].flat()),
+    filter.feature ? `with a ${filter.feature}` : '',
+    resources.length > 0 ? `with ${either(resources)}` : '',
+  ];
   return parts.filter(Boolean).join(', ');
+}
+
+function gathering(what: Gathering, names: Names): string {
+  if (what === 'food') return 'gathering food';
+  if (what === 'any') return 'gathering any good';
+  return `gathering ${either(what.map((r) => names.resource(r).toLowerCase()))}`;
 }
 
 function describeInput(input: Input, names: Names): string {
@@ -37,10 +51,29 @@ function describeInput(input: Input, names: Names): string {
       return 'each turn';
     case 'area':
       return `per area you hold${input.where ? ` ${where(input.where, names)}` : ''}`;
-    case 'settlement':
-      return `per ${input.tier ?? 'settlement'}${input.where ? ` ${where(input.where, names)}` : ''}`;
+    case 'settlement': {
+      const parts = [
+        input.where ? where(input.where, names) : '',
+        input.gathering ? gathering(input.gathering, names) : '',
+        input.contact ? 'next to another civilization' : '',
+        input.beyond !== undefined ? `more than ${plural(input.beyond, 'move')} from the capital` : '',
+      ].filter(Boolean);
+      return `per ${input.tier ?? 'settlement'}${parts.length > 0 ? ` ${parts.join(', ')}` : ''}`;
+    }
     case 'worker':
-      return `per manpower working ${names.resource(input.resource).toLowerCase()}`;
+      return input.resource === 'bureaucracy' ? 'per Bureaucracy unit' : `per manpower working ${names.resource(input.resource).toLowerCase()}`;
+    case 'instability':
+      return 'per point of civ-wide instability';
+    case 'rival':
+      return 'per civilization in contact';
+    case 'goodKind':
+      return 'per kind of good gathered';
+    case 'attacked':
+      return 'per settlement attacked this turn';
+    case 'struck':
+      return `per settlement struck by ${input.calamity} this turn`;
+    case 'traded':
+      return 'per kind of good bought or sold on the market';
   }
 }
 
@@ -58,10 +91,14 @@ function describeCondition(condition: Condition, names: Names): string {
       return `${condition.min && condition.min > 1 ? `${condition.min} areas` : 'An area'} held ${where(condition.where, names)}`.trim();
     case 'settlements':
       return `${plural(condition.min, condition.tier ?? 'settlement')}`;
+    case 'contact':
+      return 'In contact with another civilization';
+    case 'gathering':
+      return `A settlement ${gathering(condition.what, names)}`;
   }
 }
 
-function describeEffect(effect: Effect): string {
+function describeEffect(effect: Effect, names: Names): string {
   switch (effect.type) {
     case 'unlockTier':
       return `Unlocks ${effect.tier === 'city' ? 'cities' : `${effect.tier}s`}`;
@@ -69,9 +106,31 @@ function describeEffect(effect: Effect): string {
       return `Token cap +${effect.amount}`;
     case 'raiseAreaLimit':
       return `Area limits +${effect.amount}`;
+    case 'strength':
+      return `Token strength +${effect.amount}${effect.counteredBy ? ` (countered by ${names.advance(effect.counteredBy)} when attacking a settlement)` : ''}`;
+    case 'settlementDefense':
+      return `${effect.minTier ? `${effect.minTier === 'city' ? 'Cities' : `${capital(effect.minTier)}s`} and larger` : 'Every settlement'}: attack threshold and defense +${effect.amount}`;
+    case 'calm':
+      return `Civ-wide instability −${effect.amount} a turn`;
+    case 'riverLeg':
+      return `River travel: one move covers up to ${effect.areas} areas along a river, for tokens and transport`;
+    case 'store':
+      return `Each settlement stores up to ${effect.amount} unused ${names.resource(effect.resource).toLowerCase()} for next turn`;
+    case 'capitalReach':
+      return `Distance from the capital lowers thresholds ${plural(effect.amount, 'move')} later`;
+    case 'gatherBonus':
+      return `+${effect.amount} ${names.resource(effect.resource).toLowerCase()} to each settlement gathering it`;
+    case 'marketAccess':
+      return 'Market access';
+    case 'marketReach':
+      return `Market reach +${effect.amount}`;
     case 'hook':
       return 'Special rule';
   }
+}
+
+function capital(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 function stageText(view: AdvanceView): string {
@@ -82,10 +141,11 @@ function stageText(view: AdvanceView): string {
 
 function AdvanceCard({ view, content, names }: { view: AdvanceView; content: Content; names: Names }) {
   const { advance } = view;
-  const reveals = content.resources.filter((r) => r.requires === advance.id);
   const effects = [
-    ...reveals.map((r) => `Known: reveals ${r.name.toLowerCase()} · Developed: ${r.name.toLowerCase()} can be gathered`),
-    ...advance.effects.map((e) => `Developed: ${describeEffect(e)}`),
+    ...content.resources.filter((r) => (r.revealedBy ?? r.requires) === advance.id && !r.from).map((r) => `Known: reveals ${r.name.toLowerCase()}`),
+    ...content.resources.filter((r) => r.requires === advance.id).map((r) => `Developed: ${r.name.toLowerCase()} can be ${r.from ? `made from ${either(r.from.map((f) => names.resource(f).toLowerCase()))} areas` : 'gathered'}${r.luxury ? ' (luxury: calms instability)' : ''}`),
+    ...advance.effects.map((e) => `Developed: ${describeEffect(e, names)}`),
+    ...(advance.mastered ?? []).map((e) => `Mastered: ${describeEffect(e, names)}`),
   ];
   return (
     <li className={`kn-card kn-${view.stage} ${view.plausible || view.stage !== 'none' ? '' : 'kn-closed'} ${view.focused ? 'kn-focused' : ''}`}>

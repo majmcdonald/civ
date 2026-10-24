@@ -3,7 +3,7 @@ import { applyCommand } from './engine';
 import { BUREAUCRACY, CAPITAL_BUREAUCRACY, overextension, threshold, totalInstability } from './instability';
 import type { AreaId, GameMap } from './map/types';
 import { looseTokens, tokensAt } from './population';
-import { assigned, manpower } from './resources';
+import { assigned, isFood, manpower, usable, workable } from './resources';
 import { allocateSupport, nextTier, previewConversions, settlementAt, supportSummary, tierRules } from './settlements';
 import type { Command, GameState, PlayerId } from './types';
 import { mapFor } from './world';
@@ -25,8 +25,9 @@ import { mapFor } from './world';
 // 3. Calm unrest: Bureaucracy assigned now works from next turn, after this turn's resolution
 //    adds overextension again, so the AI looks two turns of overextension ahead. A settlement
 //    within 3 of its collapse threshold by then moves 1 manpower to Bureaucracy (unassigned first,
-//    else from its most recent assignment); one 6 or more below it moves 1 back to the area's
-//    first resource.
+//    else from its most recent assignment); one 6 or more below it moves 1 back to work.
+// 4. Put idle manpower to work: on the area's first food the civilization can gather, else the
+//    first good it can (copper, cloth).
 
 const FOUND_MIN_LOOSE = 12;
 const CALM_WITHIN = 3;
@@ -93,10 +94,18 @@ export function aiCommands(state: GameState, content: Content, player: PlayerId)
       issue({ type: 'assignWork', player, area: s.area, resource: BUREAUCRACY, count: calm + 1 });
     } else if (gap >= CALM_CLEAR && calm > 0) {
       issue({ type: 'assignWork', player, area: s.area, resource: BUREAUCRACY, count: calm - 1 });
-      const resource = map.areas[s.area]!.resources[0];
-      const on = work.find((w) => w.resource === resource)?.count ?? 0;
-      if (resource) issue({ type: 'assignWork', player, area: s.area, resource, count: on + 1 });
     }
+  }
+
+  for (const area of current.settlements.filter((x) => x.player === player).map((x) => x.area)) {
+    const s = settlementAt(current, area)!;
+    const idle = manpower(s) - assigned(s);
+    if (idle <= 0) continue;
+    const options = workable(map, content, area).filter((r) => usable(current, content, player, r));
+    const resource = options.find((r) => isFood(content, r)) ?? options[0];
+    if (!resource) continue;
+    const on = (s.work ?? []).find((w) => w.resource === resource)?.count ?? 0;
+    issue({ type: 'assignWork', player, area, resource, count: on + idle });
   }
   return commands;
 }

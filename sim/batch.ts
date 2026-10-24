@@ -109,7 +109,7 @@ function playGame(options: Options, seed: number, map: MapType): { samples: Samp
   const loaded = loadContent(bundle, hooks);
   if (!loaded.ok) throw new Error(loaded.errors.join('\n'));
   const players = Array.from({ length: options.civs }, (_, i) => ({ id: `c${i + 1}`, name: `Civ ${i + 1}`, kind: 'ai' as const }));
-  const session = startSession({ seed, players, finalEra: 'modern', map: { type: map, room: options.room }, unlockedTiers: ['village', 'town'] }, loaded.content);
+  const session = startSession({ seed, players, finalEra: 'modern', map: { type: map, room: options.room } }, loaded.content);
   const game = `${map}/${seed}`;
   const samples: Sample[] = [];
   const totals: Totals = { game, built: 0, collapses: 0, supportDrops: 0, captures: 0, fights: 0, firstAtCap: null };

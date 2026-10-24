@@ -1,4 +1,4 @@
-import type { DomainId, EraId } from '../content/types';
+import type { DomainId, Effect, EraId } from '../content/types';
 import type { Content } from './content';
 import type { InstabilitySource } from './instability';
 import type { AreaId, GameMap, MapType, ResourceId, RoomToExpand } from './map/types';
@@ -32,8 +32,8 @@ export interface GameSetup {
   players: PlayerSetup[];
   finalEra: EraId;
   map: MapSetup;
-  // Settlement tiers every civilization starts with; villages only by default (design doc §5).
-  // Advances unlock the rest once they exist.
+  // Settlement tiers every civilization starts with, beyond those its advances unlock; none by
+  // default, since Permanent Settlement unlocks villages (design doc §5, §8).
   unlockedTiers?: SettlementTier[];
   // Each civilization draws first-ring advances at the start (design doc §2, Setup options).
   advancedStart?: boolean;
@@ -64,7 +64,8 @@ export interface PlayerState {
   name: string;
   kind: 'human' | 'ai';
   endedPhase: boolean;
-  // Most loose tokens the civilization may have (design doc §4).
+  // Most loose tokens the civilization may have (design doc §4): the starting cap plus its
+  // advances' rises.
   tokenCap: number;
   // Areas a token moves per turn (design doc §4); transport advances raise it.
   movement: number;
@@ -72,8 +73,11 @@ export interface PlayerState {
   instability: number;
   // The capital's area: the first settlement, then the largest remaining (design doc §10).
   capital: AreaId | null;
-  // Settlement tiers the civilization can build (design doc §5).
+  // Settlement tiers the civilization can build (design doc §5): the setup's plus its advances'.
   tiers: SettlementTier[];
+  // Effects in force from its advances: each Developed advance's, plus its Mastered ones at
+  // adoption 100 (design doc §8). Kept in step with `advances`.
+  effects: Effect[];
   // Advances with any progress or stage, in content order (design doc §8).
   advances: AdvanceProgress[];
   // The domain High Learning goes to; null splits it across every advance in progress.
@@ -105,6 +109,10 @@ export interface Settlement {
   work?: Work[];
   // Local instability meter (design doc §10); absent means 0.
   instability?: number;
+  // Food kept from last turn's support check (Pottery, design doc §6, Storage); absent means 0.
+  stored?: number;
+  // The last turn it was attacked (design doc §8, Palisades).
+  attacked?: number;
 }
 
 // A founding (no settlement in the area) or an upgrade to the next tier, ordered in allocation.

@@ -1,6 +1,6 @@
 // Rules test harness: build games, apply commands, and inspect state and events.
 import { expect } from 'vitest';
-import { content as realContent } from '../src/content';
+import { eras } from '../src/content/eras';
 import type { ContentBundle } from '../src/content/types';
 import {
   loadContent,
@@ -16,7 +16,22 @@ import {
   type StampedEvent,
 } from '../src/engine';
 
-export function testContent(bundle: ContentBundle = realContent, hooks?: HookRegistry): Content {
+// The Phase 3 stand-in: grain and fish usable from turn 1 and villages open. Rules tests of
+// systems other than discovery use it, so they do not depend on the game's advances; tests of the
+// Stone Age content load `src/content` themselves.
+export const standIn: ContentBundle = {
+  eras,
+  advances: [
+    { id: 'agriculture', name: 'Agriculture', era: 'stone', domain: 'land', baseline: true, effects: [] },
+    { id: 'fishing', name: 'Fishing', era: 'stone', domain: 'land', baseline: true, effects: [] },
+  ],
+  resources: [
+    { id: 'grain', name: 'Grain', food: true, requires: 'agriculture' },
+    { id: 'fish', name: 'Fish', food: true, requires: 'fishing' },
+  ],
+};
+
+export function testContent(bundle: ContentBundle = standIn, hooks?: HookRegistry): Content {
   const result = loadContent(bundle, hooks);
   if (!result.ok) throw new Error(`Invalid test content:\n${result.errors.join('\n')}`);
   return result.content;
@@ -31,6 +46,7 @@ export function testSetup(overrides: Partial<GameSetup> = {}): GameSetup {
     ],
     finalEra: 'iron',
     map: { type: 'inlandSea', room: 'standard' },
+    unlockedTiers: ['village'],
     ...overrides,
   };
 }

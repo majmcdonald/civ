@@ -1,4 +1,6 @@
+import type { Content } from './content';
 import { emit } from './context';
+import { calm, capitalReach, riverLeg, transportNeighbors } from './effects';
 import type { AreaId, GameMap } from './map/types';
 import { dropTier, tierRules, TIERS } from './settlements';
 import type { Context, GameEvent, GameState, PlayerId, Settlement } from './types';
@@ -24,21 +26,22 @@ const DISTANCE_FREE = 2;
 const DISTANCE_STEP = 2;
 const DISTANCE_MAX_PENALTY = 4;
 
-export type InstabilitySource = 'overextension' | 'losses' | 'lostSupport' | 'conflict' | 'bureaucracy' | 'noSettlements';
+export type InstabilitySource = 'overextension' | 'losses' | 'lostSupport' | 'conflict' | 'bureaucracy' | 'calm' | 'luxury' | 'noSettlements';
 
 export function capitalOf(state: GameState, player: PlayerId): AreaId | null {
   return state.players.find((p) => p.id === player)?.capital ?? null;
 }
 
-// Fewest land moves from an area to every land area it can reach.
-export function landDistances(map: GameMap, from: AreaId): Map<AreaId, number> {
+// Fewest land moves from an area to every land area it can reach. With `leg` above 1, a stretch of
+// up to `leg` areas along a river counts as one move (Dugout Canoes, design doc §6, Transport).
+export function landDistances(map: GameMap, from: AreaId, leg = 1): Map<AreaId, number> {
   const dist = new Map([[from, 0]]);
   let frontier = [from];
   while (frontier.length > 0) {
     const next: AreaId[] = [];
     for (const a of frontier) {
-      for (const n of map.areas[a]!.neighbors) {
-        if (map.areas[n]!.kind !== 'land' || dist.has(n)) continue;
+      for (const n of transportNeighbors(map, a, leg)) {
+        if (dist.has(n)) continue;
         dist.set(n, dist.get(a)! + 1);
         next.push(n);
       }
@@ -48,19 +51,26 @@ export function landDistances(map: GameMap, from: AreaId): Map<AreaId, number> {
   return dist;
 }
 
-// How far a settlement is from its capital, in land moves; null without a capital or a land route.
-export function capitalDistance(state: GameState, map: GameMap, settlement: Settlement, distances?: Map<AreaId, number>): number | null {
-  const capital = capitalOf(state, settlement.player);
-  if (capital === null) return null;
-  return (distances ?? landDistances(map, capital)).get(settlement.area) ?? null;
+// Transport distances from a player's capital, counting its river legs.
+export function capitalDistances(state: GameState, map: GameMap, player: PlayerId): Map<AreaId, number> | undefined {
+  const capital = capitalOf(state, player);
+  return capital === null ? undefined : landDistances(map, capital, riverLeg(state, player));
 }
 
-// The settlement's collapse threshold: its tier's base, lowered by distance from the capital.
+// How far a settlement is from its capital, in moves; null without a capital or a route.
+export function capitalDistance(state: GameState, map: GameMap, settlement: Settlement, distances?: Map<AreaId, number>): number | null {
+  const all = distances ?? capitalDistances(state, map, settlement.player);
+  return all?.get(settlement.area) ?? null;
+}
+
+// The settlement's collapse threshold: its tier's base, lowered by distance from the capital
+// beyond the free moves (more with Tallies).
 export function threshold(state: GameState, map: GameMap, settlement: Settlement, distances?: Map<AreaId, number>): number {
   const base = tierRules(settlement.tier).threshold;
   if (capitalOf(state, settlement.player) === null) return base;
   const d = capitalDistance(state, map, settlement, distances);
-  const penalty = d === null ? DISTANCE_MAX_PENALTY : Math.min(DISTANCE_MAX_PENALTY, Math.max(0, Math.ceil((d - DISTANCE_FREE) / DISTANCE_STEP)));
+  const free = DISTANCE_FREE + capitalReach(state, settlement.player);
+  const penalty = d === null ? DISTANCE_MAX_PENALTY : Math.min(DISTANCE_MAX_PENALTY, Math.max(0, Math.ceil((d - free) / DISTANCE_STEP)));
   return Math.max(Math.ceil(base / 2), base - penalty);
 }
 
@@ -119,15 +129,45 @@ export function bureaucracyAt(state: GameState, settlement: Settlement): number 
   return assigned + (capitalOf(state, settlement.player) === settlement.area ? CAPITAL_BUREAUCRACY : 0);
 }
 
+// Lowers a settlement's meter by up to `units`, the rest off the civ-wide meter; meters never go
+// below 0.
+function calmAt(ctx: Context, s: Settlement, units: number, source: InstabilitySource): void {
+  const local = Math.min(units, localInstability(s));
+  addLocal(ctx, s, -local, source);
+  addCiv(ctx, s.player, -Math.min(units - local, civInstability(ctx.state, s.player)), source);
+}
+
 // Resources phase: each Bureaucracy unit removes 1 from its own settlement's meter; what is not
-// needed there comes off the civ-wide meter. Meters never go below 0.
+// needed there comes off the civ-wide meter. Then advances that calm (Ritual) lower the civ-wide
+// meter. Meters never go below 0.
 export function runBureaucracy(ctx: Context): void {
   for (const s of ctx.state.settlements) {
     const units = bureaucracyAt(ctx.state, s);
-    if (units === 0) continue;
-    const local = Math.min(units, localInstability(s));
-    addLocal(ctx, s, -local, 'bureaucracy');
-    addCiv(ctx, s.player, -Math.min(units - local, civInstability(ctx.state, s.player)), 'bureaucracy');
+    if (units > 0) calmAt(ctx, s, units, 'bureaucracy');
+  }
+  for (const p of ctx.state.players) {
+    if (!ctx.state.settlements.some((s) => s.player === p.id)) continue;
+    addCiv(ctx, p.id, -Math.min(calm(ctx.state, p.id), p.instability), 'calm');
+  }
+}
+
+// Luxury goods left after the market calm the people (design doc §6, Luxury goods): each calms 1
+// on the settlement nearest its collapse threshold (lower areas first on ties), at most 1 per
+// settlement; the rest come off the civ-wide meter.
+function useLuxuries(ctx: Context, content: Content, thresholds: Map<PlayerId, Map<AreaId, number>>): void {
+  const { state } = ctx;
+  for (const p of state.players) {
+    let left = state.goods.reduce((sum, g) => (g.player === p.id && content.resources.some((r) => r.id === g.resource && r.luxury) ? sum + g.count : sum), 0);
+    if (left === 0) continue;
+    const margin = (s: Settlement) => thresholds.get(p.id)!.get(s.area)! - totalInstability(state, s);
+    const own = state.settlements.filter((s) => s.player === p.id).sort((a, b) => margin(a) - margin(b) || a.area - b.area);
+    for (const s of own) {
+      if (left === 0) break;
+      calmAt(ctx, s, 1, 'luxury');
+      left -= 1;
+    }
+    if (left > 0) addCiv(ctx, p.id, -Math.min(left, p.instability), 'luxury');
+    state.goods = state.goods.filter((g) => g.player !== p.id || !content.resources.some((r) => r.id === g.resource && r.luxury));
   }
 }
 
@@ -186,9 +226,10 @@ export function resolveInstability(ctx: Context): void {
   // Thresholds are fixed from the capitals at the start of the check.
   const thresholds = new Map(state.players.map((p) => [p.id, new Map<AreaId, number>()]));
   for (const p of state.players) {
-    const distances = p.capital == null ? undefined : landDistances(map, p.capital);
+    const distances = capitalDistances(state, map, p.id);
     for (const s of state.settlements.filter((x) => x.player === p.id)) thresholds.get(p.id)!.set(s.area, threshold(state, map, s, distances));
   }
+  useLuxuries(ctx, ctx.content, thresholds);
   for (const s of [...state.settlements]) {
     if (totalInstability(state, s) < thresholds.get(s.player)!.get(s.area)!) continue;
     emit(ctx, { type: 'settlementCollapsed', player: s.player, area: s.area, tier: s.tier });

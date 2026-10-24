@@ -221,3 +221,81 @@ describe('conflict preview', () => {
     expect(settlementAt(game.state, area)).toBeDefined();
   });
 });
+
+describe('strength, volley, and power thresholds (v0.14)', () => {
+  const bows = (game: Session, player: string, counteredBy?: string) => {
+    game.state.players.find((p) => p.id === player)!.effects = [{ type: 'strength', amount: 0.25, ...(counteredBy ? { counteredBy } : {}) }];
+  };
+
+  it('turns bonus power into a volley before the first round', () => {
+    // 4 archers vs 5: the volley removes 1 (4 vs 4); archers at power 5 vs 4 then win the order.
+    const { game, area } = scene();
+    place(game, area, 'p1', 4);
+    place(game, area, 'ai1', 5);
+    bows(game, 'p1');
+    const ctx = conflict(game);
+    expect([at(ctx, area, 'p1'), at(ctx, area, 'ai1')]).toEqual([2, 1]);
+  });
+
+  it('without bonuses, plays as before: 4 vs 5 ends 1 vs 2', () => {
+    const { game, area } = scene();
+    place(game, area, 'p1', 4);
+    place(game, area, 'ai1', 5);
+    const ctx = conflict(game);
+    expect([at(ctx, area, 'p1'), at(ctx, area, 'ai1')]).toEqual([1, 2]);
+  });
+
+  it('checks settlement thresholds against power: 8 archers may attack a town', () => {
+    // Design doc §11 example: town threshold 10, defends as 9; 8 archers (power 10, volley 2) capture with 2.
+    const { game, area } = scene();
+    settle(game, area, 'town');
+    place(game, area, 'p1', 8);
+    bows(game, 'p1');
+    const ctx = conflict(game);
+    expect(eventsOfType(ctx.events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: 'p1', survivors: 2, repelled: [] });
+    const plain = scene();
+    settle(plain.game, plain.area, 'town');
+    place(plain.game, plain.area, 'p1', 8);
+    expect(eventsOfType(conflict(plain.game).events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: null, repelled: ['p1'] });
+  });
+
+  it('cancels a bonus the defender counters, and raises thresholds by settlement bonuses', () => {
+    // Palisades (+1) on a town: threshold 11, defends as 10; archers countered need 11 tokens.
+    const { game, area } = scene();
+    settle(game, area, 'town');
+    place(game, area, 'p1', 10);
+    bows(game, 'p1', 'fishing');
+    game.state.players.find((p) => p.id === 'ai1')!.effects = [{ type: 'settlementDefense', amount: 1 }];
+    expect(eventsOfType(conflict(game).events, 'settlementAttacked')[0]).toMatchObject({ repelled: ['p1'] });
+    game.state.stacks = [];
+    place(game, area, 'p1', 11);
+    expect(eventsOfType(conflict(game).events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: 'p1', survivors: 2 });
+    // Without the counter advance, the bonus holds: 9 archers (power 11.25) attack.
+    game.state.players.find((p) => p.id === 'ai1')!.advances = [];
+    game.state.stacks = [];
+    place(game, area, 'p1', 9);
+    expect(eventsOfType(conflict(game).events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: 'p1', survivors: 2 });
+  });
+
+  it('limits settlement bonuses to their tier', () => {
+    const { game, area } = scene();
+    settle(game, area, 'village');
+    place(game, area, 'p1', 7);
+    game.state.players.find((p) => p.id === 'ai1')!.effects = [{ type: 'settlementDefense', amount: 1, minTier: 'town' }];
+    expect(eventsOfType(conflict(game).events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: 'p1' });
+  });
+
+  it('gives the defender its own strength and volley, and marks the settlement attacked', () => {
+    // Town defended by archers (9 at power 11.25, volley 2): 10 plain attackers lose, 12 capture with 2.
+    const { game, area } = scene();
+    settle(game, area, 'town');
+    game.state.players.find((p) => p.id === 'ai1')!.effects = [{ type: 'strength', amount: 0.25 }];
+    place(game, area, 'p1', 11);
+    const held = conflict(game);
+    expect(eventsOfType(held.events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: null });
+    expect(settlementAt(held.state, area)!.attacked).toBe(game.state.turn);
+    game.state.stacks = [];
+    place(game, area, 'p1', 12);
+    expect(eventsOfType(conflict(game).events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: 'p1', survivors: 2 });
+  });
+});

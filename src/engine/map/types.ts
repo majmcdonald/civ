@@ -31,7 +31,7 @@ export interface MapArea {
   features: Feature[];
   // Starting population limit; 0 for sea areas.
   limit: number;
-  // Resources in the area; only food is placed so far (design doc §4, Procedural maps).
+  // Resources in the area: food, livestock, or copper, at most one (design doc §4, Procedural maps).
   resources: ResourceId[];
   neighbors: AreaId[];
   // A point inside the area, for labels and pieces.

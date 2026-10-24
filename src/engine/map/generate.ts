@@ -440,6 +440,7 @@ function tryGenerate(options: MapOptions, attempt: number): GameMap | null {
   const starts = placeStarts(areas, landAreas, civilizations, rand);
   if (!starts) return null;
   placeFood(areas, landAreas, starts, makeRandom(seed ^ 0x5eedf00d));
+  placeGoods(landAreas, makeRandom(seed ^ 0x2c0ffee5));
 
   for (const area of areas) area.features.sort();
   return {
@@ -738,6 +739,22 @@ function placeFood(areas: MapArea[], landAreas: MapArea[], starts: AreaId[], ran
     const best = nearby.filter((a) => grainChance(a) > 0).sort((a, b) => grainChance(b) - grainChance(a))[0];
     // Starts are plains, forest, or hills, so the start itself always qualifies.
     best?.resources.push('grain');
+  }
+}
+
+// Livestock and copper odds per area (design doc §8, Herding and Copper Working; tuning).
+const LIVESTOCK_CHANCE: Partial<Record<Terrain, number>> = { plains: 0.25, hills: 0.2 };
+const COPPER_CHANCE: Partial<Record<Terrain, number>> = { hills: 0.15, mountains: 0.3 };
+
+// Livestock on plains and hills, then copper on hills and mountains, only where no other resource
+// lies, so each area holds at most one. On their own random stream, so placing them moves nothing
+// else on the map.
+function placeGoods(landAreas: MapArea[], rand: Random): void {
+  for (const [resource, chance] of [['livestock', LIVESTOCK_CHANCE], ['copper', COPPER_CHANCE]] as const) {
+    for (const area of landAreas) {
+      const odds = chance[area.terrain!] ?? 0;
+      if (rand() < odds && area.resources.length === 0) area.resources.push(resource);
+    }
   }
 }
 

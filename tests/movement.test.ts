@@ -100,6 +100,17 @@ describe('move orders', () => {
     expect(reachable(game.state, map, 'p1', start)).not.toContain(b);
   });
 
+  it('cover a stretch of up to 3 areas along a river with a river leg (Dugout Canoes)', () => {
+    const { game, map } = setup();
+    game.state.settlements = [];
+    const river = map.rivers.find((r) => r.areas.length >= 3 && !map.areas[r.areas[0]!]!.neighbors.includes(r.areas[2]!))!;
+    const [source, , third] = river.areas as [AreaId, AreaId, AreaId];
+    expect(reachable(game.state, map, 'p1', source)).not.toContain(third);
+    game.state.players[0]!.effects = [{ type: 'riverLeg', areas: 3 }];
+    expect(reachable(game.state, map, 'p1', source)).toContain(third);
+    if (river.areas[3] !== undefined && !map.areas[source]!.neighbors.includes(river.areas[3])) expect(reachable(game.state, map, 'p1', source)).not.toContain(river.areas[3]);
+  });
+
   it('reach farther with more movement', () => {
     const { game, map, start } = setup();
     game.state.settlements = [];

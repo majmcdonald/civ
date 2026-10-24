@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { content } from '../src/content';
-import { generateMap, mapFor, MAP_TYPES, settlementAt, supportSummary, type AreaId, type Context, type GameMap, type Session, type SettlementTier } from '../src/engine';
+import { generateMap, mapFor, MAP_TYPES, settlementAt, supportSummary, type AreaId, type Context, type GameMap, type Session, type Settlement, type SettlementTier } from '../src/engine';
 import { resolveConflict } from '../src/engine/conflict';
-import { dropTier } from '../src/engine/settlements';
-import { endPhaseAll, eventsOfType, expectRejected, newGame, play, testContent } from './harness';
+import { runResources } from '../src/engine/resources';
+import { dropTier, resolveSupport } from '../src/engine/settlements';
+import { endPhaseAll, eventsOfType, expectRejected, newGame, play, standIn, testContent } from './harness';
 
 function toAllocation(game: Session): void {
   while (game.state.phase !== 'allocation') endPhaseAll(game);
@@ -226,5 +227,97 @@ describe('food as support', () => {
     const summary = supportSummary(game.state, map, game.content, 'p1').settlements;
     expect(summary.find((s) => s.area === grain)).toMatchObject({ support: 3, food: 3 });
     expect(summary.find((s) => s.area === b)).toMatchObject({ support: 0, food: 0 });
+  });
+});
+
+describe('Stone Age goods (v0.14)', () => {
+  const maps = [1, 2, 3].flatMap((seed) => MAP_TYPES.map((type) => generateMap({ seed, civilizations: 5, type, room: 'standard' })));
+
+  it('places livestock on plains and hills and copper on hills and mountains, alone in their area', () => {
+    let livestock = 0;
+    let copper = 0;
+    for (const map of maps) {
+      for (const area of map.areas) {
+        if (area.resources.includes('livestock')) {
+          livestock += 1;
+          expect(['plains', 'hills']).toContain(area.terrain);
+        }
+        if (area.resources.includes('copper')) {
+          copper += 1;
+          expect(['hills', 'mountains']).toContain(area.terrain);
+        }
+        expect(area.resources.length).toBeLessThanOrEqual(1);
+      }
+    }
+    expect(livestock).toBeGreaterThan(0);
+    expect(copper).toBeGreaterThan(0);
+  });
+
+  it('adds a Mastered gathering bonus to each settlement gathering the good', () => {
+    const { game, grain } = scene();
+    settle(game, grain, 'town', [{ resource: 'grain', count: 2 }]);
+    game.state.players[0]!.effects = [{ type: 'gatherBonus', resource: 'grain', amount: 1 }];
+    const ctx = context(game);
+    runResources(ctx);
+    expect(ctx.state.goods).toEqual([{ area: grain, player: 'p1', resource: 'grain', count: 3 }]);
+  });
+
+  it('stores unused grain with Pottery and uses it first in the next support check', () => {
+    const { game, grain, b } = scene();
+    settle(game, grain, 'village', [{ resource: 'grain', count: 1 }]);
+    place(game, b, 'p1', 2);
+    game.state.players[0]!.effects = [{ type: 'store', resource: 'grain', amount: 1 }];
+    game.state.goods = [{ area: grain, player: 'p1', resource: 'grain', count: 1 }];
+    const ctx = context(game);
+    resolveSupport(ctx);
+    expect(settlementAt(ctx.state, grain)!.stored).toBe(1);
+    // Next turn: 1 support token and no grain gathered; the stored grain covers the gap.
+    ctx.state.goods = [];
+    place({ ...game, state: ctx.state }, b, 'p1', 1);
+    resolveSupport(ctx);
+    expect(settlementAt(ctx.state, grain)).toMatchObject({ tier: 'village' });
+    expect(settlementAt(ctx.state, grain)!.stored).toBeUndefined();
+  });
+
+  it('does not store food that spoils', () => {
+    const { game, grain, b } = scene();
+    settle(game, grain, 'village', [{ resource: 'grain', count: 1 }]);
+    place(game, b, 'p1', 2);
+    game.state.goods = [{ area: grain, player: 'p1', resource: 'grain', count: 1 }];
+    const ctx = context(game);
+    resolveSupport(ctx);
+    expect(settlementAt(ctx.state, grain)!.stored).toBeUndefined();
+  });
+
+  it('works cloth instead of food in grain or livestock areas', () => {
+    const bundle = { ...standIn, resources: [...standIn.resources, { id: 'cloth', name: 'Cloth', food: false, luxury: true, requires: 'agriculture', from: ['grain'] }] };
+    const content = testContent(bundle);
+    const { game, grain, barren } = scene();
+    const session = newGame({ unlockedTiers: ['village', 'town'] }, content);
+    const settlements: Settlement[] = [
+      { area: grain, player: 'p1', tier: 'village', work: [] },
+      { area: barren, player: 'p1', tier: 'village', work: [] },
+    ];
+    session.state.settlements = settlements.sort((a, b) => a.area - b.area);
+    toAllocation(session);
+    play(session, { type: 'assignWork', player: 'p1', area: grain, resource: 'cloth', count: 1 });
+    expectRejected(session, { type: 'assignWork', player: 'p1', area: barren, resource: 'cloth', count: 1 }, /not in this area/);
+    void game;
+  });
+
+  it('feeds settlements along a river with a river leg', () => {
+    const { game, map } = scene();
+    const river = map.rivers.find((r) => r.areas.length >= 3 && !map.areas[r.areas[0]!]!.neighbors.includes(r.areas[2]!))!;
+    const [home, , far] = river.areas as [AreaId, AreaId, AreaId];
+    game.state.settlements = [];
+    settle(game, home, 'village');
+    settle(game, far, 'village', [{ resource: 'grain', count: 1 }]);
+    game.state.goods = [{ area: far, player: 'p1', resource: 'grain', count: 4 }];
+    const near = land(map, home).find((n) => n !== river.areas[1] && !game.state.settlements.some((s) => s.area === n))!;
+    place(game, near, 'p1', 1);
+    const fed = (g: Session) => supportSummary(g.state, map, g.content, 'p1').settlements.find((s) => s.area === home)!;
+    expect(fed(game)).toMatchObject({ food: 0 });
+    game.state.players[0]!.effects = [{ type: 'riverLeg', areas: 3 }];
+    expect(fed(game)).toMatchObject({ food: 1, support: 2 });
   });
 });

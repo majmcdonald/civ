@@ -38,6 +38,8 @@ import {
   tokensAt,
   tokensInReach,
   usable,
+  workable,
+  calm,
   type AreaId,
   type ConflictEvent,
   type Content,
@@ -109,7 +111,7 @@ export function newSession(options: NewGameOptions): Session {
   // Towns are open from the start until the advance that unlocks them exists (design doc §5).
   const name = options.name.trim() || 'Untitled game';
   return startSession(
-    { name, seed: options.seed, players, finalEra: 'modern', map: options.map, unlockedTiers: ['village', 'town'], ...(options.advancedStart ? { advancedStart: true } : {}) },
+    { name, seed: options.seed, players, finalEra: 'modern', map: options.map, ...(options.advancedStart ? { advancedStart: true } : {}) },
     gameContent(),
   );
 }
@@ -205,6 +207,8 @@ const SOURCE_NAMES: Record<InstabilitySource, string> = {
   lostSupport: 'lost support',
   conflict: 'nearby fight',
   bureaucracy: 'Bureaucracy',
+  calm: 'advances (Ritual)',
+  luxury: 'luxuries',
   noSettlements: 'no settlements left',
 };
 
@@ -572,7 +576,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     if (!here || here.player !== me) return null;
     const work = here.work ?? [];
     const count = (resource: string) => work.find((w) => w.resource === resource)?.count ?? 0;
-    const rows = map.areas[area]!.resources
+    const rows = workable(map, session.content, area)
       .filter((resource) => revealed(state, session.content, me, resource))
       .map((resource) => ({ resource, count: count(resource), usable: usable(state, session.content, me, resource) }));
     rows.push({ resource: BUREAUCRACY, count: count(BUREAUCRACY), usable: true }, { resource: HIGH_LEARNING, count: count(HIGH_LEARNING), usable: true });
@@ -589,7 +593,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     return { local: localInstability(here), civ: civInstability(state, me), threshold: threshold(state, map, here), reason, changes };
   };
   // Overextension Bureaucracy does not cover: the civ-wide meter will keep rising.
-  const calming = state.settlements.filter((s) => s.player === me).reduce((sum, s) => sum + bureaucracyAt(state, s), 0);
+  const calming = state.settlements.filter((s) => s.player === me).reduce((sum, s) => sum + bureaucracyAt(state, s), 0) + calm(state, me);
   const rising = overextension(state, me) - calming;
   const unrest = rising > 0 ? `Unrest rising: overextension +${overextension(state, me)} a turn, Bureaucracy −${calming}. Assign Bureaucracy or the farthest settlements will collapse first` : null;
   // Unassigned manpower produces nothing; Bureaucracy is open to every settlement.

@@ -1,9 +1,11 @@
-import type { Advance, AreaFilter, Condition, DomainId, Input } from '../content/types';
+import type { Advance, AreaFilter, Condition, DomainId, Effect, Gathering, Input, SettlementTier } from '../content/types';
 import type { Content } from './content';
 import { emit } from './context';
+import { capitalDistance } from './instability';
 import type { AreaId, GameMap } from './map/types';
+import { STARTING_TOKEN_CAP } from './population';
 import { randomInt } from './rng';
-import type { AdvanceProgress, Command, Context, GameState, PlayerId, PlayerState } from './types';
+import type { AdvanceProgress, Command, Context, GameState, PlayerId, PlayerState, Settlement } from './types';
 
 // Discovery (design doc §8). Each advance climbs Plausible → Known → Developed → Adopted →
 // Mastered. Known and Developed each have an accumulator reached exactly when progress reaches its
@@ -47,11 +49,34 @@ function presence(state: GameState, id: PlayerId): Set<AreaId> {
   return new Set([...state.stacks.filter((s) => s.player === id).map((s) => s.area), ...state.settlements.filter((s) => s.player === id).map((s) => s.area)]);
 }
 
+// Areas next to the player's (or holding them) where another civilization has tokens or a
+// settlement: the civilizations in contact (design doc §8, Barter).
+function contactOf(state: GameState, map: GameMap, id: PlayerId, areas: Iterable<AreaId>): Set<PlayerId> {
+  const near = new Set<AreaId>();
+  for (const a of areas) for (const n of [a, ...map.areas[a]!.neighbors]) near.add(n);
+  const rivals = new Set<PlayerId>();
+  for (const s of state.stacks) if (s.player !== id && near.has(s.area)) rivals.add(s.player);
+  for (const s of state.settlements) if (s.player !== id && near.has(s.area)) rivals.add(s.player);
+  return rivals;
+}
+
+// Whether a settlement's manpower works the goods: any food, any good, or one of a list.
+function gathers(content: Content, settlement: Settlement, what: Gathering): boolean {
+  return (settlement.work ?? []).some((w) => {
+    if (w.count <= 0) return false;
+    const resource = content.resources.find((r) => r.id === w.resource);
+    if (!resource) return false;
+    if (what === 'any') return true;
+    if (what === 'food') return resource.food;
+    return what.includes(resource.id);
+  });
+}
+
 function matches(state: GameState, map: GameMap, id: PlayerId, area: AreaId, where: AreaFilter | undefined): boolean {
   if (!where) return true;
   const a = map.areas[area]!;
-  if (where.resource !== undefined && !a.resources.includes(where.resource)) return false;
-  if (where.terrain !== undefined && a.terrain !== where.terrain) return false;
+  if (where.resource !== undefined && ![where.resource].flat().some((r) => a.resources.includes(r))) return false;
+  if (where.terrain !== undefined && (a.terrain === null || ![where.terrain].flat().includes(a.terrain))) return false;
   if (where.feature !== undefined && !a.features.includes(where.feature)) return false;
   if (where.full) {
     const settled = state.settlements.some((s) => s.area === area);
@@ -61,7 +86,7 @@ function matches(state: GameState, map: GameMap, id: PlayerId, area: AreaId, whe
   return true;
 }
 
-export function conditionMet(state: GameState, map: GameMap, id: PlayerId, condition: Condition): boolean {
+export function conditionMet(state: GameState, map: GameMap, content: Content, id: PlayerId, condition: Condition): boolean {
   switch (condition.type) {
     case 'knows':
       return reached(state, id, condition.advance, condition.stage);
@@ -69,27 +94,55 @@ export function conditionMet(state: GameState, map: GameMap, id: PlayerId, condi
       return [...presence(state, id)].filter((a) => matches(state, map, id, a, condition.where)).length >= (condition.min ?? 1);
     case 'settlements':
       return state.settlements.filter((s) => s.player === id && (condition.tier === undefined || s.tier === condition.tier)).length >= condition.min;
+    case 'contact':
+      return contactOf(state, map, id, presence(state, id)).size > 0;
+    case 'gathering':
+      return state.settlements.some((s) => s.player === id && gathers(content, s, condition.what));
   }
 }
 
+function settlementCounts(state: GameState, map: GameMap, content: Content, id: PlayerId, s: Settlement, input: Extract<Input, { per: 'settlement' }>): boolean {
+  if (s.player !== id) return false;
+  if (input.tier !== undefined && s.tier !== input.tier) return false;
+  if (!matches(state, map, id, s.area, input.where)) return false;
+  if (input.gathering !== undefined && !gathers(content, s, input.gathering)) return false;
+  if (input.contact && contactOf(state, map, id, [s.area]).size === 0) return false;
+  if (input.beyond !== undefined) {
+    const d = capitalDistance(state, map, s);
+    if (d !== null && d <= input.beyond) return false;
+  }
+  return true;
+}
+
 // How many things an input counts for the player this turn.
-export function inputCount(state: GameState, map: GameMap, id: PlayerId, input: Input): number {
+export function inputCount(state: GameState, map: GameMap, content: Content, id: PlayerId, input: Input): number {
+  const own = state.settlements.filter((s) => s.player === id);
   switch (input.per) {
     case 'turn':
       return 1;
     case 'area':
       return [...presence(state, id)].filter((a) => matches(state, map, id, a, input.where)).length;
     case 'settlement':
-      return state.settlements.filter((s) => s.player === id && (input.tier === undefined || s.tier === input.tier) && matches(state, map, id, s.area, input.where)).length;
+      return own.filter((s) => settlementCounts(state, map, content, id, s, input)).length;
     case 'worker':
-      return state.settlements
-        .filter((s) => s.player === id)
-        .reduce((sum, s) => sum + ((s.work ?? []).find((w) => w.resource === input.resource)?.count ?? 0), 0);
+      return own.reduce((sum, s) => sum + ((s.work ?? []).find((w) => w.resource === input.resource)?.count ?? 0), 0);
+    case 'instability':
+      return player(state, id).instability;
+    case 'rival':
+      return contactOf(state, map, id, presence(state, id)).size;
+    case 'goodKind':
+      return new Set(own.flatMap((s) => (s.work ?? []).filter((w) => w.count > 0 && content.resources.some((r) => r.id === w.resource)).map((w) => w.resource))).size;
+    case 'attacked':
+      return own.filter((s) => s.attacked === state.turn).length;
+    // Calamities arrive in Phase 4 step 5 and the market in step 4; until then nothing counts.
+    case 'struck':
+    case 'traded':
+      return 0;
   }
 }
 
-export function plausible(state: GameState, map: GameMap, id: PlayerId, advance: Advance): boolean {
-  return (advance.plausible ?? []).every((c) => conditionMet(state, map, id, c));
+export function plausible(state: GameState, map: GameMap, content: Content, id: PlayerId, advance: Advance): boolean {
+  return (advance.plausible ?? []).every((c) => conditionMet(state, map, content, id, c));
 }
 
 export function highLearning(state: GameState, id: PlayerId): number {
@@ -133,7 +186,7 @@ export function discoveryView(state: GameState, map: GameMap, content: Content, 
   const p = player(state, id);
   const open = content.advances.filter((a) => {
     const stage = stageOf(state, id, a.id);
-    return stageRules(a, stage) !== null && plausible(state, map, id, a);
+    return stageRules(a, stage) !== null && plausible(state, map, content, id, a);
   });
   const focused = p.focus !== null && open.some((a) => a.domain === p.focus) ? open.filter((a) => a.domain === p.focus) : open;
   const share = focused.length > 0 ? highLearning(state, id) / focused.length : 0;
@@ -144,7 +197,7 @@ export function discoveryView(state: GameState, map: GameMap, content: Content, 
     const parts: ProgressPart[] = [];
     if (rules && isOpen) {
       for (const input of rules.inputs) {
-        const count = inputCount(state, map, id, input);
+        const count = inputCount(state, map, content, id, input);
         if (count > 0) parts.push({ input, count, value: count * input.amount });
       }
       if (focused.includes(advance) && share > 0) parts.push({ input: 'highLearning', count: share, value: share * (stage === 'none' ? 1 : HIGH_LEARNING_DEVELOPED) });
@@ -154,13 +207,13 @@ export function discoveryView(state: GameState, map: GameMap, content: Content, 
     const cost = rules?.cost ?? 0;
     const adoptionRate =
       stage === 'developed' && advance.adoption
-        ? advance.adoption.inputs.reduce((sum, input) => sum + inputCount(state, map, id, input) * input.amount, 0)
+        ? advance.adoption.inputs.reduce((sum, input) => sum + inputCount(state, map, content, id, input) * input.amount, 0)
         : 0;
     return {
       advance,
       stage,
-      plausible: plausible(state, map, id, advance),
-      conditions: (advance.plausible ?? []).map((condition) => ({ condition, met: conditionMet(state, map, id, condition) })),
+      plausible: plausible(state, map, content, id, advance),
+      conditions: (advance.plausible ?? []).map((condition) => ({ condition, met: conditionMet(state, map, content, id, condition) })),
       next: rules ? (stage === 'none' ? 'known' : 'developed') : null,
       progress,
       cost,
@@ -185,13 +238,28 @@ function entry(p: PlayerState, advance: string, content: Content): AdvanceProgre
   return e;
 }
 
-// What a Developed advance does (design doc §8): its effects apply civ-wide.
-function applyEffects(ctx: Context, p: PlayerState, advance: Advance): void {
-  for (const effect of advance.effects) {
-    if (effect.type === 'unlockTier' && !p.tiers.includes(effect.tier)) p.tiers.push(effect.tier);
-    if (effect.type === 'raiseTokenCap') p.tokenCap += effect.amount;
-    if (effect.type === 'hook') ctx.content.hooks[effect.hook]!(ctx, effect.params ?? {});
+const TIER_ORDER: readonly SettlementTier[] = ['village', 'town', 'city', 'metropolis'];
+
+// What advances do (design doc §8): a Developed advance's effects are in force civ-wide, and its
+// Mastered effects while adoption is 100, so they lapse if adoption falls. The token cap and the
+// unlocked tiers follow from them.
+export function refreshEffects(state: GameState, content: Content, p: PlayerState): void {
+  const effects: Effect[] = [];
+  for (const advance of content.advances) {
+    const e = p.advances.find((a) => a.advance === advance.id);
+    if (e?.stage !== 'developed') continue;
+    effects.push(...advance.effects.filter((x) => x.type !== 'hook'));
+    if (e.adoption >= 100) effects.push(...(advance.mastered ?? []).filter((x) => x.type !== 'hook'));
   }
+  p.effects = effects;
+  p.tokenCap = STARTING_TOKEN_CAP + effects.reduce((sum, x) => sum + (x.type === 'raiseTokenCap' ? x.amount : 0), 0);
+  const tiers = new Set<SettlementTier>([...(state.setup.unlockedTiers ?? []), ...effects.flatMap((x) => (x.type === 'unlockTier' ? [x.tier] : []))]);
+  p.tiers = TIER_ORDER.filter((t) => tiers.has(t));
+}
+
+// Scripted hooks run once, when the advance is Developed.
+function runHooks(ctx: Context, advance: Advance): void {
+  for (const effect of advance.effects) if (effect.type === 'hook') ctx.content.hooks[effect.hook]!(ctx, effect.params ?? {});
 }
 
 // Developed and Mastered at once: the starting baseline and Advanced start draws.
@@ -200,7 +268,7 @@ function grant(ctx: Context, p: PlayerState, advance: Advance): void {
   e.stage = 'developed';
   e.progress = 0;
   e.adoption = 100;
-  applyEffects(ctx, p, advance);
+  runHooks(ctx, advance);
 }
 
 // Advances that build only on the baseline (design doc §2, Advanced start).
@@ -223,6 +291,7 @@ export function grantStartingKnowledge(ctx: Context): void {
       emit(ctx, { type: 'advanceReached', player: p.id, advance: advance!.id, stage: 'developed' });
     }
   }
+  for (const p of ctx.state.players) refreshEffects(ctx.state, ctx.content, p);
 }
 
 // Resolution step 10: every open advance gains this turn's progress, reaching its next stage
@@ -241,7 +310,7 @@ export function resolveDiscovery(ctx: Context): void {
           e.progress = 0;
           if (view.next === 'developed') {
             if (!advance.adoption) e.adoption = 100;
-            applyEffects(ctx, p, advance);
+            runHooks(ctx, advance);
           }
           emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: view.next });
           if (e.adoption === 100) emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: 'mastered' });
@@ -254,6 +323,7 @@ export function resolveDiscovery(ctx: Context): void {
       e.adoption = view.adoptionRate > 0 ? Math.min(100, before + view.adoptionRate) : Math.max(0, before - advance.adoption.fall);
       if (e.adoption === 100 && before < 100) emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: 'mastered' });
     }
+    refreshEffects(state, content, p);
   }
 }
 

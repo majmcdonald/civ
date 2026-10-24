@@ -1,4 +1,5 @@
 import { emit } from './context';
+import { riverLeg, transportNeighbors } from './effects';
 import type { AreaId, GameMap } from './map/types';
 import type { Context, GameState, MoveOrder, PlayerId, Stack } from './types';
 
@@ -30,10 +31,12 @@ function orderedOut(state: GameState, player: PlayerId, from: AreaId, except: Ar
 
 // Land areas a player's tokens can reach from an area this turn (design doc §4, Movement). Each
 // step costs 1 movement, except that stepping out of one of the player's own settlements entered
-// on the way is free, once per move: plains → own village → hills is one step. Settlements count as
-// they stand now (planned conversions do not).
+// on the way is free, once per move: plains → own village → hills is one step. With Dugout Canoes,
+// one step along a river covers a stretch of up to 3 areas. Settlements count as they stand now
+// (planned conversions do not).
 export function reachable(state: GameState, map: GameMap, player: PlayerId, from: AreaId): AreaId[] {
   const range = state.players.find((p) => p.id === player)?.movement ?? BASE_MOVEMENT;
+  const leg = riverLeg(state, player);
   const own = new Set(state.settlements.filter((s) => s.player === player).map((s) => s.area));
   // Best movement left on reaching each area, with and without the free step used.
   const best = new Map<string, number>();
@@ -44,8 +47,8 @@ export function reachable(state: GameState, map: GameMap, player: PlayerId, from
     const free = !passed && area !== from && own.has(area);
     const cost = free ? 0 : 1;
     if (left < cost) continue;
-    for (const n of map.areas[area]!.neighbors) {
-      if (map.areas[n]!.kind !== 'land' || n === from) continue;
+    for (const n of transportNeighbors(map, area, leg)) {
+      if (n === from) continue;
       const next = { area: n, left: left - cost, passed: passed || free };
       const key = `${n}:${next.passed}`;
       if ((best.get(key) ?? -1) >= next.left) continue;

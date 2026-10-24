@@ -22,6 +22,38 @@ describe('content loading', () => {
     expect(loadContent(content).ok).toBe(true);
   });
 
+  it('rejects unknown references in Stone Age effects and goods', () => {
+    const bundle: ContentBundle = {
+      ...base,
+      advances: [
+        {
+          id: 'a',
+          name: 'A',
+          era: 'stone',
+          domain: 'war',
+          baseline: true,
+          effects: [
+            { type: 'strength', amount: 0.25, counteredBy: 'walls' },
+            { type: 'store', resource: 'salt', amount: 1 },
+            { type: 'riverLeg', areas: 1 },
+          ],
+          mastered: [{ type: 'gatherBonus', resource: 'wool', amount: 1 }],
+        },
+      ],
+      resources: [{ id: 'cloth', name: 'Cloth', food: false, requires: 'a', revealedBy: 'b', from: ['flax'] }],
+    };
+    expect(errorsFor(bundle)).toEqual(
+      expect.arrayContaining([
+        'Resource "cloth" is revealed by unknown advance "b"',
+        'Resource "cloth" is worked from unknown resource "flax"',
+        'Advance "a": strength countered by unknown advance "walls"',
+        'Advance "a": store references unknown resource "salt"',
+        'Advance "a": riverLeg areas must be a whole number, 2 or more (got 1)',
+        'Advance "a": gatherBonus references unknown resource "wool"',
+      ]),
+    );
+  });
+
   it('accepts effects from the library and known hooks', () => {
     const bundle: ContentBundle = {
       ...base,

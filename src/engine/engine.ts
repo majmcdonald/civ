@@ -18,7 +18,7 @@ import {
   type Phase,
 } from './types';
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 interface CommandHandler<C extends Command> {
   validate(ctx: Pick<Context, 'state' | 'map' | 'content'>, command: C): string | null;
@@ -95,8 +95,7 @@ export function validateSetup(setup: GameSetup, content: Content): string | null
   if (ids.size !== setup.players.length) return 'Player ids must be unique';
   if (setup.players.filter((p) => p.kind === 'human').length > 1) return 'Version 1 allows at most one human player';
   if (!content.eras.some((e) => e.id === setup.finalEra)) return `Unknown final era "${setup.finalEra}"`;
-  const tiers = setup.unlockedTiers ?? ['village'];
-  if (!tiers.includes('village') || tiers.some((t) => !TIERS.some((rule) => rule.id === t))) return 'Unlocked tiers must be known tiers, including village';
+  if ((setup.unlockedTiers ?? []).some((t) => !TIERS.some((rule) => rule.id === t))) return 'Unlocked tiers must be known tiers';
   // Also checks the player count against the civilizations a map supports (2–15).
   return validateMap(setup);
 }
@@ -112,7 +111,7 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
     rng: createRng(setup.seed),
     turn: 1,
     phase: 'resources',
-    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, capital: null, tiers: [...(setup.unlockedTiers ?? ['village'])], advances: [], focus: null })),
+    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, capital: null, tiers: [...(setup.unlockedTiers ?? [])], effects: [], advances: [], focus: null })),
     // Each civilization starts with one token in its starting area (design doc §4).
     stacks: setup.players
       .map((p, i) => ({ area: map.starts[i]!, player: p.id, count: 1 }))

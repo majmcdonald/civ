@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { content as stoneAge } from '../src/content';
 import type { ContentBundle } from '../src/content/types';
-import { mapFor, settlementAt, type AreaId, type Context, type Session, type SettlementTier } from '../src/engine';
-import { discoveryView, firstRing, resolveDiscovery, stageOf } from '../src/engine/discovery';
+import { mapFor, settlementAt, type AreaId, type Context, type Session, type Settlement, type SettlementTier } from '../src/engine';
+import { conditionMet, discoveryView, firstRing, inputCount, refreshEffects, resolveDiscovery, stageOf } from '../src/engine/discovery';
 import { revealed, usable } from '../src/engine/resources';
-import { endPhaseAll, eventsOfType, expectRejected, newGame, play, testContent } from './harness';
+import { advanceTurns, endPhaseAll, eventsOfType, expectRejected, newGame, play, testContent } from './harness';
 
 // Test-only advances; the game's own are designed one at a time (Phase 4 step 2).
 const bundle: ContentBundle = {
@@ -229,5 +230,74 @@ describe('resolution', () => {
     const steps = eventsOfType(events, 'resolutionStep').map((e) => e.step);
     expect(steps.indexOf('discovery')).toBe(9);
     expect(game.state.players[0]!.advances.find((a) => a.advance === 'settle')).toMatchObject({ stage: 'none', progress: 1 });
+  });
+});
+
+describe('the Stone Age content (v0.14)', () => {
+  const stone = testContent(stoneAge);
+  const game = () => newGame({ unlockedTiers: [] }, stone);
+  const ctxOf = (g: Session): Context => ({ state: JSON.parse(JSON.stringify(g.state)), content: stone, map: mapFor(g.setup), events: [], refugees: [] });
+
+  it('starts with the baseline, no settlement tiers, and grain and fish shown but not gatherable', () => {
+    const g = game();
+    const p = g.state.players[0]!;
+    expect(p.advances.map((a) => a.advance)).toEqual(['fire', 'stoneTools', 'foraging']);
+    expect(p.tiers).toEqual([]);
+    expect([revealed(g.state, stone, 'p1', 'grain'), usable(g.state, stone, 'p1', 'grain')]).toEqual([true, false]);
+    expect(revealed(g.state, stone, 'p1', 'livestock')).toBe(false);
+  });
+
+  it('has Permanent Settlement, Fishing, Archery, and Dugout Canoes as the first ring', () => {
+    expect(firstRing(stone).map((a) => a.id)).toEqual(['permanentSettlement', 'fishing', 'archery', 'dugoutCanoes']);
+  });
+
+  it('unlocks villages with Permanent Settlement by turn 7 at the latest', () => {
+    const g = game();
+    advanceTurns(g, 7);
+    for (const p of g.state.players) {
+      expect(p.advances.find((a) => a.advance === 'permanentSettlement')?.stage).toBe('developed');
+      expect(p.tiers).toEqual(['village']);
+    }
+  });
+
+  it('keeps Mastered effects in force only at adoption 100: the token cap shrinks when adoption falls', () => {
+    const g = game();
+    const p = g.state.players[0]!;
+    p.advances.push({ advance: 'permanentSettlement', stage: 'developed', progress: 0, adoption: 100 }, { advance: 'agriculture', stage: 'developed', progress: 0, adoption: 100 });
+    refreshEffects(g.state, stone, p);
+    expect(p.tokenCap).toBe(60);
+    expect(p.effects).toContainEqual({ type: 'gatherBonus', resource: 'grain', amount: 1 });
+    const ctx = ctxOf(g);
+    resolveDiscovery(ctx);
+    const after = ctx.state.players[0]!;
+    expect(after.advances.find((a) => a.advance === 'agriculture')!.adoption).toBe(90);
+    expect(after.tokenCap).toBe(55);
+    expect(after.effects).not.toContainEqual({ type: 'gatherBonus', resource: 'grain', amount: 1 });
+  });
+
+  it('counts contact, kinds of goods, attacks, gatherers, and distance from the capital', () => {
+    const g = game();
+    const map = mapFor(g.setup);
+    g.state.stacks = [];
+    const [a, b] = map.areas.filter((x) => x.kind === 'land' && x.neighbors.some((n) => map.areas[n]!.kind === 'land'));
+    const next = map.areas[a!.id]!.neighbors.find((n) => map.areas[n]!.kind === 'land')!;
+    const settlements: Settlement[] = [
+      { area: a!.id, player: 'p1', tier: 'village', work: [{ resource: 'grain', count: 1 }], attacked: g.state.turn },
+      { area: b!.id, player: 'p1', tier: 'village', work: [{ resource: 'copper', count: 1 }] },
+    ];
+    g.state.settlements = settlements.sort((x, y) => x.area - y.area);
+    g.state.stacks = [{ area: next, player: 'ai1', count: 1 }];
+    g.state.players[0]!.capital = a!.id;
+    const count = (input: Parameters<typeof inputCount>[4]) => inputCount(g.state, map, stone, 'p1', input);
+    expect(count({ per: 'rival', amount: 1 })).toBe(1);
+    expect(count({ per: 'settlement', amount: 1, contact: true })).toBe(1);
+    expect(count({ per: 'goodKind', amount: 1 })).toBe(2);
+    expect(count({ per: 'attacked', amount: 3 })).toBe(1);
+    expect(count({ per: 'settlement', amount: 1, gathering: 'food' })).toBe(1);
+    expect(count({ per: 'settlement', amount: 1, gathering: 'any' })).toBe(2);
+    expect(count({ per: 'settlement', amount: 1, beyond: 0 })).toBe(1);
+    expect(count({ per: 'struck', amount: 3, calamity: 'superstition' })).toBe(0);
+    expect(conditionMet(g.state, map, stone, 'p1', { type: 'contact' })).toBe(true);
+    expect(conditionMet(g.state, map, stone, 'p1', { type: 'gathering', what: ['cloth'] })).toBe(false);
   });
 });

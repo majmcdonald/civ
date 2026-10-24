@@ -1,9 +1,10 @@
 import { resolveConflict } from './conflict';
 import { clone, emit } from './context';
 import type { Content } from './content';
+import { riverLeg, storeCap, transportNeighbors } from './effects';
 import type { AreaId, GameMap } from './map/types';
 import { adjust, areaTotals, looseLimit, looseTokens, resolveMovement, tokensAt } from './population';
-import { addManpower, foodAt, resetWork, trimWork } from './resources';
+import { addManpower, isFood, resetWork, trimWork } from './resources';
 import type { Command, Context, GameState, PlayerId, Settlement, SettlementTier, TokenSource } from './types';
 
 // Settlements: founding, upgrading, support, tier drop, and urban growth (design doc §5).
@@ -167,18 +168,63 @@ export function resolveConversion(ctx: Context): void {
   state.conversions = [];
 }
 
+// Food one player holds in one area for the support check: what a settlement there stored last
+// turn, food that spoils, and food that keeps (design doc §6, Storage). Used in that order, so
+// food that keeps is left over to store.
+interface Pantry {
+  stored: number;
+  spoils: number;
+  keeps: number;
+}
+
+function pantryOf(state: GameState, content: Content, area: AreaId, player: PlayerId): Pantry {
+  const here = settlementAt(state, area);
+  const pantry: Pantry = { stored: here?.player === player ? (here.stored ?? 0) : 0, spoils: 0, keeps: 0 };
+  for (const g of state.goods) {
+    if (g.area !== area || g.player !== player || !isFood(content, g.resource)) continue;
+    if (storeCap(state, player, g.resource) > 0) pantry.keeps += g.count;
+    else pantry.spoils += g.count;
+  }
+  return pantry;
+}
+
+function takeFood(pantry: Pantry, want: number): number {
+  let got = 0;
+  for (const kind of ['stored', 'spoils', 'keeps'] as const) {
+    const take = Math.min(pantry[kind], want - got);
+    pantry[kind] -= take;
+    got += take;
+  }
+  return got;
+}
+
+// Food a player's settlements keep into the next turn: the most any of its food goods allows.
+function keepLimit(state: GameState, content: Content, player: PlayerId): number {
+  return Math.max(0, ...content.resources.filter((r) => r.food).map((r) => storeCap(state, player, r.id)));
+}
+
 // Support each settlement receives: loose tokens of its civilization in adjacent unsettled areas,
 // one settlement per token. Larger tiers claim first, then lower area ids (design doc §5). Then
-// food covers what tokens could not, 1 food per token, from the settlement's own goods or those of
-// its civilization's adjacent settlements, in the same order (design doc §6, Food). `support`
-// counts both; `fed` is the food part. Also returns the tokens left over, by "area:player".
-export function allocateSupport(state: GameState, map: GameMap, content: Content): { support: Map<AreaId, number>; fed: Map<AreaId, number>; spare: Map<string, number> } {
+// food covers what tokens could not, 1 food per token, from the settlement's own goods and stores
+// or those of its civilization's settlements one transport step away (adjacent, or along a river
+// with Dugout Canoes), in the same order (design doc §6, Food). `support` counts both; `fed` is the
+// food part; `kept` is the food each settlement stores for next turn. Also returns the tokens left
+// over, by "area:player".
+export function allocateSupport(
+  state: GameState,
+  map: GameMap,
+  content: Content,
+): { support: Map<AreaId, number>; fed: Map<AreaId, number>; kept: Map<AreaId, number>; spare: Map<string, number> } {
   const spare = new Map(state.stacks.map((s) => [`${s.area}:${s.player}`, s.count]));
   const order = [...state.settlements].sort((a, b) => tierRules(b.tier).value - tierRules(a.tier).value || a.area - b.area);
   const support = new Map<AreaId, number>();
   const fed = new Map<AreaId, number>();
-  const food = new Map<string, number>();
-  const foodLeft = (area: AreaId, player: PlayerId) => food.get(`${area}:${player}`) ?? foodAt(state, content, area, player);
+  const pantries = new Map<string, Pantry>();
+  const pantry = (area: AreaId, player: PlayerId) => {
+    const key = `${area}:${player}`;
+    if (!pantries.has(key)) pantries.set(key, pantryOf(state, content, area, player));
+    return pantries.get(key)!;
+  };
   for (const s of order) {
     const need = tierRules(s.tier).support;
     let got = 0;
@@ -196,30 +242,37 @@ export function allocateSupport(state: GameState, map: GameMap, content: Content
   for (const s of order) {
     const need = tierRules(s.tier).support;
     let got = 0;
-    for (const a of [s.area, ...[...map.areas[s.area]!.neighbors].sort((x, y) => x - y)]) {
-      if (support.get(s.area)! + got === need) break;
-      const take = Math.min(foodLeft(a, s.player), need - support.get(s.area)! - got);
-      if (take <= 0) continue;
-      food.set(`${a}:${s.player}`, foodLeft(a, s.player) - take);
-      got += take;
+    for (const a of [s.area, ...transportNeighbors(map, s.area, riverLeg(state, s.player))]) {
+      if (support.get(s.area)! + got >= need) break;
+      got += takeFood(pantry(a, s.player), need - support.get(s.area)! - got);
     }
     if (got === 0) continue;
     fed.set(s.area, got);
     support.set(s.area, support.get(s.area)! + got);
   }
-  return { support, fed, spare };
+  const kept = new Map<AreaId, number>();
+  for (const s of state.settlements) {
+    const left = pantry(s.area, s.player);
+    const keep = Math.min(keepLimit(state, content, s.player), left.stored + left.keeps);
+    if (keep > 0) kept.set(s.area, keep);
+  }
+  return { support, fed, kept, spare };
 }
 
 export function assignSupport(state: GameState, map: GameMap, content: Content): Map<AreaId, number> {
   return allocateSupport(state, map, content).support;
 }
 
-// Resolution step 6: a settlement short of support drops one tier.
+// Resolution step 6: a settlement short of support drops one tier. Food that keeps and is left
+// over is stored for next turn's check (Pottery).
 export function resolveSupport(ctx: Context): void {
-  const { support, fed } = allocateSupport(ctx.state, ctx.map, ctx.content);
+  const { support, fed, kept } = allocateSupport(ctx.state, ctx.map, ctx.content);
   for (const s of ctx.state.settlements) {
     const count = fed.get(s.area);
     if (count) emit(ctx, { type: 'foodSupport', player: s.player, area: s.area, count });
+    const keep = kept.get(s.area);
+    if (keep) s.stored = keep;
+    else delete s.stored;
   }
   const short = ctx.state.settlements.filter((s) => support.get(s.area)! < tierRules(s.tier).support);
   for (const s of short) dropTier(ctx, s);

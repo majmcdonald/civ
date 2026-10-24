@@ -12,7 +12,7 @@ Read both before design or build work. When a decision is made in conversation, 
 ## Current status
 
 - Design: core systems decided (v0.14); Stone Age advances reviewed; numbers untuned.
-- Build: Phases 0–3 done (Phase 3 core loop: tokens, movement and growth, settlements, conflict, food and manpower, instability, minimal AI, save/load, batch runs, game log). **Phase 4 (Stone Age systems) in progress** on branch `phase-4`: 9 steps (development plan §3), ending in the tuning pass. Step 1 (discovery core) done; step 2 (Stone Age advances) designed (design doc v0.14, §8 reviewed advances), build next.
+- Build: Phases 0–3 done (Phase 3 core loop: tokens, movement and growth, settlements, conflict, food and manpower, instability, minimal AI, save/load, batch runs, game log). **Phase 4 (Stone Age systems) in progress** on branch `phase-4`: 9 steps (development plan §3), ending in the tuning pass. Steps 1 (discovery core) and 2 (Stone Age advances, design doc v0.14) done; step 3 (currency) next.
 - **No balance changes until the Stone Age is complete**; every number is a placeholder until then. Batch runs (`npm run batch`) measure the real engine and only report. The Phase 0 economy simulation (`sim/phase0/sim.ts`) predates the engine and is no longer re-run.
 
 ## Stack and architecture

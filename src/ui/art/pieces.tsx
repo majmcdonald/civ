@@ -186,6 +186,17 @@ export function ResourceIcon({ resource }: { resource: string }) {
           <ellipse cx={-0.5} cy={0} rx={1.9} ry={1.05} />
           <path d="M1.1,0 L2.6,-1.1 L2.6,1.1 Z" />
         </g>
+      ) : resource === 'livestock' ? (
+        <g fill="#7a5530" stroke="none">
+          <ellipse cx={-0.2} cy={0} rx={1.9} ry={1.05} />
+          <circle cx={1.9} cy={-0.7} r={0.7} />
+          <path d="M-1.6,0.6 v1.5 M-0.6,0.8 v1.3 M0.6,0.8 v1.3 M1.4,0.6 v1.5" stroke="#7a5530" strokeWidth={0.45} />
+        </g>
+      ) : resource === 'copper' ? (
+        <g fill="#c06a36" stroke="#7a3c18" strokeWidth={0.4} strokeLinejoin="round">
+          <path d="M-2.2,1.4 L-1.2,-1.2 L0.6,-1.8 L2.2,-0.2 L1.4,1.7 Z" />
+          <path d="M-1.2,-1.2 L0.2,0.2 L2.2,-0.2 M0.2,0.2 L-0.4,1.6" fill="none" />
+        </g>
       ) : (
         <g stroke="#9a6b14" strokeWidth={0.45} fill="#d9a630" strokeLinecap="round">
           <path d="M0,2.4 V-1.2 M-1.1,2.4 L-0.5,-0.4 M1.1,2.4 L0.5,-0.4" fill="none" />

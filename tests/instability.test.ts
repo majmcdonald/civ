@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mapFor, settlementAt, type AreaId, type Context, type GameEvent, type GameMap, type Session, type Settlement, type SettlementTier } from '../src/engine';
 import { resolveConflict } from '../src/engine/conflict';
 import { landDistances, resolveInstability, runBureaucracy, threshold, updateCapitals } from '../src/engine/instability';
-import { endPhaseAll, eventsOfType, expectRejected, newGame, play, testContent } from './harness';
+import { endPhaseAll, eventsOfType, expectRejected, newGame, play, standIn, testContent } from './harness';
 
 const land = (map: GameMap, area: AreaId) => map.areas[area]!.neighbors.filter((n) => map.areas[n]!.kind === 'land').sort((a, b) => a - b);
 
@@ -220,5 +220,60 @@ describe('capture', () => {
     resolveConflict(ctx);
     expect(settlementAt(ctx.state, home)).toMatchObject({ player: 'p1', tier: 'village' });
     expect(settlementAt(ctx.state, home)!.instability).toBeUndefined();
+  });
+});
+
+describe('advances and luxuries (v0.14)', () => {
+  it('calms the civ-wide meter each turn with Ritual-like effects', () => {
+    const { game, home } = scene();
+    settle(game, home, 'village');
+    game.state.players[0]!.instability = 3;
+    game.state.players[0]!.effects = [{ type: 'calm', amount: 2 }];
+    const ctx = context(game);
+    runBureaucracy(ctx);
+    expect(civ(ctx)).toBe(1);
+    expect(eventsOfType(ctx.events, 'instabilityChanged')).toContainEqual({ type: 'instabilityChanged', player: 'p1', area: null, amount: -2, source: 'calm' });
+  });
+
+  it('shifts the capital-distance penalty with Tallies-like reach', () => {
+    const { game, map, home } = scene();
+    settle(game, home, 'village');
+    updateCapitals(context(game));
+    game.state.players[0]!.capital = home;
+    const dist = landDistances(map, home);
+    const far = [...dist].find(([, d]) => d === 6)![0];
+    const village = { area: far, player: 'p1', tier: 'village' as const };
+    expect(threshold(game.state, map, village)).toBe(6);
+    game.state.players[0]!.effects = [{ type: 'capitalReach', amount: 2 }];
+    expect(threshold(game.state, map, village)).toBe(7);
+    game.state.players[0]!.effects = [{ type: 'capitalReach', amount: 2 }, { type: 'capitalReach', amount: 2 }];
+    expect(threshold(game.state, map, village)).toBe(8);
+  });
+
+  it('counts a stretch along a river as one move with a river leg', () => {
+    const { map } = scene();
+    const river = map.rivers.find((r) => r.areas.length >= 3)!;
+    const [source, , third] = river.areas;
+    expect(landDistances(map, source!, 3).get(third!)).toBe(1);
+    expect(landDistances(map, source!).get(third!)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('uses luxuries on the settlements nearest collapse, one each, the rest civ-wide', () => {
+    const { game, map, home } = scene();
+    const [b, c] = land(map, home);
+    settle(game, home, 'village', { instability: 1 });
+    settle(game, b!, 'village', { instability: 5 });
+    settle(game, c!, 'village', { instability: 0 });
+    game.state.players[0]!.capital = home;
+    game.state.players[0]!.instability = 2;
+    game.state.goods = [{ area: home, player: 'p1', resource: 'copper', count: 4 }];
+    const content = testContent({ ...standIn, advances: standIn.advances, resources: [...standIn.resources, { id: 'copper', name: 'Copper', food: false, luxury: true, requires: 'agriculture' }] });
+    const ctx = { ...context(game), content };
+    resolveInstability(ctx);
+    const local = (area: AreaId) => settlementAt(ctx.state, area)!.instability ?? 0;
+    // b (5 + 2 of 8) first, then home (1 + 2), then c (0 local: its luxury comes off the civ-wide meter), then 1 more civ-wide.
+    expect([local(b!), local(home), local(c!)]).toEqual([4, 0, 0]);
+    expect(civ(ctx)).toBe(0);
+    expect(ctx.state.goods).toEqual([]);
   });
 });

@@ -1,6 +1,7 @@
 import type { Content } from './content';
 import { emit } from './context';
 import { HIGH_LEARNING, reached } from './discovery';
+import { gatherBonus } from './effects';
 import { BUREAUCRACY } from './instability';
 import type { AreaId, GameMap, ResourceId } from './map/types';
 import { settlementAt, tierRules } from './settlements';
@@ -27,7 +28,15 @@ export function usable(state: GameState, content: Content, player: PlayerId, res
 
 export function revealed(state: GameState, content: Content, player: PlayerId, resource: ResourceId): boolean {
   const rule = content.resources.find((r) => r.id === resource);
-  return Boolean(rule && reached(state, player, rule.requires, 'known'));
+  return Boolean(rule && reached(state, player, rule.revealedBy ?? rule.requires, 'known'));
+}
+
+// Goods a settlement in this area could work: the area's resources, and goods worked from them
+// (cloth from grain or livestock), whether or not the civilization can use them yet.
+export function workable(map: GameMap, content: Content, area: AreaId): ResourceId[] {
+  const here = map.areas[area]!.resources;
+  const made = content.resources.filter((r) => r.from?.some((f) => here.includes(f))).map((r) => r.id);
+  return [...here, ...made];
 }
 
 export function isFood(content: Content, resource: ResourceId): boolean {
@@ -78,7 +87,7 @@ export function validateWork(ctx: Pick<Context, 'state' | 'map' | 'content'>, co
   if (!here || here.player !== command.player) return 'You have no settlement there';
   if (!Number.isInteger(command.count) || command.count < 0) return 'Manpower must be a whole number, 0 or more';
   if (command.resource !== BUREAUCRACY && command.resource !== HIGH_LEARNING) {
-    if (!map.areas[command.area]!.resources.includes(command.resource)) return 'That resource is not in this area';
+    if (!workable(map, content, command.area).includes(command.resource)) return 'That resource is not in this area';
     if (!usable(state, content, command.player, command.resource)) return 'Your civilization cannot gather that resource yet';
   }
   const others = (here.work ?? []).filter((w) => w.resource !== command.resource).reduce((sum, w) => sum + w.count, 0);
@@ -94,20 +103,16 @@ export function setWork(ctx: Context, command: Extract<Command, { type: 'assignW
 }
 
 // Resources phase: last turn's goods are gone; each settlement gathers 1 of a resource per unit
-// working it, if its civilization can use it.
+// working it, if its civilization can use it, plus any Mastered gathering bonus.
 export function runResources(ctx: Context): void {
   const { state, content } = ctx;
   state.goods = [];
   for (const s of state.settlements) {
     for (const w of s.work ?? []) {
       if (w.count <= 0 || !usable(state, content, s.player, w.resource)) continue;
-      state.goods.push({ area: s.area, player: s.player, resource: w.resource, count: w.count });
-      emit(ctx, { type: 'goodsProduced', player: s.player, area: s.area, resource: w.resource, count: w.count });
+      const count = w.count + gatherBonus(state, s.player, w.resource);
+      state.goods.push({ area: s.area, player: s.player, resource: w.resource, count });
+      emit(ctx, { type: 'goodsProduced', player: s.player, area: s.area, resource: w.resource, count });
     }
   }
-}
-
-// Food held by one player in one area.
-export function foodAt(state: GameState, content: Content, area: AreaId, player: PlayerId): number {
-  return state.goods.reduce((sum, g) => (g.area === area && g.player === player && isFood(content, g.resource) ? sum + g.count : sum), 0);
 }
