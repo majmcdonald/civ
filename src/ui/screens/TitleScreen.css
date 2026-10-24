@@ -243,6 +243,18 @@
   min-width: 0;
 }
 
+.title-setup-check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.95rem;
+}
+
+.title-setup .title-setup-check input {
+  width: auto;
+  margin: 0;
+}
+
 .title-setup-seed {
   display: flex;
   gap: 0.4rem;

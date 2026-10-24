@@ -30,6 +30,8 @@ describe('content loading', () => {
           id: 'test-advance',
           name: 'Test',
           era: 'stone',
+          domain: 'land',
+          baseline: true,
           effects: [
             { type: 'unlockTier', tier: 'town' },
             { type: 'raiseTokenCap', amount: 25 },
@@ -42,12 +44,12 @@ describe('content loading', () => {
   });
 
   it('reports duplicate ids', () => {
-    const advance = { id: 'a', name: 'A', era: 'stone' as const, effects: [] };
+    const advance = { id: 'a', name: 'A', era: 'stone' as const, domain: 'land' as const, baseline: true, effects: [] };
     expect(errorsFor({ ...base, advances: [advance, advance] })).toEqual(['Duplicate advance id "a"']);
   });
 
   it('reports references to unknown eras', () => {
-    const bundle: ContentBundle = { ...base, advances: [{ id: 'a', name: 'A', era: 'modern', effects: [] }] };
+    const bundle: ContentBundle = { ...base, advances: [{ id: 'a', name: 'A', era: 'modern', domain: 'land', baseline: true, effects: [] }] };
     expect(errorsFor(bundle)).toEqual(['Advance "a" references unknown era "modern"']);
   });
 
@@ -60,10 +62,38 @@ describe('content loading', () => {
     ]);
   });
 
+  it('reports problems in discovery data', () => {
+    const bundle: ContentBundle = {
+      ...base,
+      resources: [],
+      advances: [
+        {
+          id: 'a',
+          name: 'A',
+          era: 'stone',
+          domain: 'land',
+          plausible: [{ type: 'knows', advance: 'missing', stage: 'known' }, { type: 'presence', where: { resource: 'gold' } }],
+          known: { cost: 0, inputs: [{ per: 'turn', amount: -1 }] },
+          adoption: { inputs: [{ per: 'worker', amount: 1, resource: 'gold' }], fall: -2 },
+          effects: [],
+        },
+      ],
+    };
+    expect(errorsFor(bundle)).toEqual([
+      'Advance "a": condition references unknown advance "missing"',
+      'Advance "a": unknown resource "gold"',
+      'Advance "a": known cost must be positive (got 0)',
+      'Advance "a": input amount must be positive (got -1)',
+      'Advance "a": needs developed rules (or baseline)',
+      'Advance "a": unknown resource "gold"',
+      'Advance "a": adoption fall must be 0 or more (got -2)',
+    ]);
+  });
+
   it('reports unknown hooks', () => {
     const bundle: ContentBundle = {
       ...base,
-      advances: [{ id: 'a', name: 'A', era: 'stone', effects: [{ type: 'hook', hook: 'missing' }] }],
+      advances: [{ id: 'a', name: 'A', era: 'stone', domain: 'land', baseline: true, effects: [{ type: 'hook', hook: 'missing' }] }],
     };
     expect(errorsFor(bundle)).toEqual(['Advance "a": unknown hook "missing"']);
   });
@@ -71,7 +101,7 @@ describe('content loading', () => {
   it('reports invalid amounts', () => {
     const bundle: ContentBundle = {
       ...base,
-      advances: [{ id: 'a', name: 'A', era: 'stone', effects: [{ type: 'raiseAreaLimit', amount: 0 }] }],
+      advances: [{ id: 'a', name: 'A', era: 'stone', domain: 'land', baseline: true, effects: [{ type: 'raiseAreaLimit', amount: 0 }] }],
     };
     expect(errorsFor(bundle)).toEqual(['Advance "a": raiseAreaLimit amount must be a positive integer (got 0)']);
   });

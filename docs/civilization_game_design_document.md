@@ -1,7 +1,7 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.12  
-**Date:** October 18, 2026  
+**Version:** 0.14  
+**Date:** October 23, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
 > This is a living design document. Sections marked **Decided** are current design commitments (still subject to playtesting). Items under **Open** and **Tuning** are unresolved. Ideas documented here do not become rules until they are moved into a Decided section.
@@ -45,6 +45,7 @@ Where a system has a clear equivalent in the original game, the default is to **
 | Map | Procedural or historical |
 | Map type (procedural) | **Inland sea** (default; like the original: one mainland around a central sea, a few islands), **continents** (landmasses separated by ocean; some civilizations isolated until ships), **single landmass** (little sea). Seas are divided into sea areas in every type |
 | Civilizations | 2–15; default 5 (the player plus four AI). The original allowed 2–7. A procedural map scales with the count |
+| Advanced start | Off (default) or on. On: each civilization draws **2 advances** of its own from the first ring (advances that build only on the starting baseline, §8), granted Developed and Mastered like the baseline. Draws come from the game seed, so civilizations differ from turn 1 and a game still replays exactly |
 | AST track length | Same for everyone / derived from starting conditions / authored per civilization (historical maps only) |
 | Final era | Any era; e.g., end of the Iron Age for a single evening, end of the Modern era for a full campaign |
 | Room to expand | Land per civilization: **crowded** (half of standard, 32 land areas), **standard** (default, 64), **spacious** (2×, 128). Standard targets about 30–40 turns of expansion before a civilization's land meets a neighbor's (roughly the Stone Age); crowded makes neighbors meet early, spacious keeps the early game peaceful longer |
@@ -119,7 +120,7 @@ Four phases. All players act simultaneously within each phase.
 - **No fixed supply.** A civilization's maximum token count is a **cap** that discoveries raise.
   - The cap counts **loose tokens only**. Tokens absorbed into settlements leave the count, as in the original, where building a city returned its tokens to the stock.
   - The cap starts at **55**, the original's token stock.
-  - Advances raise the cap **1–2 times per era**. Rise sizes are set when those advances are designed.
+  - Advances raise the cap **1–2 times per era**. Rise sizes are set when those advances are designed. Stone Age: Weaving +5 when Developed (clothing) and Agriculture +5 when Mastered (food surplus), 55 → 65 (v0.14, §8).
   - Support tokens are loose and count against the cap, so the cap also bounds the number of settlements (roughly cap ÷ 4–5 in Phase 0). Each era's expansion is paced by its cap rises.
 - **Each civilization starts with one token in its starting area**, as in the original. The Phase 0 simulation and the 30–40 turn expansion window assume this start.
 - **Growth is automatic and proportional**: each turn, an area gains **0.5 per loose token** of each civilization in it. Growth never exceeds the area's population limit or the civilization's token cap. Resources and discoveries boost the rate (e.g., +0.25 per token); boost sizes are set when those are designed.
@@ -159,7 +160,7 @@ Settlements grow by absorbing tokens, extending the original's "6 tokens → cit
 | Metropolis | City + 10 tokens | 30 |
 
 - **No skipping tiers.** A player with 100 tokens cannot convert straight to a metropolis.
-- **Tiers are unlocked by advances.** A game starts with villages only. A Stone Age advance unlocks towns. Cities and metropolises are unlocked by later advances, following history: towns like Jericho and Çatalhöyük appeared late in the Stone Age, cities like Uruk at the Bronze Age transition, and metropolises like Babylon and Rome in the Iron and Classical ages.
+- **Tiers are unlocked by advances.** A game starts with no tiers: Permanent Settlement unlocks villages and Chiefdom unlocks towns (v0.14, §8). Cities and metropolises are unlocked by later advances, following history: towns like Jericho and Çatalhöyük appeared late in the Stone Age, cities like Uruk at the Bronze Age transition, and metropolises like Babylon and Rome in the Iron and Classical ages.
 - The tokens merged may be in the **same or adjacent areas**; the settlement stays where it is.
 - **The area limit does not block construction**, as in the original: tokens gathered for a conversion may exceed the limit, because conversion resolves before surplus removal.
 - Conversion is ordered in allocation and resolves after conflict.
@@ -248,24 +249,27 @@ Each tier keeps the abilities of the tiers below it. Higher tiers justify their 
 
 - **Goods last one turn.** Goods are produced in phase 1, can be traded in phase 2, and are used in resolution; anything unused is lost at the end of the turn. Example: wheat gathered in turn 10 and not used cannot cover a support shortfall in turn 14. Storage comes later through advances (e.g., granaries for food), which may let some goods carry over or spoil slowly. The original kept commodity cards in hand between turns; this design does not.
 
+- **Luxury goods** (v0.14). A category of goods given to the people to lower instability (§10). They create demand on the market: a civilization struggling with instability buys luxuries, so a luxury's price is not just a sale price that only falls. **Copper** (Copper Working) and **cloth** (Weaving) are the first (§8). **Use is automatic** (v0.14): luxuries left after the market (phase 2) are used in resolution step 7, before the collapse check. Each calms −1 on the settlement nearest its collapse threshold (smallest margin; lower area numbers break ties), **at most 1 per settlement per turn**; luxuries beyond one per settlement come off the civ-wide meter. Luxuries reach every settlement of the civilization regardless of transport (the ruler's gifts). Example: 2 copper, a far village 1 below its threshold and a town 5 below: the village and then the town each lose 1. The ruler's choice is how much to gather, buy, or sell, not where each unit goes; the cap keeps currency from replacing governance.
+
 Candidate resource categories (from v0.1, not yet finalized): renewable production, extracted materials, manufactured goods, stored resources.
 
 ### Transport
 
 - Produced goods must be transported to where they are used.
 - **Adjacent areas share goods freely**, with no discovery required.
-- Moving goods farther requires transport discoveries.
+- Moving goods farther requires transport discoveries. **Dugout Canoes** (v0.14, §8): a stretch of up to 3 areas along a river counts as one step for transport distance.
 
 ### Food
 
 - **Food is a special resource**, not a base need. It appears only in some areas (e.g., wheat on a floodplain), and nothing consumes food by default: loose tokens live off the land (area limits stand for carrying capacity, as in the original) and settlements are fed by their support tokens.
 - **Any settlement can produce food**, with production manpower, once its civilization has discovered the technology that farms that resource. Example: a village on a wheat floodplain farms nothing until irrigation (or similar) is discovered, then can assign its 1 manpower to wheat.
-- **Food is a category of named goods**, each with its own market price: grain and fish to start, more later (cattle, rice). Any food good counts as food for support. As in the original, where each commodity (grain, cloth, salt) had its own cards and value.
+- **Food is a category of named goods**, each with its own market price: grain and fish to start, livestock with Herding (v0.14), more later (rice). Any food good counts as food for support. As in the original, where each commodity (grain, cloth, salt) had its own cards and value.
 - **Food is a good like any other resource**: production manpower gathers it in phase 1, and it can be traded on the market in phase 2 (§7). Further uses may be added later.
 - **Food substitutes for support tokens: 1 food replaces 1 support token**, and 1 production manpower gathers 1 food. Example: a town (2 manpower, 3 support) left with 1 support token can farm with both manpower and stay a town, but does no other work that turn. A village (1 manpower, 2 support) can cover only half its own support, so settlements still need hinterland.
 - **Food in reach.** A settlement can be supported by its own food or food gathered by one of its civilization's settlements in an adjacent area (§6, Transport); farther food needs transport discoveries or the market. The engine assigns food in the support check (resolution step 6), after support tokens, larger tiers first, then lower area numbers. Example: a town 1 support short is covered by a neighbouring village's grain; fish gathered three areas away cannot help.
 - **Food goods differ through advances and storage, not base yield or conversion.** Every food good starts at 1 food per manpower and 1 support per food. Grain gains from the plough and irrigation and later keeps in granaries; fish gains from boats and nets, scales less, and spoils without salt. Historically, fishing matched or beat early farming (Jōmon, Pacific Northwest, Baltic), but grain scaled with technology and stored for years, which made it the base of early states.
-- Earlier direction, not decided now that food is a special resource (§17): food surplus drives growth; stores buffer shortages and calamities; shortage raises instability, surplus and stores lower it.
+- **Storage** (v0.14): with Pottery, each settlement keeps up to 1 unused grain (2 when Mastered) into the next turn to cover a support shortfall; fish does not keep (§8).
+- Earlier direction, not decided now that food is a special resource (§17): food surplus drives growth; stores buffer calamities; shortage raises instability, surplus and stores lower it.
 
 ### Manpower
 
@@ -300,7 +304,7 @@ Trade is **market listings only**. There is no negotiation, proposal round, or t
 
 | Element | Decision |
 |---|---|
-| Access | Requires a trade discovery. Before it, a civilization has no market access at all |
+| Access | Requires a trade discovery: **Barter** Developed (v0.14, §8); Barter Mastered adds 1 step of reach. Before it, a civilization has no market access at all |
 | Phase | Phase 2; orders placed and filled; goods usable the same turn |
 | Counterparty | The game supplies and absorbs any quantity |
 | Order types | **Limit** (maximum buy / minimum sell price) or **market** (accept the resulting price) |
@@ -326,11 +330,17 @@ Consequences:
 | **Developed** | The technique is usable; applies **civ-wide** automatically | Same accumulator mechanic as Known, with different inputs |
 | **Adopted → Mastered** | The society uses it, then gets full benefit | Civ-wide adoption %; benefit grows until mastered. How benefit scales varies by technology |
 
+- **Every advance uses the full ladder** (v0.13). What each stage does is defined **per advance**, and each is reviewed one at a time. Example, Agriculture: Known reveals grain on the map and makes advances that build on it plausible; Developed lets manpower gather grain; adoption rises each turn from 0% to 100% and the benefit (e.g., extra grain) scales with it until Mastered. Fast adoption raises instability (§10).
+- What drives each advance's adoption also varies by advance and is designed with it.
+
 ### Accumulators
 
-- Each plausible advance has an accumulator. Conditions add progress each turn; breakthrough chance rises with progress.
+- Each plausible advance has an accumulator and a cost. Conditions add progress each turn; **the advance is reached exactly when progress reaches its cost**. There is no chance involved, so timing is fully predictable: the panel can say "Known in 3 turns" at the current rate. Example: Pottery costs 20 and gains +3 a turn, so it becomes Known on the seventh turn.
 - Historical figures spike or redirect accumulators.
 - **Accumulators are fully visible** to the player.
+- **Details.** Progress beyond a stage's cost is dropped when the stage is reached; the next stage starts from 0 the following turn. Advances reached in the same turn do not affect each other's progress that turn. A focus on a domain with nothing in progress falls back to the even split. An advance without adoption rules is Mastered as soon as it is Developed. Adoption rises by its drivers' points each turn and, with none, falls by an amount set per advance.
+- **Resources** are revealed (shown on the map and in panels) when their advance is Known and gatherable when it is Developed (§6).
+- **The whole tree is visible** (v0.13): the Knowledge screen lists every advance in the game with its conditions, costs, and stage effects, including those with no route yet, like a tech tree. Planning is fully open; surprise comes from figures and calamities.
 
 ### Discovery inputs
 
@@ -348,6 +358,10 @@ The ruler holds two direct levers. Everything else is indirect.
 1. **Assign manpower to High Learning** (any settlement).
 2. **Set discovery focus** on a domain (costs currency).
 
+- **Domains.** Every advance belongs to one of five domains, and a focus picks one: **Land and food** (agriculture, fishing, herding, irrigation), **Crafts** (stone tools, pottery, weaving, masonry, metalworking), **Beliefs and society** (mysticism, burial rites, law, writing), **Travel and trade** (boats, the wheel, trade), **War** (archery, bronze weapons, walls). Five domains usually hold 2–4 open advances in an era, so a focus steers without naming the invention. The focus is a standing choice, changed in allocation; it is free until currency exists (Phase 4 step 3).
+- **High Learning is a pool.** Each unit adds 1 progress a turn, which goes to the advances in the **focused domain**, split evenly among them; with no focus, it splits evenly among all advances in progress. Example: 3 units, focus on Crafts, with Pottery the only Crafts advance in progress: Pottery gains +3 a turn on top of its own conditions. The ruler picks a direction, never the exact invention.
+- **Scholars discover; field use develops.** High Learning counts in full toward Known but at **half** toward Developed (starting value), where field use (per-advance practical inputs such as occupying and working related areas) is the main driver. Example: Agriculture, Known, field use +2 a turn, cost 30 to Developed; 3 High Learning units focused on Food add +1.5, so 9 turns instead of 15.
+
 ### Knowledge spread between civilizations
 
 - Uses the **same reach rules as market pricing** (settlement to settlement, mutual, direct only).
@@ -361,7 +375,125 @@ The ruler holds two direct levers. Everything else is indirect.
 - **Each advance has a counter** (walls → siege weapons). Counters cancel the matching modifier.
 - Counter relationships are designed **one technology at a time**.
 
+### Starting knowledge
+
+- Every civilization starts with a **baseline** of advances already Developed and Mastered: **Fire, Stone Tools, Foraging** (v0.13). The game opens on the eve of settled life: everything else is earned, as in the original, where civilizations started with no advances.
+- **Permanent Settlement** is the first advance earned. It is cheap; field use comes from tokens staying put (e.g., each area filled to its limit). **Villages unlock when it is Developed**, so every settlement tier is unlocked by an advance. Historically, permanent villages (the Natufians, around 12,000 BC) came shortly before farming.
+- **Agriculture and Fishing must be earned**, so food arrives once field use develops it, perhaps 10–20 turns in. This replaces the Phase 3 stand-in (both known from turn 1).
+
+### Stone Age advances (v0.14)
+
+The list for the Stone Age: 3 baseline advances and 15 to earn. Each advance's conditions, costs, stage effects, and adoption are still reviewed one at a time; "Unlocks" is the headline only, and a stage may do nothing.
+
+| Advance | Domain | Builds on | Unlocks (headline) |
+|---|---|---|---|
+| Fire *(baseline)* | Crafts | — | Root of Pottery (and through it Copper Working) |
+| Stone Tools *(baseline)* | Crafts | — | Root of Masonry, Archery, Dugout Canoes, Palisades |
+| Foraging *(baseline)* | Land and food | — | Reveals grain and fish; root of Permanent Settlement, Agriculture, Fishing |
+| Permanent Settlement | Land and food | Foraging | **Villages** |
+| Agriculture | Land and food | Foraging, Permanent Settlement | Grain can be gathered |
+| Fishing | Land and food | Foraging | Fish can be gathered |
+| Herding | Land and food | Agriculture | Livestock (new resource) or a food bonus |
+| Pottery | Crafts | Fire, Permanent Settlement | Food storage |
+| Weaving | Crafts | Agriculture | **Cloth**, a luxury good worked from grain or livestock areas; token cap +5 |
+| Masonry | Crafts | Stone Tools, Permanent Settlement | Walls and later wonders |
+| Copper Working | Crafts | Pottery | Copper, the first luxury good; bridge to Bronze Working (Bronze Age) |
+| Ritual | Beliefs and society | Permanent Settlement | Shrines (first institution; lowers instability) |
+| Chiefdom | Beliefs and society | Ritual | **Towns** |
+| Tallies | Beliefs and society | Chiefdom | Record-keeping; root of Writing |
+| Dugout Canoes | Travel and trade | Stone Tools | River travel and river transport |
+| Barter | Travel and trade | Permanent Settlement | Market access |
+| Archery | War | Stone Tools | Token strength **+0.25** |
+| Palisades | War | Stone Tools, Permanent Settlement | Higher settlement defense |
+
+- **Chiefdom unlocks towns** (v0.14): a town is a social step, a leader and a centre for the villages around it, more than a building one. Masonry keeps walls and later wonders.
+- **Archery adds +0.25 strength** per token (v0.14), not +1: a whole point would let 4 archers beat 5 tokens outright. Strength may be fractional. Bonus power turns into a volley (every 4 archers remove 1 enemy token before the first round), and settlement thresholds count power (§11, v0.14), so 8 archers may attack a town that needs 10.
+- **Irrigation opens the Bronze Age** (v0.14), not the Stone Age.
+- **Gathering bonuses are flat** (v0.14). Mastered Fishing, Agriculture, Herding, and Weaving give **+1 of their good to each settlement gathering (or making, for cloth) at least 1**, not +1 per worker: doubling every worker was too strong. Example: a town with 2 manpower on grain gathers 3 grain; a village with 1 on grain gathers 2.
+
+**Timing targets** (v0.14). Game turns at which a typical civilization, with no High Learning, reaches each stage. Each advance's costs are set to meet them; High Learning and a focus pull them earlier. Placeholders until the tuning pass (development plan §3, step 9); an advance's own review may move its row. An advance with no adoption is Mastered when Developed.
+
+| Advance | Known | Developed | Mastered |
+|---|---|---|---|
+| Permanent Settlement | 3 | 5 | 5 |
+| Fishing | 5 | 10 | 18 |
+| Archery | 6 | 12 | 12 |
+| Agriculture | 8 | 14 | 24 |
+| Ritual | 8 | 14 | 22 |
+| Dugout Canoes | 10 | 18 | 18 |
+| Pottery | 10 | 16 | 26 |
+| Chiefdom | 14 | 20 | 20 |
+| Herding | 15 | 22 | 30 |
+| Masonry | 15 | 22 | 30 |
+| Barter | 15 | 22 | 30 |
+| Palisades | 16 | 24 | 24 |
+| Weaving | 18 | 26 | 34 |
+| Tallies | 22 | 30 | 36 |
+| Copper Working | 24 | 32 | 32 |
+
+Arc: villages, fish, and archers by turn 10; grain, shrines, pottery, and towns by turn 20; herding, clothing, barter, walls, and copper by turn 35, opening the Bronze Age.
+
+#### Reviewed advances
+
+Each advance below is final for the Stone Age content (numbers still placeholders until the tuning pass).
+
+| Advance | Plausible | Toward Known | Toward Developed | Known does | Developed does | Adoption / Mastered |
+|---|---|---|---|---|---|---|
+| **Permanent Settlement** (Land and food) | From turn 1 (Foraging) | Cost 3: +1 a turn, +1 per area filled to its limit | Cost 4: same inputs | Opens Agriculture, Pottery, Ritual, Masonry, Barter, Palisades | **Villages** unlock | None; Mastered when Developed |
+| **Fishing** (Land and food) | Hold an area with fish | Cost 3: +1 per fish area held | Cost 8: +1 per fish area held, +1 per settlement on a fish area | Nothing | Fish can be gathered | +15 a turn per settlement gathering fish; falls 10 a turn with none. Mastered: +1 fish to each settlement gathering fish |
+| **Archery** (War) | Hold a forest area | Cost 4: +1 per forest area held | Cost 8: +1 per forest area held | Nothing | Token strength +0.25; **countered by Palisades** when attacking a settlement | None; Mastered when Developed |
+| **Agriculture** (Land and food) | Permanent Settlement Known; hold an area with grain | Cost 5: +1 per grain area held | Cost 12: +1 per grain area held, +1 per settlement on a grain area | Opens Herding, Weaving | Grain can be gathered | +10 a turn per settlement gathering grain; falls 10 a turn with none. Mastered: +1 grain to each settlement gathering grain; **token cap +5** |
+| **Ritual** (Beliefs and society) | Permanent Settlement Known; 1+ village | Cost 4: +1 per settlement, +1 per civ-wide instability point, +3 per settlement struck by Superstition that turn | Cost 8: same inputs | Opens Chiefdom | −1 civ-wide instability a turn | +5 a turn per settlement; falls 10 a turn with none. Mastered: −2 civ-wide a turn |
+| **Dugout Canoes** (Travel and trade) | Hold a river area | Cost 6: +1 per river area held | Cost 10: +1 per river area held, +1 per settlement on a river | Nothing | **River travel**: a move starting in a river area may continue up to 2 more areas along the river. **River transport**: everything measured by transport distance counts the same river leg as one step | None; Mastered when Developed |
+| **Pottery** (Crafts) | Permanent Settlement Known; 1+ village | Cost 5: +1 per village | Cost 6: +1 per settlement gathering food | Nothing | **Grain storage**: each settlement keeps up to 1 unused grain into the next turn, where it covers a support shortfall; fish spoils and is not stored | +5 a turn per settlement gathering grain; falls 10 a turn with none. Mastered: keeps up to 2 |
+| **Chiefdom** (Beliefs and society) | Ritual Known; 3+ villages | Cost 12: +1 per settlement, +1 per Bureaucracy unit | Cost 24: same inputs | Nothing | **Towns** unlock | None; Mastered when Developed |
+| **Herding** (Land and food) | Agriculture Known; hold a plains or hills area | Cost 14: +1 per plains or hills area held | Cost 12: +1 per livestock area held, +1 per settlement on a livestock area | **Reveals livestock** (new map resource) | Livestock can be gathered (food) | +15 a turn per settlement gathering livestock; falls 10 a turn with none. Mastered: +1 livestock to each settlement gathering it |
+| **Masonry** (Crafts) | Permanent Settlement Known; hold a hills or mountain area | Cost 12: +1 per hills or mountain area held | Cost 10: +1 per settlement on hills or mountains | Nothing | **Stone walls**: towns and larger +1 attack threshold and +1 defense value | +15 a turn per town; falls 10 a turn with none. Mastered: +2 and +2. Opens Bronze Age building advances and wonders later |
+| **Barter** (Travel and trade) | Permanent Settlement Known; gather any good | Cost 6: +1 per kind of good gathered, +1 per rival civilization in contact | Cost 12: +1 per settlement gathering any good, +1 per rival civilization in contact | Nothing | **Market access** (§7) | +10 a turn per kind of good bought or sold on the market that turn; falls 10 a turn with no trade. Mastered: market reach +1 step |
+| **Palisades** (War) | Permanent Settlement Known; 1+ village | Cost 8: +1 per own settlement in contact with a rival, +3 per own settlement attacked that turn | Cost 14: same inputs | Nothing | Every settlement +1 attack threshold and +1 defense value; **counters Archery** (archers attacking it lose their bonus) | None; Mastered when Developed |
+| **Weaving** (Crafts) | Agriculture Known | Cost 8: +1 per settlement on a grain or livestock area | Cost 16: same input | Nothing | **Cloth**: a settlement on a grain or livestock area may put manpower on cloth instead of food, 1 per unit; cloth is a luxury good (§6). **Token cap +5** | +15 a turn per settlement making cloth; falls 10 a turn with none. Mastered: +1 cloth to each settlement making cloth |
+| **Tallies** (Beliefs and society) | Chiefdom Known; 1+ town | Cost 4: +1 per town, +1 per Bureaucracy unit | Cost 24: +1 per settlement more than 2 land moves from the capital | Opens Writing (Bronze Age) | **Records reach the frontier**: the capital-distance penalty (§10) starts beyond 4 land moves instead of 2 | +5 a turn per Bureaucracy unit, +5 per town; falls 10 a turn with neither. Mastered: beyond 6 |
+| **Copper Working** (Crafts) | Pottery Known; hold a hills or mountain area | Cost 14: +1 per hills or mountain area held | Cost 14: +1 per copper area held, +1 per settlement on a copper area | **Reveals copper** (new map resource, hills and mountains) | Copper can be gathered: the first **luxury good** (§6), given to the people to lower instability; opens Bronze Working | None; Mastered when Developed |
+
+- **Permanent Settlement** (v0.14): time alone guarantees the idea; crowding speeds it. Example: a start area with limit 3 is Known on turn 3, full on turn 4, and Developed on turn 5; a limit-5 start with nothing full is Developed on turn 7. The original needed no advance, only 6 tokens in one area; this keeps its "crowd up, then build" feel.
+- **Fishing** (v0.14): tied to the fish Foraging shows on the map (coastal areas only), so inland civilizations may never find it plausible. Example: a token reaches a fish area on turn 2, Known on turn 4; a village there from turn 6 makes +2 a turn, Developed on turn 9. One fishing village masters it in 7 turns, two in 4.
+- **Archery** (v0.14): the bow comes from wood and hunting grounds, so forest peoples arm first; it also gives forests, poor in food, a reason to hold them. Example: one forest from turn 2, Known on turn 5 and Developed on turn 13; two forests from turn 4, Developed around turn 9. Counter: archers attacking a settlement with Palisades fight at plain strength (8 archers: power 8, not 10); in open areas the bonus holds. Bows won in the field; walls held towns.
+- **Agriculture** (v0.14): the same pattern as Fishing. Example: a grain area held when Permanent Settlement becomes Known on turn 3, Known on turn 8; a village on it from turn 6, Developed on turn 14. Grain is common (every floodplain, half of river plains), so nearly every civilization meets the target. Adoption is slower per settlement than Fishing for the same reason: one farming village masters it in 10 turns, two in 5. Mastered also raises the token cap +5 (food surplus, the Neolithic demographic transition).
+- **Ritual** (v0.14): shared belief holds a growing people together, so its calm is civ-wide and needs no building; §9 institutions (temples) wait for towns. Example: 7 villages make +1 overextension a turn, cancelled once Ritual is Developed; Mastered, 8 run free. No shrine piece, so no exception to §9's towns-and-larger rule. Belief arises from need: unrest and Superstition strikes speed it. Example: a first village on turn 5 and a calm civilization, Known on turn 9; a second village from turn 10, Developed on turn 14; each point of civ-wide instability or Superstition strike brings it sooner. Inputs per instability point and per settlement struck are new input types. Adoption follows the people who practise it: 3–4 villages at turn 14 master it in 5–7 turns.
+- **Dugout Canoes** (v0.14): rivers get their promised use early (§4). Example: Highland → Valley → Delta in one turn at range 1. Sea crossings wait for a Bronze Age boat advance, keeping the continents map isolated until ships. Up and downstream alike. It builds on Stone Tools alone, not Fishing: fish lie only on coasts, and a dugout is a river tool, so inland river peoples are not locked out. Example: 2 river areas held from turn 4, Known on turn 6; a village on the river from turn 8, Developed on turn 10. **River transport:** anything that depends on transport distance (food in reach, goods transport, market reach, knowledge spread, distance from the capital) treats a stretch of up to 3 areas along a river as one step, the same leg tokens can travel. Example: a village's grain feeds a town 2 areas downstream.
+- **Pottery** (v0.14): stores grain only, as §6 intends (grain keeps; fish spoils without salt). Example: a village loses a support token in a conflict, and last turn's stored grain keeps it a village. Grain left unused after the support check (resolution step 6) is stored, up to the settlement's limit, and is used first in the next support check. Fishing peoples get the same from Salt later. Pottery also counters Famine (decided; how much is set in step 5). The idea comes from settled life, real use from food to store; as with the Jōmon fishers, the oldest potters, it can come before farming. Example: a first village on turn 5, Known on turn 10; a settlement gathering food from turn 11, Developed on turn 16. Adoption follows the farmers who benefit: two farming villages master it in 10 turns; a fishing-only people never does.
+- **Chiefdom** (v0.14): leaders emerge from people organising others, so Bureaucracy, already the main calming tool, also speeds towns. Example: Ritual Known on turn 9 with 3 villages, and 1 Bureaucracy unit from turn 12: Known on turn 13; with 4 villages, Developed on turn 18 (turn 19 without the unit). The capital's free Bureaucracy unit does not count; only assigned manpower does.
+- **Herding** (v0.14): livestock is a new food resource placed on plains and hills, mostly away from grain, so grazing land becomes a second food belt beside the river valleys. Map generation places it on its own random stream, so existing maps keep everything else. It becomes a market good (step 4). Livestock is hidden until Known, so the first stage comes from the land and the second from the livestock it reveals. Example: Agriculture Known on turn 8 with 2 plains and hills areas, Known on turn 15; a village on livestock from turn 16, Developed on turn 21. "Plains or hills" needs an any-of terrain filter. Adoption matches Fishing, since livestock is about as scarce as fish: one herding village masters it in 7 turns.
+- **Masonry** (v0.14): stone walls rise over time with adoption. Example: a town needs 10 to attack and defends as 9; Masonry Developed, 11 and 10; Mastered, 12 and 11. Walls work against every attacker; Palisades (+1, every settlement) mainly stop bows (§11 example). Countered by siege in the Bronze Age. Known from holding stony land, Developed from building on it, as Göbekli Tepe and Jericho's tower used local stone. Example: Permanent Settlement Known on turn 3 with 1 hill held, Known on turn 15; 2 villages on hills from turn 16, Developed on turn 20 (1 village, turn 25). Walls are built where they stand: one town masters it in 7 turns, two in 4.
+- **Barter** (v0.14): access is the gate and reach is the lever. Developed opens the market (§7); Mastered adds 1 step of market reach, so a Mastered civilization's market includes settlements one step farther, and (reach being mutual) its neighbors see it too: a middleman's advance. Example: a village 3 areas from a rival town is out of reach with Barter Developed and in reach once Mastered. Reach numbers are set with the market (step 4). Surplus breeds exchange, and the game is the market's counterparty (§7), so goods alone give every people a path, isolated or not; contact speeds it. **Contact** is any of a rival's tokens or settlements in or next to an area you hold; no settlement needs to be in market reach. Example: fish from turn 10, grain from turn 15, and contact with one rival from turn 12: Known on turn 14; with 2 settlements gathering, Developed on turn 18. Adoption comes from trading itself: 2 goods traded a turn master it in 5 turns. It sits idle until the market exists (step 4), which is harmless, since reach means nothing without one; a civilization that stops trading loses the reach bonus.
+- **Palisades** (v0.14): a fence answers a threat. Contact and attacks drive it, so a raided frontier fortifies fast, isolated peoples hit by barbarians (step 5) get there too, and a peaceful, isolated people never needs it. Example: 2 frontier villages from turn 12, Known on turn 15 and Developed on turn 22; each attack adds 3. Archery's counter comes fastest to those archers attack.
+- **Weaving** (v0.14, revisited): **cloth is a luxury good** like copper (§6). It is worked from the area's own resource: a settlement on grain (flax) or livestock (wool) may put manpower on cloth instead of food, 1 cloth per unit, so every unit on cloth is one not feeding the settlement. Example: a town on grain with 2 manpower gathers 1 grain and makes 1 cloth. A well-fed civilization turns fields to luxury; a hungry one cannot. Hill peoples have copper, farming and herding peoples cloth. Weaving also raises the token cap by +5 when Developed (warmer clothing opens colder, denser living); the era's second +5 comes from Agriculture Mastered (food surplus), so each rise has a clear reason and the total stays 55 → 65 for the step 9 batch runs. Fibres come from flax and wool, so settlements on grain or livestock drive it (an any-of resource filter). Example: Agriculture Known on turn 8 and 1 grain village from turn 11, Known on turn 18; 2 such settlements, Developed on turn 26. Adoption follows the settlements making cloth, as each food advance follows its gatherers: one weaving settlement masters it in 7 turns.
+- **Tallies** (v0.14): record-keeping lets a ruler track what distant villages owe, so the far edge holds longer. A different lever from Ritual: Ritual lowers how much trouble builds; Tallies change where it breaks. Example: a village 6 moves from the capital has threshold 6 today, 7 with Tallies Developed, and the full 8 when Mastered. A long, thin realm needs Tallies. Known from administration, Developed from distance: records develop where needed. Example: a first town on turn 20 and 1 Bureaucracy unit, Known on turn 22; 3 far settlements, Developed on turn 30. Needs an input per settlement beyond N moves from the capital (the distance instability already computes). The administrators adopt it: 2 towns and 1 Bureaucracy unit master it in 7 turns.
+- **Copper Working** (v0.14): copper is a new resource on hills and mountains, placed on its own random stream like livestock. The Bronze Age transition becomes a geographic race, as real copper sources (Cyprus, Anatolia, Sinai) shaped early trade, and the market gets its first good that is not food. Copper is a **luxury good**: given to the people, it lowers instability, so a civilization in trouble buys it and its price does not only fall from selling. Smelting grew out of pottery kilns, so it builds on Pottery: Fire → Pottery → Copper → Bronze. Example: Pottery Known on turn 10 with 1 hill held, Known on turn 24; a village on copper from turn 25, Developed on turn 31.
+
+**Candidate calamity tags** (v0.14). Each reviewed advance notes the calamity it may soften. These are notes, not rules: calamities are designed in development plan §3, step 5, starting from this list, which confirms or changes them; an advance is revisited only if its main effect then duplicates its calamity role.
+
+| Advance | Candidate calamity |
+|---|---|
+| Permanent Settlement | None |
+| Fishing | Famine (a second food source) |
+| Archery | Barbarian raid |
+| Agriculture | Famine |
+| Ritual | Superstition, civil disorder |
+| Dugout Canoes | None |
+| Pottery | **Famine** (intended counter, as in the original) |
+| Chiefdom | Civil war |
+| Herding | Famine |
+| Masonry | Barbarian raid, earthquake |
+| Barter | Famine (food bought on the market) |
+| Palisades | Barbarian raid |
+| Weaving | None |
+| Tallies | Civil disorder |
+| Copper Working | Civil disorder (luxuries calm) |
+
 ### Knowledge and collapse (from v0.1, still the direction)
+
+- **Known and Developed are never lost** (v0.13). **Adoption falls** while the conditions that drive it are missing, and the benefit shrinks with it. **Partial progress pauses** when its conditions lapse and resumes from where it stopped when they return. Example: a civilization loses every settlement on grain areas; Agriculture stays Developed but its adoption falls, and Irrigation's 12 of 25 toward Known waits.
 
 - Knowledge survives political collapse more readily than the material capacity to use it.
 - Practical skills, infrastructure, and specialization may be lost when populations disperse.
@@ -404,11 +536,12 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 | Lost support | Local, on the settlement that dropped | +2 (none if it dissolved) |
 | Nearby conflict | Local | +1 for each settlement in or adjacent to an area where its civilization's tokens or settlement fought |
 | Bureaucracy | Local first, the rest civ-wide | −1 per unit per turn; the capital has 1 free unit |
+| Luxury goods | Local first (1 per settlement, nearest collapse first), the rest civ-wide | −1 per unit, used automatically in step 7 (v0.14, §6) |
 | Threshold | Local + civ-wide | Village 8, town 10, city 12, metropolis 14, lowered by distance from the capital (below) |
 | Collapse | — | One tier (§5, Tier drop, with refugees); the local meter is halved, rounded down; at most one drop per turn |
 
 - **Capital.** A civilization's first settlement is its capital. It has **one free, invisible Bureaucracy unit** on top of its manpower, so a civilization can hold 7 settlements before overextension outruns it. When the capital is lost, the largest remaining settlement becomes the capital at once, nearest the old capital first (lower area numbers break ties); nothing else happens. The capital is marked with a gold star on the map.
-- **Distance from the capital lowers the threshold** by 1 for every 2 land moves beyond 2, by at most 4, and never below half the tier's base. A settlement with no land route to the capital counts as the farthest band. So as the civ-wide meter rises, **the far edge collapses first**; each collapse removes a settlement, which slows overextension, and the core settles close to its limit.
+- **Distance from the capital lowers the threshold** by 1 for every 2 land moves beyond 2 (beyond 4 with Tallies Developed, beyond 6 Mastered; v0.14, §8), by at most 4, and never below half the tier's base. A settlement with no land route to the capital counts as the farthest band. So as the civ-wide meter rises, **the far edge collapses first**; each collapse removes a settlement, which slows overextension, and the core settles close to its limit.
 
   | Distance | Village | Town | City | Metropolis |
   |---|---|---|---|---|
@@ -436,7 +569,7 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 | Element | Decision |
 |---|---|
 | Trigger | Combined tokens of two or more civilizations exceed the area's limit. Coexistence below the limit is allowed. Technologies may change this |
-| Attrition | Deterministic. Each token has a **strength** (base 1); a civilization's **power** in an area is the sum of its tokens' strength. Discoveries raise strength; counters cancel matching modifiers. Losses follow the original's removal rule (below) |
+| Attrition | Deterministic. Each token has a **strength** (base 1); a civilization's **power** in an area is the sum of its tokens' strength. Bonus power becomes a **volley** of extra removals, and settlement thresholds are checked against power (v0.14). Discoveries raise strength, possibly by fractions (Archery +0.25, §8); counters cancel matching modifiers. Losses follow the original's removal rule (below) |
 | Commander figures | Temporary conflict modifiers |
 
 ### Removing tokens in conflict
@@ -446,6 +579,7 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 - Example: Plains, limit 3; you have 4 tokens, a rival 2. The rival removes (4 vs 1), then you (3 vs 1), then the rival (3 vs 0).
 - **Rounds.** In each round every side removes one token, weakest power first, stopping as soon as the area is within its limit; the order is recomputed from power at the start of each round. **Sides with equal power remove together**, as in the original, even if that removes one more token than needed (Plains, limit 3, 2 vs 2 ends 1 vs 1).
 - Three or more sides follow the same order. Example: Plains, limit 3; you 3, rival A 2, rival B 1. B removes (3/2/0), then A (3/1/0), then you (2/1/0).
+- **Volley** (v0.14). Before the first round, each side removes extra tokens equal to the **whole part of its opponent's bonus power** (power minus tokens). Example: 4 archers (+0.25 each) have bonus power 1, so their opponent removes 1 token first; 8 archers force 2; 3 archers force none. The removal rule then runs as usual, and the volley also counts toward reaching the area's limit. With three or more sides, each side's volley falls on the opponent with the most power (earlier player order on ties). Without the volley, strength only decided who removed first, so a bonus saved at most one token in an even fight and +0.25 and +0.5 played the same.
 
 ### Attacking settlements
 
@@ -456,13 +590,26 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 | City | 15 | 14 |
 | Metropolis | 22 | 21 |
 
+- **Thresholds are power** (v0.14): an attacker's power, not its token count, must reach the threshold. Example: 8 archers (power 10) may attack a town; 8 plain tokens may not.
 - A settled area is fully populated (§5), so **any enemy token entering it attacks the settlement**. All tokens a civilization has in the area after movement attack together.
 - **Below the threshold**, the attackers fight the settlement's defense value and are destroyed; the settlement is unharmed.
 - **At or above the threshold**, the settlement fights as a side of tokens equal to its defense value, using the removal rule above, until one side has none left; there is no area limit to stop at. If the defense is eliminated, the attackers capture. Example: 9 attackers against a village (defends as 6): the village, weaker, removes first each round and is gone after its sixth removal, leaving 4 attackers to capture; 7 attackers capture with 2. If the last tokens on both sides fall together, no one is left to capture and the settlement holds.
 - **Reinforcements.** The defender's own tokens in the area after movement add their power to the defense. The threshold is still checked against the settlement's own value; reinforcements only strengthen the fight. Example: 8 attackers against a village reinforced by 3 fight 8 vs 9 and are destroyed. Reinforcements that survive beyond the garrison are removed as surplus (§3, step 9).
 - **Several attackers.** Each attacker's threshold is checked separately; attackers below it are destroyed first. The settlement then joins the remaining attackers as one side (power = defense value plus reinforcements) in a single fight under the removal rule, weakest first, until one side is left. A surviving attacker captures. Example: village (6) attacked by A 8 and B 7 runs 8/7/6 → 7/6/5 → … → 3/2/1; in the sixth round the village falls (A 2, B 1), then B removes and A captures with 2.
 - Walls and similar advances raise these values; siege advances counter them.
-- The settlement fights at its defense value using the defender's strength multiplier.
+- The settlement fights at its defense value using the defender's strength multiplier, so a defender's bonus power gives it a volley too. Attacker volleys remove defense tokens.
+- **Example** (v0.14; Palisades and Masonry values as drafted, §8). Fewest tokens needed to take a town; each attack below captures with 2 left:
+
+| Town's defenses | Plain attackers | Archers |
+|---|---|---|
+| None | 10 | 8 (power 10; volley 2) |
+| Palisades | 11 | 11 (bonus countered) |
+| Masonry Developed | 11 | 9 (power 11.25; volley 2) |
+| Masonry Mastered | 12 | 10 (power 12.5; volley 2) |
+| Masonry Mastered + Palisades | 13 | 13 (countered) |
+| None, defended by archers | 12 | — |
+| Masonry Mastered + Palisades, defended by archers | 16 | — |
+
 - **Capture:** the attacker takes the settlement **one tier lower** (§5, Tier drop). Figure marks on it transfer to the new owner.
 - **Surviving attackers.** When a town or larger is captured, the survivors garrison it and are removed, since a settled area holds no loose tokens (§5). When a village is captured, it is destroyed and the survivors stay as loose tokens up to the area's limit; any extra is surplus. A capture releases no refugees (§5, Tier drop). Example: 13 attackers take a town (defends as 9), win with 5, and the 5 garrison the new village. The new owner must support the captured settlement the same turn (§5).
 - **Spoils:** a share of the defender's currency (scaled by tier) plus discovery progress toward the defender's advances.
@@ -491,6 +638,7 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 | Drought | Environmental | Arid areas, climate | Food output drops for N turns | Irrigation, storage | No |
 | Famine | Economic | Food deficit, low stores | Tokens lost; local instability | Pottery/storage, agriculture | No |
 | Epidemic | Social | Dense settlements, trade contact | Tokens lost across settlements | Medicine, sanitation | Yes (market reach) |
+| Superstition | Social | Settlements without belief advances | To be designed (step 5); added v0.14, as in the original | Ritual (as Mysticism in the original) | — |
 | Civil disorder | Social | High instability | Instability spike; output lost | Law, institutions | No |
 | Civil war | Social | Very high instability, large civilization | Settlements break away as independents | Unifying leaders, governance | No |
 | Heresy / schism | Social | Institutions, religious advances | Institution effects suspended | Philosophy, tolerance | Yes (contact) |
@@ -580,7 +728,8 @@ These are choices made knowingly, or risks to watch in playtesting.
 | Unlimited game counterparty | A currency-rich civilization can buy its way out of any shortage. Price-change rate is the main brake |
 | Mild AST regression | Regression costs position within an era, never the era itself |
 | Derived track lengths | Poor starts are already penalized by requirements; shorter rows for good starts penalize them twice. Offered as a setup option only |
-| Deterministic combat | Uncertainty comes from figures, discovery timing, and calamities instead |
+| Deterministic combat | Uncertainty comes from figures and calamities instead |
+| Deterministic discovery | Advances arrive exactly when progress reaches their cost (v0.13). Fully plannable; surprise comes only from historical figures, which spike or redirect progress, and calamities |
 | No diplomacy | Diplomats act only on market reach and knowledge spread |
 | Weak AI during tuning | The AI stays minimal until development Phase 7, so balance numbers set earlier are tuned against a weak opponent and need a retuning pass |
 | Long-arc content | The emergent discovery model needs a large authored set of advances, each with conditions, counters, and adoption effects |
@@ -591,20 +740,22 @@ These are choices made knowingly, or risks to watch in playtesting.
 
 - [x] ~~How the original's growth rule extends~~ — kept unchanged (v0.3).
 - [x] ~~Growth variant: original rule vs proportional~~ — proportional, 0.5 per loose token with per-area progress (v0.10).
-- [ ] What specific transport discoveries do to movement range and goods range.
+- [ ] What specific transport discoveries do to movement range and goods range. (Dugout Canoes: up to 2 more areas along a river, v0.14.)
 - [ ] Conditions for absorbing independent settlements peacefully.
 - [ ] Barbarian spawn rules.
-- [ ] Technology-by-technology design: plausibility conditions, counters, adoption benefits, mitigated calamities.
+- [ ] Whether token cap rises from adoption are permanent. Agriculture's Mastered +5 is lost when adoption falls below 100%, and loose tokens above the lowered cap are removed as surplus (v0.14); revisit with later cap advances.
+- [ ] Calamity mitigators: confirm or change the candidate tags on Stone Age advances (§8) when calamities are designed.
+- [ ] Technology-by-technology design: plausibility conditions, Known and Developed inputs and costs, what each stage does, what drives adoption and how benefit scales, counters, mitigated calamities. Every advance is reviewed one at a time.
 - [ ] Final resource category list.
 - [ ] Game name. Placeholder: *Succession* (after the Archaeological Succession Table).
 - [x] ~~Per-area tier caps~~ — replaced by one settlement per area (v0.3).
 - [ ] Map size per civilization (procedural maps scale land areas by civilization count). Phase 0 used 64 areas per civilization; with limits 1–5, cap 55, and two Stone Age rises, land filled around turn 36.
-- [ ] Which advances unlock towns, cities, and metropolises.
+- [ ] Which advances unlock cities and metropolises. (Villages: Permanent Settlement; towns: Chiefdom, v0.14.)
 - [ ] Tier drop details: how the host accepts or rejects refugees under simultaneous turns (standing policy or per-event choice); whether accepted refugees count against the host's cap; whether a ruler can exploit deliberate collapse to transfer tokens.
 - [ ] Names for rival civilizations' settlements (generated name lists, or unnamed).
 - [ ] What happens to a settlement's name when it dissolves or is refounded.
 - [ ] Support variant: tokens only (current) vs tokens plus one lower-tier settlement in range. Compared in the Phase 0 simulation.
-- [ ] Food: whether food still drives growth, stores buffer shortages, and shortage raises instability now that food is a special resource.
+- [ ] Food: whether food still drives growth and shortage raises instability now that food is a special resource. (Stores buffer support shortfalls: Pottery, v0.14.)
 
 ### Tuning (playtesting)
 
@@ -636,6 +787,8 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.14 (October 23, 2026):** Stone Age advance list (§8): baseline Fire, Stone Tools, Foraging; to earn Permanent Settlement, Agriculture, Fishing, Herding, Pottery, Weaving, Masonry, Copper Working, Ritual, Chiefdom, Tallies, Dugout Canoes, Barter, Archery, Palisades. Chiefdom unlocks towns. Archery adds +0.25 token strength; strength may be fractional. Irrigation moves to the Bronze Age. Mastered gathering advances give +1 per settlement gathering the good, not per worker. Permanent Settlement reviewed: +1 a turn and +1 per full area, Known cost 3, Developed cost 4. Fishing reviewed: plausible with a fish area held; Known cost 3 (+1 per fish area), Developed cost 8 (+1 per fish area, +1 per settlement on one); adoption +15 per settlement gathering fish, falls 10. Archery reviewed: plausible with a forest held; Known cost 4, Developed cost 8, both +1 per forest area; countered by Palisades when attacking settlements. Agriculture reviewed: plausible with Permanent Settlement Known and a grain area held; Known cost 5, Developed cost 12, mirroring Fishing; adoption +10 per settlement gathering grain, falls 10. Ritual: −1 civ-wide instability a turn when Developed, −2 when Mastered; no shrine building; driven by settlements, civ-wide instability points, and Superstition strikes (Known cost 4, Developed cost 8); adoption +5 per settlement, falls 10. Dugout Canoes: river travel, a move starting on a river may continue up to 2 more areas along it; sea crossings wait for a Bronze Age boat advance; transport distance (food in reach, market reach, knowledge spread, capital distance) counts the same river leg as one step; plausible with a river area held, built on Stone Tools alone (Known cost 6, Developed cost 10). Pottery stores grain (1 per settlement, 2 when Mastered) to cover support shortfalls; fish spoils; it is the intended counter to Famine; plausible with Permanent Settlement Known and a village (Known cost 5, +1 per village; Developed cost 6, +1 per settlement gathering food; adoption +5 per settlement gathering grain, falls 10). Chiefdom (towns): plausible with Ritual Known and 3 villages; +1 per settlement and +1 per Bureaucracy unit (Known cost 12, Developed cost 24). Herding reveals livestock, a new food resource on plains and hills; plausible with Agriculture Known and plains or hills held (Known cost 14, +1 per such area; Developed cost 12, +1 per livestock area and per settlement on one; adoption +15 per settlement gathering livestock, falls 10). Superstition is added to the calamity list (§12), as in the original. Conflict (§11): bonus power becomes a volley of extra removals before the first round, and settlement thresholds are checked against power, so strength modifiers matter in every fight. Masonry: stone walls for towns and larger, +1 threshold and defense when Developed, +2 when Mastered; plausible with Permanent Settlement Known and hills or mountains held (Known cost 12, +1 per such area; Developed cost 10, +1 per settlement on one; adoption +15 per town, falls 10). Barter: Developed opens market access; Mastered adds 1 step of market reach; plausible with Permanent Settlement Known and any good gathered; driven by kinds of goods and settlements gathering, plus +1 per rival in contact through tokens or settlements (Known cost 6, Developed cost 12); adoption +10 per kind of good traded that turn, falls 10. Palisades: every settlement +1 threshold and defense, counters Archery; driven by own settlements in contact with a rival (+1) and attacked that turn (+3) (Known cost 8, Developed cost 14). Weaving (see the revision below): plausible with Agriculture Known, +1 per settlement on grain or livestock (Known cost 8, Developed cost 16); adoption +15 per such settlement, falls 10; a cap can shrink when adoption falls. Tallies: the capital-distance penalty starts beyond 4 land moves when Developed, beyond 6 when Mastered; plausible with Chiefdom Known and a town (Known cost 4, +1 per town and per Bureaucracy unit; Developed cost 24, +1 per settlement more than 2 moves from the capital; adoption +5 per Bureaucracy unit and per town, falls 10). Copper Working reveals copper, a new resource on hills and mountains, gathered when Developed; opens Bronze Working. New good category, **luxury goods** (§6): given to the people to lower instability, creating market demand; copper is the first. Luxuries are used automatically in resolution step 7: −1 each on the settlements nearest collapse, at most 1 per settlement, the rest civ-wide. Copper Working: plausible with Pottery Known and hills or mountains held (Known cost 14, +1 per such area; Developed cost 14, +1 per copper area and per settlement on one). All 15 Stone Age advances reviewed. Weaving revisited: cloth is a luxury good worked instead of food on grain or livestock areas; token cap +5 when Weaving is Developed and +5 when Agriculture is Mastered (55 → 65); Weaving adoption +15 per settlement making cloth. Advances carry candidate calamity tags (notes, not rules) for the calamity design in step 5. Timing targets per advance (Known, Developed, Mastered turns) set the scale for costs; the Stone Age ends around turn 35. Details of each advance are still reviewed one at a time.
+- **0.13 (October 19, 2026):** Discovery is deterministic: an advance is reached exactly when its accumulator's progress reaches its cost, with no breakthrough chance. Every advance uses the full ladder (Plausible, Known, Developed, Adopted → Mastered); each stage's effects and the drivers of adoption are defined per advance and reviewed one at a time. High Learning is a pool of 1 progress per unit, sent to the focused domain's advances (split evenly), or split across all advances without a focus; it counts at half toward Developed, where field use leads. Five domains (Land and food, Crafts, Beliefs and society, Travel and trade, War); focus is free until currency exists. Known and Developed are never lost; adoption falls while its drivers are missing; partial progress pauses. The whole advance tree is visible. Starting baseline: Fire, Stone Tools, Foraging (Developed and Mastered); Permanent Settlement is earned first and unlocks villages; Agriculture and Fishing are earned. New setup option, Advanced start (off by default): each civilization draws 2 first-ring advances of its own, Developed and Mastered.
 - **0.12 (October 19, 2026):** Instability, first version: overextension (+1 civ-wide per turn per settlement beyond 6), settlement losses (+1 civ-wide per tier lost), lost support (+2 local) and nearby conflict (+1 local). Bureaucracy is a manpower assignment in any settlement: −1 per unit per turn, its own meter first, the rest civ-wide; it works in the resources phase. Collapse thresholds rise by tier (village 8, town 10, city 12, metropolis 14) and fall with distance from the capital (−1 per 2 land moves beyond 2, at most −4, never below half); collapse drops one tier and halves the local meter, and does not count as a loss. The capital is the first settlement, has one free Bureaucracy unit, and passes to the largest remaining settlement when lost. A civilization with no settlements left has its civ-wide meter reset to 0. The planning panel warns while overextension outruns Bureaucracy. War, food, and the other sources and stabilizers wait for their systems.
 - **0.11 (October 19, 2026):** Moves are planned by drag and drop: a drag sends one token, Shift-drag sends all; right-click an arrow takes one back, Shift-right-click cancels it. A drag starting off your tokens pans. A single click selects any land area and shows its details, plus its actions in allocation; the hover box stays. Each civilization has a movement range, starting at 1 and raised by transport discoveries. Settlement step: leaving one of your own settlements entered during a move costs nothing, once per move (plains → own village → hills is one move).
 - **0.10 (October 18, 2026):** Food is a special resource found only in some areas, not a base need: nothing eats by default. Any settlement can produce it with production manpower once the farming technology for that resource is discovered. Food is gathered by production manpower and traded on the market like any other good; it substitutes for support tokens. Goods last one turn; storage arrives later through advances such as granaries. Food is placed by chance from terrain and features (floodplains always), and every start has a food area within reach (grain is added if none was rolled). Food goods are named (grain, fish), each with its own price; any of them counts for support. 1 manpower gathers 1 food and 1 food replaces 1 support token for every food good; goods differ through advances (plough and irrigation for grain, boats and nets for fish) and storage. Food supports its own settlement or an adjacent one of the same civilization, assigned by the engine after support tokens. Manpower assignments are standing orders, taking effect in the next resources phase; new settlements start on their area's food. Added open questions on the earlier growth, store, and instability roles of food. Growth replaces the original's rule (+1 / +2 per area) with 0.5 per loose token, boosted by resources and discoveries; each area keeps its fractional progress until it makes a whole token, losing it when the civilization's last token there leaves or dies; a full area keeps its progress but gains none. The expansion window and cap pacing must be re-simulated.

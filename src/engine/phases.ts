@@ -1,5 +1,6 @@
 import { resolveConflict } from './conflict';
 import { emit } from './context';
+import { resolveDiscovery } from './discovery';
 import { resolveInstability, runBureaucracy, updateCapitals } from './instability';
 import { resolveGrowth, resolveMovement, resolveSurplus } from './population';
 import { runResources } from './resources';
@@ -42,7 +43,7 @@ const resolutionSteps: Record<ResolutionStepId, (ctx: Context) => void> = {
     resolveUrbanGrowth(ctx);
   },
   surplus: resolveSurplus,
-  discovery: () => {},
+  discovery: resolveDiscovery,
   figures: () => {},
   wonders: () => {},
   ast: () => {},

@@ -227,6 +227,8 @@ interface IsoMapProps {
   onMoveDrop?: (from: AreaId, to: AreaId, all: boolean) => void;
   // The settlement a move passes through, if any; its arrow is drawn through the settlement.
   moveVia?: (from: AreaId, to: AreaId) => AreaId | null;
+  // Resources the viewer has revealed (design doc §6); all are drawn without it.
+  revealedResources?: ReadonlySet<string>;
   selection?: AreaId | null;
   // Planned settlement conversions, drawn as translucent pieces. Like real pieces, they let clicks
   // through to the area.
@@ -335,7 +337,7 @@ export interface View {
   zoom: number;
 }
 
-export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hovered, onHover, hideTerrainArt = false, handle, showStarts = true, onAreaClick, moves = [], onMoveClick, moveTargets, onMoveDrop, moveVia, selection = null, plans = [] }: IsoMapProps) {
+export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hovered, onHover, hideTerrainArt = false, handle, showStarts = true, onAreaClick, moves = [], onMoveClick, moveTargets, onMoveDrop, moveVia, revealedResources, selection = null, plans = [] }: IsoMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const onHoverRef = useRef(onHover);
   onHoverRef.current = onHover;
@@ -516,7 +518,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hov
     // Resource markers sit to the left of the area's pieces.
     for (const area of map.areas) {
       const [resource] = area.resources;
-      if (!resource) continue;
+      if (!resource || (revealedResources && !revealedResources.has(resource))) continue;
       const [cx, cy] = project(area.center);
       place(`r${area.id}`, [cx - 9, cy + 1], <ResourceIcon resource={resource} />, 0.75);
     }
@@ -579,7 +581,7 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hov
       });
     }
     return items.sort((a, b) => a.y - b.y).map((item) => item.node);
-  }, [map, pieces, showCounts, viewer, pieceScale, showStarts, moves]);
+  }, [map, pieces, showCounts, viewer, pieceScale, showStarts, moves, revealedResources]);
 
   // Everything that changes only with the map, so panning and zooming re-render cheaply.
   const board = useMemo(

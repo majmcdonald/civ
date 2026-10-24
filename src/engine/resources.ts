@@ -1,5 +1,6 @@
 import type { Content } from './content';
 import { emit } from './context';
+import { HIGH_LEARNING, reached } from './discovery';
 import { BUREAUCRACY } from './instability';
 import type { AreaId, GameMap, ResourceId } from './map/types';
 import { settlementAt, tierRules } from './settlements';
@@ -17,9 +18,16 @@ export function assigned(settlement: Settlement): number {
   return (settlement.work ?? []).reduce((sum, w) => sum + w.count, 0);
 }
 
+// A resource is usable once its required advance is Developed, and shown on the map once it is
+// Known (design doc §6, Resources).
 export function usable(state: GameState, content: Content, player: PlayerId, resource: ResourceId): boolean {
   const rule = content.resources.find((r) => r.id === resource);
-  return Boolean(rule && state.players.find((p) => p.id === player)?.known.includes(rule.requires));
+  return Boolean(rule && reached(state, player, rule.requires, 'developed'));
+}
+
+export function revealed(state: GameState, content: Content, player: PlayerId, resource: ResourceId): boolean {
+  const rule = content.resources.find((r) => r.id === resource);
+  return Boolean(rule && reached(state, player, rule.requires, 'known'));
 }
 
 export function isFood(content: Content, resource: ResourceId): boolean {
@@ -69,7 +77,7 @@ export function validateWork(ctx: Pick<Context, 'state' | 'map' | 'content'>, co
   const here = settlementAt(state, command.area);
   if (!here || here.player !== command.player) return 'You have no settlement there';
   if (!Number.isInteger(command.count) || command.count < 0) return 'Manpower must be a whole number, 0 or more';
-  if (command.resource !== BUREAUCRACY) {
+  if (command.resource !== BUREAUCRACY && command.resource !== HIGH_LEARNING) {
     if (!map.areas[command.area]!.resources.includes(command.resource)) return 'That resource is not in this area';
     if (!usable(state, content, command.player, command.resource)) return 'Your civilization cannot gather that resource yet';
   }

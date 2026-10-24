@@ -1,4 +1,4 @@
-import type { EraId } from '../content/types';
+import type { DomainId, EraId } from '../content/types';
 import type { Content } from './content';
 import type { InstabilitySource } from './instability';
 import type { AreaId, GameMap, MapType, ResourceId, RoomToExpand } from './map/types';
@@ -35,6 +35,17 @@ export interface GameSetup {
   // Settlement tiers every civilization starts with; villages only by default (design doc §5).
   // Advances unlock the rest once they exist.
   unlockedTiers?: SettlementTier[];
+  // Each civilization draws first-ring advances at the start (design doc §2, Setup options).
+  advancedStart?: boolean;
+}
+
+// One civilization's standing on one advance (design doc §8). `progress` builds toward the next
+// stage; `adoption` (0–100) applies once Developed, and 100 is Mastered.
+export interface AdvanceProgress {
+  advance: string;
+  stage: 'none' | 'known' | 'developed';
+  progress: number;
+  adoption: number;
 }
 
 export type SettlementTier = 'village' | 'town' | 'city' | 'metropolis';
@@ -63,9 +74,10 @@ export interface PlayerState {
   capital: AreaId | null;
   // Settlement tiers the civilization can build (design doc §5).
   tiers: SettlementTier[];
-  // Advances the civilization knows. Until discovery exists, the farming advances are known from
-  // turn 1 (development plan, Phase 3).
-  known: string[];
+  // Advances with any progress or stage, in content order (design doc §8).
+  advances: AdvanceProgress[];
+  // The domain High Learning goes to; null splits it across every advance in progress.
+  focus: DomainId | null;
 }
 
 // Manpower on one resource of the settlement's area, or on Bureaucracy ('bureaucracy') (design doc
@@ -133,7 +145,9 @@ export type Command =
   // Names a settlement; an empty name clears it.
   | { type: 'nameSettlement'; player: PlayerId; area: AreaId; name: string }
   // Sets how much of a settlement's manpower works one of its area's resources; 0 unassigns it.
-  | { type: 'assignWork'; player: PlayerId; area: AreaId; resource: ResourceId; count: number };
+  | { type: 'assignWork'; player: PlayerId; area: AreaId; resource: ResourceId; count: number }
+  // Points High Learning at a discovery domain; null removes the focus.
+  | { type: 'setFocus'; player: PlayerId; domain: DomainId | null };
 
 // Tokens taken from one area by a conversion.
 export interface TokenSource {
@@ -166,6 +180,7 @@ export type GameEvent =
   | { type: 'instabilityChanged'; player: PlayerId; area: AreaId | null; amount: number; source: InstabilitySource }
   | { type: 'settlementCollapsed'; player: PlayerId; area: AreaId; tier: SettlementTier }
   | { type: 'capitalMoved'; player: PlayerId; area: AreaId | null }
+  | { type: 'advanceReached'; player: PlayerId; advance: string; stage: 'known' | 'developed' | 'mastered' }
   | { type: 'urbanGrowth'; player: PlayerId; from: AreaId; to: AreaId; count: number }
   | { type: 'conflict'; area: AreaId; losses: TokenCount[] }
   | {

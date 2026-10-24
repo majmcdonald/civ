@@ -9,7 +9,8 @@ export * from './types';
 export * from './map';
 export { mapFor, mapOptions } from './world';
 export { BASE_MOVEMENT, GROWTH_PER_TOKEN, looseTokens, reachable, STARTING_TOKEN_CAP, tokensAt } from './population';
-export { assigned, manpower, usable } from './resources';
+export { assigned, manpower, revealed, usable } from './resources';
+export { discoveryView, DOMAINS, HIGH_LEARNING, highLearning, stageOf, type AdvanceView, type ProgressPart, type Stage } from './discovery';
 export {
   BUREAUCRACY,
   bureaucracyAt,

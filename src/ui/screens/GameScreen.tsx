@@ -5,6 +5,10 @@ import {
   assigned,
   BUREAUCRACY,
   bureaucracyAt,
+  discoveryView,
+  HIGH_LEARNING,
+  highLearning,
+  revealed,
   capitalDistance,
   capitalOf,
   civInstability,
@@ -48,6 +52,7 @@ import {
 import { CIV_COLORS, IsoMap, type ClickButton, type IsoMapHandle, type PlannedSettlement } from '../art/IsoMap';
 import type { MapPieces, SettlementTier } from '../art/pieces';
 import { CivilizationSheet } from './CivilizationSheet';
+import { KnowledgeSheet } from './KnowledgeSheet';
 import { RivalsSheet } from './RivalsSheet';
 import { AUTOSAVE_ID, downloadLog, downloadSave, writeSave } from '../saves';
 import './GameScreen.css';
@@ -85,9 +90,11 @@ export interface NewGameOptions {
   seed: number;
   opponents: number;
   map: MapSetup;
+  // Each civilization draws 2 first-ring advances (design doc §2, Setup options).
+  advancedStart: boolean;
 }
 
-export const DEFAULT_GAME: NewGameOptions = { name: '', seed: 1, opponents: 4, map: { type: 'inlandSea', room: 'standard' } };
+export const DEFAULT_GAME: NewGameOptions = { name: '', seed: 1, opponents: 4, map: { type: 'inlandSea', room: 'standard' }, advancedStart: false };
 
 export function gameContent(): Content {
   const loaded = loadContent(contentBundle, hooks);
@@ -101,7 +108,10 @@ export function newSession(options: NewGameOptions): Session {
   );
   // Towns are open from the start until the advance that unlocks them exists (design doc §5).
   const name = options.name.trim() || 'Untitled game';
-  return startSession({ name, seed: options.seed, players, finalEra: 'modern', map: options.map, unlockedTiers: ['village', 'town'] }, gameContent());
+  return startSession(
+    { name, seed: options.seed, players, finalEra: 'modern', map: options.map, unlockedTiers: ['village', 'town'], ...(options.advancedStart ? { advancedStart: true } : {}) },
+    gameContent(),
+  );
 }
 
 // The map has pieces for villages and towns only; larger tiers are not unlocked by anything yet.
@@ -149,7 +159,7 @@ function conflictLine(e: ConflictEvent, me: string, who: (player: string) => str
 }
 
 // One line per notable result of the turn for the player, for the notice after resolution.
-function turnReport(events: GameEvent[], me: string, conflict: (e: ConflictEvent) => string | null, place: (area: AreaId) => string): string[] {
+function turnReport(events: GameEvent[], me: string, conflict: (e: ConflictEvent) => string | null, place: (area: AreaId) => string, advanceName: (id: string) => string): string[] {
   const lines: string[] = [];
   // A collapse is reported as such, not as the tier drop it causes.
   const collapsed = new Set(events.flatMap((e) => (e.type === 'settlementCollapsed' ? [e.area] : [])));
@@ -163,6 +173,7 @@ function turnReport(events: GameEvent[], me: string, conflict: (e: ConflictEvent
     if (e.type === 'conversionFailed') lines.push(`Not built: ${e.reason}`);
     if (e.type === 'settlementCollapsed') lines.push(`A ${e.tier} collapsed in unrest`);
     if (e.type === 'capitalMoved' && e.area !== null) lines.push(`Capital: ${place(e.area)}`);
+    if (e.type === 'advanceReached') lines.push(`${advanceName(e.advance)} is ${e.stage === 'known' ? 'Known' : e.stage === 'developed' ? 'Developed' : 'Mastered'}`);
     if (e.type === 'settlementDropped' && !collapsed.has(e.area)) lines.push(e.tier ? `A settlement dropped to ${e.tier} for lack of support` : 'A village dissolved for lack of support');
     if (e.type === 'foodSupport') lines.push(`Food stood in for ${plural(e.count, 'support token')}`);
   }
@@ -340,8 +351,8 @@ function WorkRow({ area, work, onWork }: { area: AreaId; work: WorkOption; onWor
         Manpower: {work.total - work.free} of {work.total} working
       </strong>
       {work.rows.map((r) => (
-        <span key={r.resource} className="game-plan-work-row" title={r.resource === BUREAUCRACY ? 'Each unit lowers this settlement’s instability by 1 a turn, then the civ-wide meter' : r.usable ? '1 per manpower, gathered at the start of next turn' : 'Your civilization cannot gather this yet'}>
-          <span>{capitalize(r.resource)}</span>
+        <span key={r.resource} className="game-plan-work-row" title={r.resource === BUREAUCRACY ? 'Each unit lowers this settlement’s instability by 1 a turn, then the civ-wide meter' : r.resource === HIGH_LEARNING ? 'Each unit adds 1 discovery progress a turn to the focused domain’s advances (half toward Developed); see Knowledge' : r.usable ? '1 per manpower, gathered at the start of next turn' : 'Your civilization cannot gather this yet'}>
+          <span>{r.resource === HIGH_LEARNING ? 'High Learning' : capitalize(r.resource)}</span>
           <button type="button" aria-label={`Less ${r.resource}`} disabled={r.count === 0} onClick={() => onWork(area, r.resource, r.count - 1)}>
             −
           </button>
@@ -447,6 +458,10 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     };
   }, [state]);
   const names = useMemo(() => new Map(state.settlements.flatMap((s) => (s.name ? [[s.area, s.name] as const] : []))), [state]);
+  const shownResources = useMemo(
+    () => new Set(session.content.resources.filter((r) => revealed(state, session.content, state.players[HUMAN]!.id, r.id)).map((r) => r.id)),
+    [state, session],
+  );
 
   const era = [...session.content.eras].sort((a, b) => a.order - b.order)[0]!;
   const tokens = pieces.stacks.filter((s) => s.civ === HUMAN).reduce((sum, s) => sum + s.count, 0);
@@ -492,7 +507,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
         if (result.ok) events.push(...result.events.map((e) => e.event));
       }
     } while (session.state.phase === 'trade');
-    setReport(turnReport(events, me, describeConflict, (area) => areaName(area)));
+    setReport(turnReport(events, me, describeConflict, (area) => areaName(area), (id) => session.content.advances.find((a) => a.id === id)?.name ?? id));
     setLastEvents(events);
     if (session.state.turn > turn) {
       const failed = writeSave(session, `${gameName(session)} - autosave`, AUTOSAVE_ID);
@@ -541,7 +556,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     const here = settlementAt(state, area);
     const capital = here && capitalOf(state, here.player) === area ? ', capital' : '';
     const title = here ? `${names.get(area) ?? 'Unnamed'} – ${tierRules(here.tier).name} of ${who(here.player)}${capital}` : capitalize(a.terrain!);
-    const facts = [here ? capitalize(a.terrain!) : '', ...a.features, `limit ${a.limit}`, ...a.resources].filter(Boolean).join(' · ');
+    const facts = [here ? capitalize(a.terrain!) : '', ...a.features, `limit ${a.limit}`, ...a.resources.filter((r) => revealed(state, session.content, me, r))].filter(Boolean).join(' · ');
     const stacks = state.stacks.filter((st) => st.area === area).map((st) => ({ name: who(st.player), count: st.count, mine: st.player === me }));
     return { title, facts, stacks };
   };
@@ -557,8 +572,10 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     if (!here || here.player !== me) return null;
     const work = here.work ?? [];
     const count = (resource: string) => work.find((w) => w.resource === resource)?.count ?? 0;
-    const rows = map.areas[area]!.resources.map((resource) => ({ resource, count: count(resource), usable: usable(state, session.content, me, resource) }));
-    rows.push({ resource: BUREAUCRACY, count: count(BUREAUCRACY), usable: true });
+    const rows = map.areas[area]!.resources
+      .filter((resource) => revealed(state, session.content, me, resource))
+      .map((resource) => ({ resource, count: count(resource), usable: usable(state, session.content, me, resource) }));
+    rows.push({ resource: BUREAUCRACY, count: count(BUREAUCRACY), usable: true }, { resource: HIGH_LEARNING, count: count(HIGH_LEARNING), usable: true });
     return { total: manpower(here), free: manpower(here) - assigned(here), rows };
   };
   const stabilityOption = (area: AreaId): StabilityOption | null => {
@@ -682,6 +699,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
           moveTargets={moveTargets}
           onMoveDrop={onMoveDrop}
           moveVia={moveVia}
+          revealedResources={shownResources}
           selection={source}
           plans={plans}
         />
@@ -731,7 +749,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                     {hoveredSettlement && `${names.get(hoveredSettlement.area) ?? 'Unnamed'} – ${hoveredSettlement.tier === 'town' ? 'Town' : 'Village'} · `}
                     {hoveredArea.terrain!.charAt(0).toUpperCase() + hoveredArea.terrain!.slice(1)}
                     {hoveredArea.features.length > 0 && ` · ${hoveredArea.features.join(', ')}`} · limit {hoveredArea.limit}
-                    {hoveredArea.resources.length > 0 && ` · ${hoveredArea.resources.join(', ')}`}
+                    {hoveredArea.resources.some((r) => revealed(state, session.content, me, r)) && ` · ${hoveredArea.resources.filter((r) => revealed(state, session.content, me, r)).join(', ')}`}
                     {tokensAt(state, hoveredArea.id, me) > 0 && ` · ${tokensAt(state, hoveredArea.id, me)} of your tokens`}
                   </>
                 )
@@ -759,7 +777,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
           </>
         ) : (
           <div className="game-sheet-backdrop" onClick={() => setScreen('map')}>
-            <article className={`game-sheet ${screen === 'civilization' || screen === 'rivals' ? 'filled' : ''}`} onClick={(e) => e.stopPropagation()}>
+            <article className={`game-sheet ${screen === 'civilization' || screen === 'rivals' || screen === 'knowledge' ? 'filled' : ''}`} onClick={(e) => e.stopPropagation()}>
               {screen === 'civilization' ? (
                 <CivilizationSheet
                   map={map}
@@ -786,6 +804,19 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   eras={session.content.eras}
                   finalEra={state.setup.finalEra}
                   turn={state.turn}
+                />
+              ) : screen === 'knowledge' ? (
+                <KnowledgeSheet
+                  views={discoveryView(state, map, session.content, me)}
+                  content={session.content}
+                  focus={state.players[HUMAN]!.focus}
+                  highLearning={highLearning(state, me)}
+                  canFocus={planning}
+                  onFocus={(domain) => {
+                    const result = submit(session, { type: 'setFocus', player: me, domain });
+                    if (!result.ok) setNotice(result.reason);
+                    setVersion((v) => v + 1);
+                  }}
                 />
               ) : (
                 <p className="game-placeholder">Placeholder</p>

@@ -167,6 +167,13 @@ function NewGameSetup({ options, onChange, onStart, onBack }: NewGameSetupProps)
           </button>
         </span>
       </label>
+      <label>
+        <span>Advanced start</span>
+        <span className="title-setup-check">
+          <input type="checkbox" checked={options.advancedStart} onChange={(e) => onChange({ ...options, advancedStart: e.target.checked })} />
+          Each civilization begins with 2 random advances
+        </span>
+      </label>
       <p className="title-setup-summary">
         {civilizations} civilizations on about {land(options.map.room)} land areas
       </p>

@@ -1,5 +1,6 @@
 import type { Content } from './content';
 import { clone, emit } from './context';
+import { grantStartingKnowledge, setFocus, validateFocus } from './discovery';
 import { runResolution, runResourcesPhase } from './phases';
 import { BASE_MOVEMENT, setMoveOrder, STARTING_TOKEN_CAP, validateMoveOrder } from './population';
 import { setWork, validateWork } from './resources';
@@ -17,7 +18,7 @@ import {
   type Phase,
 } from './types';
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 interface CommandHandler<C extends Command> {
   validate(ctx: Pick<Context, 'state' | 'map' | 'content'>, command: C): string | null;
@@ -78,6 +79,14 @@ const handlers: CommandHandlers = {
       setWork(ctx, command);
     },
   },
+  setFocus: {
+    validate(ctx, command) {
+      return validateFocus(ctx, command);
+    },
+    execute(ctx, command) {
+      setFocus(ctx, command);
+    },
+  },
 };
 
 export function validateSetup(setup: GameSetup, content: Content): string | null {
@@ -97,16 +106,13 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
   if (problem) return { ok: false, reason: problem };
 
   const map = mapFor(setup);
-  // Stand-in until discovery exists (development plan, Phase 3): every civilization knows the
-  // advances its resources need.
-  const known = [...new Set(content.resources.map((r) => r.requires))];
   const state: GameState = {
     schemaVersion: SCHEMA_VERSION,
     setup: clone(setup),
     rng: createRng(setup.seed),
     turn: 1,
     phase: 'resources',
-    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, capital: null, tiers: [...(setup.unlockedTiers ?? ['village'])], known: [...known] })),
+    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, capital: null, tiers: [...(setup.unlockedTiers ?? ['village'])], advances: [], focus: null })),
     // Each civilization starts with one token in its starting area (design doc §4).
     stacks: setup.players
       .map((p, i) => ({ area: map.starts[i]!, player: p.id, count: 1 }))
@@ -118,6 +124,7 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
   };
   const ctx: Context = { state, content, map, events: [], refugees: [] };
   emit(ctx, { type: 'gameStarted', seed: setup.seed, players: setup.players.map((p) => p.id) });
+  grantStartingKnowledge(ctx);
   emit(ctx, { type: 'turnStarted', turn: 1 });
   emit(ctx, { type: 'phaseStarted', phase: 'resources' });
   runUntilPlayerInput(ctx);

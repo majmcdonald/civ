@@ -78,7 +78,7 @@ describe('food on the map', () => {
 describe('the farming stand-in', () => {
   it('has every civilization know the advances its resources need from turn 1', () => {
     const game = newGame();
-    for (const p of game.state.players) expect(p.known).toEqual(['agriculture', 'fishing']);
+    for (const p of game.state.players) expect(p.advances.map((a) => [a.advance, a.stage, a.adoption])).toEqual([['agriculture', 'developed', 100], ['fishing', 'developed', 100]]);
   });
 });
 
@@ -129,7 +129,7 @@ describe('manpower', () => {
   it('refuses resources the civilization cannot gather yet', () => {
     const { game, grain } = scene();
     settle(game, grain, 'village');
-    game.state.players[0]!.known = [];
+    game.state.players[0]!.advances = [];
     toAllocation(game);
     expectRejected(game, { type: 'assignWork', player: 'p1', area: grain, resource: 'grain', count: 1 }, /cannot gather/);
   });
@@ -177,7 +177,7 @@ describe('goods', () => {
   it('are not gathered when the civilization cannot use the resource', () => {
     const { game, grain } = scene();
     settle(game, grain, 'village', [{ resource: 'grain', count: 1 }]);
-    game.state.players[0]!.known = [];
+    game.state.players[0]!.advances = [];
     toAllocation(game);
     expect(eventsOfType(endPhaseAll(game), 'goodsProduced')).toEqual([]);
   });

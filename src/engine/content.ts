@@ -1,4 +1,4 @@
-import type { Advance, ContentBundle, Effect, Era, Resource } from '../content/types';
+import type { Advance, AreaFilter, ContentBundle, Effect, Era, Input, Resource } from '../content/types';
 import { hooks as defaultHooks, type HookRegistry } from './hooks';
 
 export interface Content {
@@ -41,8 +41,48 @@ export function loadContent(bundle: ContentBundle, hooks: HookRegistry = default
     if (!advanceIds.has(resource.requires)) errors.push(`Resource "${resource.id}" requires unknown advance "${resource.requires}"`);
   }
 
+  for (const advance of bundle.advances) {
+    for (const problem of checkDiscovery(advance, advanceIds, resourceIds)) errors.push(`Advance "${advance.id}": ${problem}`);
+  }
+
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, content: { eras: bundle.eras, advances: bundle.advances, resources: bundle.resources, hooks } };
+}
+
+const DOMAIN_IDS = ['land', 'crafts', 'beliefs', 'travel', 'war'];
+
+// Discovery data (design doc §8): a domain, both accumulators unless baseline, positive costs and
+// amounts, and references to known advances and resources.
+function checkDiscovery(advance: Advance, advances: Set<string>, resources: Set<string>): string[] {
+  const problems: string[] = [];
+  if (!DOMAIN_IDS.includes(advance.domain)) problems.push(`unknown domain "${advance.domain}"`);
+  const filter = (where: AreaFilter | undefined) => {
+    if (where?.resource !== undefined && !resources.has(where.resource)) problems.push(`unknown resource "${where.resource}"`);
+  };
+  const input = (i: Input) => {
+    if (!(i.amount > 0)) problems.push(`input amount must be positive (got ${i.amount})`);
+    if (i.per === 'area' || i.per === 'settlement') filter(i.where);
+    if (i.per === 'worker' && !resources.has(i.resource)) problems.push(`unknown resource "${i.resource}"`);
+  };
+  for (const c of advance.plausible ?? []) {
+    if (c.type === 'knows' && !advances.has(c.advance)) problems.push(`condition references unknown advance "${c.advance}"`);
+    if (c.type === 'knows' && c.advance === advance.id) problems.push('condition references itself');
+    if (c.type === 'presence') filter(c.where);
+  }
+  for (const stage of ['known', 'developed'] as const) {
+    const rules = advance[stage];
+    if (!rules) {
+      if (!advance.baseline) problems.push(`needs ${stage} rules (or baseline)`);
+      continue;
+    }
+    if (!(rules.cost > 0)) problems.push(`${stage} cost must be positive (got ${rules.cost})`);
+    rules.inputs.forEach(input);
+  }
+  if (advance.adoption) {
+    advance.adoption.inputs.forEach(input);
+    if (!(advance.adoption.fall >= 0)) problems.push(`adoption fall must be 0 or more (got ${advance.adoption.fall})`);
+  }
+  return problems;
 }
 
 function checkEffect(effect: Effect, hooks: HookRegistry): string | null {
