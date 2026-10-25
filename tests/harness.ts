@@ -26,8 +26,8 @@ export const standIn: ContentBundle = {
     { id: 'fishing', name: 'Fishing', era: 'stone', domain: 'land', baseline: true, effects: [] },
   ],
   resources: [
-    { id: 'grain', name: 'Grain', food: true, requires: 'agriculture' },
-    { id: 'fish', name: 'Fish', food: true, requires: 'fishing' },
+    { id: 'grain', name: 'Grain', food: true, price: 5, requires: 'agriculture' },
+    { id: 'fish', name: 'Fish', food: true, price: 5, requires: 'fishing' },
   ],
 };
 

@@ -36,6 +36,7 @@ export function loadContent(bundle: ContentBundle, hooks: HookRegistry = default
     resourceIds.add(resource.id);
     if (!advanceIds.has(resource.requires)) errors.push(`Resource "${resource.id}" requires unknown advance "${resource.requires}"`);
     if (resource.revealedBy !== undefined && !advanceIds.has(resource.revealedBy)) errors.push(`Resource "${resource.id}" is revealed by unknown advance "${resource.revealedBy}"`);
+    if (!(resource.price > 0)) errors.push(`Resource "${resource.id}" needs a positive starting price (got ${resource.price})`);
   }
   for (const resource of bundle.resources) {
     for (const from of resource.from ?? []) if (!resourceIds.has(from)) errors.push(`Resource "${resource.id}" is worked from unknown resource "${from}"`);

@@ -1,6 +1,6 @@
 # Development Plan
 
-**Version:** 0.22  
+**Version:** 0.23  
 **Date:** October 25, 2026  
 **Status:** Working draft
 
@@ -113,6 +113,7 @@ Other costs on the 15-civilization spacious board: map generation 0.3 s, first r
 
 ## Change log
 
+- **0.23 (October 25, 2026):** Phase 4 step 4, the market (design doc v0.21), built in `src/engine/market.ts`. `Resource.price` is the starting price (food 5, luxury 10). `PlayerState` gains `prices` (unrounded, per player's market), `orders` (standing, one per good; `setOrder` command in the trade phase), and `traded` (kinds traded this turn, Barter's `traded` input). At the close of the trade phase `resolveMarket` moves each trader's prices by the imbalance in its market (its own orders plus those of traders within reach: 2 steps settlement to settlement plus `marketReach`, mutual), within half to triple the start, then fills its orders at the rounded price: sales first, then purchases within the treasury. Bought goods are `Good`s with no area (the civilization's pool); the support check uses pooled food after local food. The minimal AI sets buy orders for forecast support shortfalls and settlements within 2 of collapse. The game screen stops at the trade phase once the player can trade; the Market screen shows prices, the forecast at the close, goods held, and order controls. Batch runs report goods bought. Save schema 13.
 - **0.22 (October 25, 2026):** Phase 4 step 3, currency (design doc v0.20), built. `PlayerState.treasury` keeps from turn to turn; `TierRules` gains `tax` (village 0, town 2, city 3, metropolis 4) and `spoils` (10% per tier). `collectTax` runs in the resources phase after gathering (`taxCollected` event; `taxIncome` for the interface). A capture moves the spoils from the defender's treasury to the capturer (`settlementAttacked.spoils`). The top bar shows the treasury and tax income; turn reports and conflict forecasts show spoils; batch runs report the treasury. Nothing spends currency until the market (step 4). Currency is no longer an instability stabilizer, so step 6 drops it. Save schema 12.
 - **0.21 (October 25, 2026):** Very crowded room to expand for design doc v0.19: `RoomToExpand` gains `veryCrowded` (`ROOM_FACTOR` 0.25); minimum start spacing is per room size (3 very crowded, 4 otherwise). Map tests cover 15 civilizations on very crowded maps; `npm run batch -- --room veryCrowded`.
 - **0.20 (October 25, 2026):** Urban growth for design doc v0.18: `allocateSupport` reports `ateOwn` (settlements that gathered food and ate their own), `resolveSupport` records it as `Settlement.ateOwn` (the turn), and `urbanGrowthOf` adds 1 that turn. `supportSummary` predicts it for the Civilization screen's urban growth figures.

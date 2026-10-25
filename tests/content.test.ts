@@ -40,7 +40,7 @@ describe('content loading', () => {
           mastered: [{ type: 'gatherBonus', resource: 'wool', amount: 1 }],
         },
       ],
-      resources: [{ id: 'cloth', name: 'Cloth', food: false, requires: 'a', revealedBy: 'b', from: ['flax'] }],
+      resources: [{ id: 'cloth', name: 'Cloth', food: false, price: 10, requires: 'a', revealedBy: 'b', from: ['flax'] }],
     };
     expect(errorsFor(bundle)).toEqual(
       expect.arrayContaining([
@@ -86,7 +86,7 @@ describe('content loading', () => {
   });
 
   it('reports duplicate resources and resources requiring unknown advances', () => {
-    const grain = { id: 'grain', name: 'Grain', food: true, requires: 'agriculture' };
+    const grain = { id: 'grain', name: 'Grain', food: true, price: 5, requires: 'agriculture' };
     expect(errorsFor({ ...base, resources: [grain, grain] })).toEqual([
       'Resource "grain" requires unknown advance "agriculture"',
       'Duplicate resource id "grain"',

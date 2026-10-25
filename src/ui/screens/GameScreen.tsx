@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { content as contentBundle } from '../../content';
 import {
   aiCommands,
+  canTrade,
+  marketView,
   assigned,
   BUREAUCRACY,
   bureaucracyAt,
@@ -59,6 +61,7 @@ import { CIV_COLORS, IsoMap, type ClickButton, type IsoMapHandle, type PlannedSe
 import type { MapPieces, SettlementTier } from '../art/pieces';
 import { CivilizationSheet, type WorkOption } from './CivilizationSheet';
 import { KnowledgeSheet } from './KnowledgeSheet';
+import { MarketSheet } from './MarketSheet';
 import { RivalsSheet } from './RivalsSheet';
 import { CITY_NAMES } from '../cityNames';
 import { AUTOSAVE_ID, downloadLog, downloadSave, writeSave } from '../saves';
@@ -185,6 +188,7 @@ function turnReport(events: GameEvent[], me: string, conflict: (e: ConflictEvent
     if (e.type === 'advanceReached') lines.push(`${advanceName(e.advance)} is ${e.stage === 'known' ? 'Known' : e.stage === 'developed' ? 'Developed' : 'Mastered'}`);
     if (e.type === 'settlementDropped' && !collapsed.has(e.area)) lines.push(e.tier ? `A settlement dropped to ${e.tier} for lack of support` : 'A village dissolved for lack of support');
     if (e.type === 'foodSupport') lines.push(`Food stood in for ${plural(e.count, 'support token')}`);
+    if (e.type === 'marketTrade') lines.push(`${e.side === 'buy' ? 'Bought' : 'Sold'} ${e.count} ${e.resource} at ${e.price}`);
   }
   return lines;
 }
@@ -434,7 +438,13 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
 
   // Open on the player's starting area.
   useEffect(() => {
-    while (session.state.phase === 'trade') for (const player of session.state.players) submit(session, { type: 'endPhase', player: player.id });
+    // The trade phase is skipped while the player cannot trade (design doc §7); AI players still place their orders.
+    while (session.state.phase === 'trade' && !canTrade(session.state, session.state.players[HUMAN]!.id)) {
+      for (const player of session.state.players) {
+        if (player.kind === 'ai') for (const command of aiCommands(session.state, session.content, player.id)) submit(session, command);
+        submit(session, { type: 'endPhase', player: player.id });
+      }
+    }
     setVersion((v) => v + 1);
     mapHandle.current?.focus(mapFor(session.setup).starts[HUMAN]!);
   }, [session]);
@@ -512,7 +522,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   }, [report]);
 
   // The player ends the phase; AI players (minimal until Phase 7) give their orders and end it at
-  // once. The trade phase is skipped while no one can trade (trade discovery, design doc §7).
+  // once. The trade phase is skipped while the player cannot trade (Barter, design doc §7).
   const endPhase = () => {
     const events: GameEvent[] = [];
     const turn = session.state.turn;
@@ -522,7 +532,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
         const result = submit(session, { type: 'endPhase', player: player.id });
         if (result.ok) events.push(...result.events.map((e) => e.event));
       }
-    } while (session.state.phase === 'trade');
+    } while (session.state.phase === 'trade' && !canTrade(session.state, me));
     // An advance with no adoption is Mastered when Developed; only Developed is reported.
     const reported = events.filter((e) => !(e.type === 'advanceReached' && e.stage === 'mastered' && !session.content.advances.find((a) => a.id === e.advance)?.adoption));
     setReport(turnReport(reported, me, describeConflict, (area) => areaName(area), (id) => session.content.advances.find((a) => a.id === id)?.name ?? id));
@@ -811,7 +821,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   </>
                 )
               ) : (
-                <span className="game-hint">{planning ? 'Drag your tokens to move them (Shift-drag for all) · click an area for details and actions · double-click a settlement to see it in your list · arrow keys scroll' : 'Drag or use the arrow keys to pan · scroll to zoom · click an area for details'}</span>
+                <span className="game-hint">{state.phase === 'trade' ? 'Trade phase: place or change orders on the Market screen, then end the phase' : planning ? 'Drag your tokens to move them (Shift-drag for all) · click an area for details and actions · double-click a settlement to see it in your list · arrow keys scroll' : 'Drag or use the arrow keys to pan · scroll to zoom · click an area for details'}</span>
               )}
             </div>
             <div className="game-turn-panel">
@@ -834,7 +844,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
           </>
         ) : (
           <div className="game-sheet-backdrop" onClick={() => setScreen('map')}>
-            <article className={`game-sheet ${screen === 'civilization' || screen === 'rivals' || screen === 'knowledge' ? 'filled' : ''}`} onClick={(e) => e.stopPropagation()}>
+            <article className={`game-sheet ${screen === 'civilization' || screen === 'rivals' || screen === 'knowledge' || screen === 'market' ? 'filled' : ''}`} onClick={(e) => e.stopPropagation()}>
               {screen === 'civilization' ? (
                 <CivilizationSheet
                   map={map}
@@ -875,6 +885,19 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   canStudy={planning && !state.players[HUMAN]!.endedPhase}
                   onStudy={(queue) => {
                     const result = submit(session, { type: 'setStudy', player: me, queue });
+                    if (!result.ok) setNotice(result.reason);
+                    setVersion((v) => v + 1);
+                  }}
+                />
+              ) : screen === 'market' ? (
+                <MarketSheet
+                  view={marketView(state, map, session.content, me)}
+                  treasury={treasury}
+                  members={marketView(state, map, session.content, me).members.map((id) => state.players.find((p) => p.id === id)!.name)}
+                  canOrder={state.phase === 'trade' && !state.players[HUMAN]!.endedPhase}
+                  trades={lastEvents.filter((e): e is Extract<GameEvent, { type: 'marketTrade' }> => e.type === 'marketTrade' && e.player === me && session.state.phase !== 'trade')}
+                  onOrder={(resource, side, count, limit) => {
+                    const result = submit(session, { type: 'setOrder', player: me, resource, side, count, ...(limit !== undefined ? { limit } : {}) });
                     if (!result.ok) setNotice(result.reason);
                     setVersion((v) => v + 1);
                   }}

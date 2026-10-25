@@ -73,6 +73,13 @@ export interface PlayerState {
   instability: number;
   // Currency held; it keeps from turn to turn (design doc §6, Currency).
   treasury: number;
+  // Market prices in this player's market, unrounded; a good not listed is at its starting price
+  // (design doc §7).
+  prices: Record<ResourceId, number>;
+  // Standing market orders, at most one per good (design doc §7).
+  orders: MarketOrder[];
+  // Goods it bought or sold during `turn`'s trade phase (Barter's adoption); absent means none.
+  traded?: { turn: number; resources: ResourceId[] };
   // The capital's area: the first settlement, then the largest remaining (design doc §10).
   capital: AreaId | null;
   // Settlement tiers the civilization can build (design doc §5): the setup's plus its advances'.
@@ -95,10 +102,20 @@ export interface Work {
   count: number;
 }
 
+// A standing market order (design doc §7): buy or sell up to `count` each turn, at no more (buy) or
+// no less (sell) than `limit`; without a limit, at the market price.
+export interface MarketOrder {
+  resource: ResourceId;
+  side: 'buy' | 'sell';
+  count: number;
+  limit?: number;
+}
+
 // Goods gathered in the resources phase, held where they were gathered; lost at the end of the
-// turn (design doc §6).
+// turn (design doc §6). Goods bought on the market have no area: they are in the civilization's
+// pool (design doc §7, Delivery).
 export interface Good {
-  area: AreaId;
+  area: AreaId | null;
   player: PlayerId;
   resource: ResourceId;
   count: number;
@@ -162,7 +179,9 @@ export type Command =
   // Sets how much of a settlement's manpower works one of its area's resources; 0 unassigns it.
   | { type: 'assignWork'; player: PlayerId; area: AreaId; resource: ResourceId; count: number }
   // Orders the study queue; an empty queue splits learning evenly.
-  | { type: 'setStudy'; player: PlayerId; queue: string[] };
+  | { type: 'setStudy'; player: PlayerId; queue: string[] }
+  // Sets the standing market order for one good; a count of 0 cancels it.
+  | { type: 'setOrder'; player: PlayerId; resource: ResourceId; side: 'buy' | 'sell'; count: number; limit?: number };
 
 // Tokens taken from one area by a conversion.
 export interface TokenSource {
@@ -193,6 +212,9 @@ export type GameEvent =
   | { type: 'goodsProduced'; player: PlayerId; area: AreaId; resource: ResourceId; count: number }
   | { type: 'foodSupport'; player: PlayerId; area: AreaId; count: number }
   | { type: 'taxCollected'; player: PlayerId; amount: number }
+  // A market price moved: `imbalance` units bought minus sold in that player's market.
+  | { type: 'priceChanged'; player: PlayerId; resource: ResourceId; from: number; to: number; imbalance: number }
+  | { type: 'marketTrade'; player: PlayerId; resource: ResourceId; side: 'buy' | 'sell'; count: number; price: number }
   | { type: 'instabilityChanged'; player: PlayerId; area: AreaId | null; amount: number; source: InstabilitySource }
   | { type: 'settlementCollapsed'; player: PlayerId; area: AreaId; tier: SettlementTier }
   | { type: 'capitalMoved'; player: PlayerId; area: AreaId | null }

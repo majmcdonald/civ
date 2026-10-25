@@ -146,9 +146,12 @@ export function inputCount(state: GameState, map: GameMap, content: Content, id:
       const fought = player(state, id).fought;
       return fought?.turn === state.turn ? fought.count : 0;
     }
-    // Calamities arrive in Phase 4 step 5 and the market in step 4; until then nothing counts.
+    case 'traded': {
+      const traded = player(state, id).traded;
+      return traded?.turn === state.turn ? traded.resources.length : 0;
+    }
+    // Calamities arrive in Phase 4 step 5; until then nothing counts.
     case 'struck':
-    case 'traded':
       return 0;
   }
 }

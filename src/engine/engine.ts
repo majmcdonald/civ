@@ -1,6 +1,7 @@
 import type { Content } from './content';
 import { clone, emit } from './context';
 import { grantStartingKnowledge, setStudy, validateStudy } from './discovery';
+import { resolveMarket, setOrder, validateOrder } from './market';
 import { runResolution, runResourcesPhase } from './phases';
 import { BASE_MOVEMENT, setMoveOrder, STARTING_TOKEN_CAP, validateMoveOrder } from './population';
 import { setWork, validateWork } from './resources';
@@ -18,7 +19,7 @@ import {
   type Phase,
 } from './types';
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 
 interface CommandHandler<C extends Command> {
   validate(ctx: Pick<Context, 'state' | 'map' | 'content'>, command: C): string | null;
@@ -42,6 +43,7 @@ const handlers: CommandHandlers = {
       emit(ctx, { type: 'phaseEnded', player: player.id, phase: ctx.state.phase });
       // Simultaneous turns: the phase closes once every player has ended it.
       if (ctx.state.players.every((p) => p.endedPhase)) {
+        if (ctx.state.phase === 'trade') resolveMarket(ctx);
         advancePhase(ctx);
         runUntilPlayerInput(ctx);
       }
@@ -87,6 +89,14 @@ const handlers: CommandHandlers = {
       setStudy(ctx, command);
     },
   },
+  setOrder: {
+    validate(ctx, command) {
+      return validateOrder(ctx, command);
+    },
+    execute(ctx, command) {
+      setOrder(ctx, command);
+    },
+  },
 };
 
 export function validateSetup(setup: GameSetup, content: Content): string | null {
@@ -111,7 +121,7 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
     rng: createRng(setup.seed),
     turn: 1,
     phase: 'resources',
-    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, treasury: 0, capital: null, tiers: [...(setup.unlockedTiers ?? [])], effects: [], advances: [], study: [] })),
+    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, treasury: 0, prices: {}, orders: [], capital: null, tiers: [...(setup.unlockedTiers ?? [])], effects: [], advances: [], study: [] })),
     // Each civilization starts with one token in its starting area (design doc §4).
     stacks: setup.players
       .map((p, i) => ({ area: map.starts[i]!, player: p.id, count: 1 }))

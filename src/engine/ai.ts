@@ -2,7 +2,8 @@ import type { Content } from './content';
 import { HIGH_LEARNING, highLearning } from './discovery';
 import { applyCommand } from './engine';
 import { BUREAUCRACY, CAPITAL_BUREAUCRACY, overextension, threshold, totalInstability } from './instability';
-import type { AreaId, GameMap } from './map/types';
+import { canTrade, priceOf } from './market';
+import type { AreaId, GameMap, ResourceId } from './map/types';
 import { looseTokens, tokensAt } from './population';
 import { assigned, isFood, manpower, usable, workable } from './resources';
 import { allocateSupport, nextTier, previewConversions, settlementAt, supportSummary, tierRules } from './settlements';
@@ -32,6 +33,11 @@ import { mapFor } from './world';
 //    splits evenly (design doc §8, v0.17).
 // 5. Put idle manpower to work: on the area's first food the civilization can gather, else the
 //    first good it can (copper, cloth).
+//
+// Each trade phase, once it can trade (design doc §7, v0.21), it buys only what it needs, as
+// market orders: the cheapest food (earlier goods on ties) for this turn's forecast support
+// shortfall, and the cheapest luxury for each settlement within 2 of collapse. It cancels any other
+// order and never sells. Purchases fill only as far as its treasury allows.
 
 const FOUND_MIN_LOOSE = 12;
 const CALM_WITHIN = 3;
@@ -39,12 +45,35 @@ const CALM_CLEAR = 6;
 const FOUND_MIN_REACH = 8;
 // Share of manpower the AI keeps on High Learning (placeholder until the tuning pass).
 const STUDY_SHARE = 1 / 3;
+const BUY_CALM_WITHIN = 2;
 
 function landNeighbors(map: GameMap, area: AreaId): AreaId[] {
   return map.areas[area]!.neighbors.filter((n) => map.areas[n]!.kind === 'land');
 }
 
+function tradeCommands(state: GameState, map: GameMap, content: Content, player: PlayerId): Command[] {
+  if (!canTrade(state, player)) return [];
+  const cheapest = (goods: ResourceId[]) => [...goods].sort((a, b) => priceOf(state, content, player, a) - priceOf(state, content, player, b))[0];
+  const shortfall = supportSummary(state, map, content, player).settlements.reduce((sum, s) => sum + Math.max(0, s.needed - s.support), 0);
+  const unrest = state.settlements.filter((s) => s.player === player && threshold(state, map, s) - totalInstability(state, s) <= BUY_CALM_WITHIN).length;
+  const want = new Map<ResourceId, number>();
+  const food = cheapest(content.resources.filter((r) => r.food).map((r) => r.id));
+  const luxury = cheapest(content.resources.filter((r) => r.luxury).map((r) => r.id));
+  if (food && shortfall > 0) want.set(food, shortfall);
+  if (luxury && unrest > 0) want.set(luxury, unrest);
+  const orders = state.players.find((p) => p.id === player)!.orders;
+  const commands: Command[] = [];
+  for (const o of orders) if (!want.has(o.resource)) commands.push({ type: 'setOrder', player, resource: o.resource, side: o.side, count: 0 });
+  for (const [resource, count] of want) {
+    const o = orders.find((x) => x.resource === resource);
+    if (o?.side === 'buy' && o.count === count && o.limit === undefined) continue;
+    commands.push({ type: 'setOrder', player, resource, side: 'buy', count });
+  }
+  return commands;
+}
+
 export function aiCommands(state: GameState, content: Content, player: PlayerId): Command[] {
+  if (state.phase === 'trade') return tradeCommands(state, mapFor(state.setup), content, player);
   if (state.phase !== 'allocation') return [];
   const map = mapFor(state.setup);
   const commands: Command[] = [];

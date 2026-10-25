@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.20  
+**Version:** 0.22  
 **Date:** October 25, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -58,7 +58,7 @@ Four phases. All players act simultaneously within each phase.
 |---|---|
 | **1. Resources** | Settlements produce from manpower assigned to production. Towns and larger pay tax into the treasury (§6, Currency) |
 | **2. Trade** | Players with the trade discovery place market orders; prices are set and orders filled. Goods are usable this turn |
-| **3. Allocation** | Players assign manpower (production, Bureaucracy, High Learning, Artists, wonders), set the study queue (§8), order movement and migration, and order settlement conversions |
+| **3. Allocation** | Players assign manpower (production, Bureaucracy, High Learning, Artists, wonders), set the study queue (§8), mark calamities to buy off (§12), order movement and migration, and order settlement conversions |
 | **4. Resolution** | The game resolves all consequences in a fixed order (below) |
 
 ### Resolution order (starting point; adjust in playtesting)
@@ -301,7 +301,7 @@ Manpower is a settlement's labor. Every unit is spent each turn on exactly one a
 - **Tax** (v0.20). Towns and larger pay a fixed tax each turn in the resources phase (phase 1): **village 0, town 2, city 3, metropolis 4**. Villages pay nothing, so a civilization collects no tax until its first town (Chiefdom), as only cities paid tax in the original; chiefs collected tribute, villages did not. Before then, currency comes only from selling on the market (Barter, §7). Example: 2 villages and 1 town collect 2 a turn.
 - **Tax is free** in the Stone Age: no token, instability, or manpower cost. A later advance (Coinage, as in the original, where it let a player set 1–3 per city) adds a **tax rate lever**: lighter or heavier tax, with heavier tax raising local instability. Designed with that era's advances.
 - **The treasury keeps** (v0.20) from turn to turn with no cap or decay, unlike goods (§6, Goods last one turn). It is lost only to spoils when a settlement is captured (§11) and to calamities that take currency (Piracy, Market crash; §12).
-- **Uses** (v0.20): **buying on the market** (§7) and **building wonders** (§9). Nothing else: currency does not buy calm (calm comes from Bureaucracy, luxuries, advances, institutions, and wonders), does not buy learning or advances (unlike the original's treasury, which bought civilization cards), and cannot fund specialists.
+- **Uses** (v0.20): **buying on the market** (§7), **building wonders** (§9), and (v0.22) **buying off calamities** (10 each: Famine with Barter, Superstition, Civil disorder, Barbarian raid; §12). Nothing else: currency does not buy calm (calm comes from Bureaucracy, luxuries, advances, institutions, and wonders), does not buy learning or advances (unlike the original's treasury, which bought civilization cards), and cannot fund specialists.
 
 ## 7. Trade and the market — Decided
 
@@ -314,11 +314,19 @@ Trade is **market listings only**. There is no negotiation, proposal round, or t
 | Counterparty | The game supplies and absorbs any quantity |
 | Order types | **Limit** (maximum buy / minimum sell price) or **market** (accept the resulting price) |
 | Market scope | **Per player:** a player's market includes their own orders plus those of every player directly in reach who has discovered trade |
-| Reach | Each player's transport range, measured **settlement to settlement** (village or higher at both ends) |
+| Reach | Each player's transport range, measured **settlement to settlement** (village or higher at both ends): **2 steps** of transport distance (v0.21), 3 with Barter Mastered; a river stretch counts as one step with Dugout Canoes; no sea crossings until a Bronze Age boat advance |
 | Reach symmetry | **Mutual:** if either player reaches the other, both include each other |
 | Chaining | **Direct only:** A–B–C does not connect A and C |
 | Pricing | Per player, recalculated each turn from the buy/sell imbalance in that player's market; orders then fill at the new price. Limit orders the new price misses go unfilled |
 | Conflict | Civilizations in a conflict state are **excluded** from each other's markets |
+| Goods (v0.21) | **Sell** any good you can use (its advance Developed) and hold, including stored grain; selling food in phase 2 leaves it out of that turn's support check. **Buy** any good, with or without its advance: bought goods work as their category says (food supports, luxuries calm), as finished goods, the way copper was traded long before smelting spread |
+| Starting prices (v0.21) | **Food 5** (grain, fish, livestock), **luxury 10** (copper, cloth), the same in every player's market at the start |
+| Price change (v0.21) | Each turn, before orders fill, each good's price moves **10% of its starting price per unit of imbalance** (units ordered bought minus sold in that market), rounded; food ±0.5 per unit, luxury ±1. Example: grain at 5, 4 bought and none sold: grain 7, and the 4 cost 28 |
+| Limits (v0.21) | **Price bounds only**: half to triple the starting price (food 3–15, luxury 5–30). No cap on quantity |
+| Recovery (v0.21) | **None**: a price moves only with imbalance and stays where it is on quiet turns, so a heavy buyer raises prices for everyone in its market until sellers bring them down |
+| Delivery (v0.21) | Bought goods go to a **civ-wide pool**: bought food covers any of the civilization's settlements' shortfalls in the support check, after local food (largest tiers first, as §6); bought luxuries are used as gathered ones (§6, Luxury goods). Market reach is the geographic test; there is no routing inside the civilization. Bought food does not keep (Pottery stores only grain a settlement gathered) |
+| Standing orders (v0.21) | One order per good, buy or sell, with an optional price limit. Orders **stand**, repeating every turn until changed or cancelled, like manpower assignments. A sell order sells only what is held; a buy order fills only as far as the treasury allows (proceeds from the turn's sales count first) |
+| AI (v0.21) | The minimal AI **buys only what it needs**, as market orders it can afford: food for forecast support shortfalls, luxuries for settlements within 2 of collapse. It does not sell. Richer trading waits for Phase 7 |
 
 Consequences:
 - **Prices diverge by location**, since each player's market includes a different set of players.
@@ -643,7 +651,32 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 - **Specific advances mitigate specific calamities**, as in the original.
 - Calamities that **spread** (the original's tradable calamities) travel along market reach or contact.
 
-### Starting list
+### Chance and choice (v0.22)
+
+- **One roll per civilization a turn**, in resolution step 5, for a civilization with at least one settlement. The chance is **1% per settlement tier point** (village 1, town 2, city 3, metropolis 4), plus **5% for every turn in a row without a calamity**. The build-up **resets** the turn a calamity strikes; turns without a settlement do not add to it. Example: 6 villages and 2 towns are 10 points, so 10%; after 4 quiet turns, 30%; a calamity strikes, and it is 10% again.
+- **One weighted draw picks both the calamity and the settlement**: every settlement × calamity pair has a weight from that settlement's conditions (below), pairs with weight 0 are left out, and one pair is drawn in proportion to its weight. The weights are what each settlement shows as its risk: **1–2 low, 3–4 medium, 5 or more high**, with the conditions behind them; the civilization's chance this turn is shown with its parts.
+- **Mitigation lessens the damage, not the chance** (as in the original): each softening advance, once Developed, **halves** the effect, rounded down; some also halve again when Mastered. The calamity still strikes.
+- Calamities hit before the support check (resolution step 6), so lost tokens or food can drop a settlement a tier that same turn.
+- **Buying off** (v0.22). In allocation the ruler marks which calamities to buy off, a standing choice like manpower and market orders. When a marked calamity strikes and the treasury holds **10**, the 10 is paid automatically and the calamity is averted. It still counts as a strike: the build-up resets. Eligible: **Famine** (only with Barter Developed: food bought in), **Superstition**, **Civil disorder**, and **Barbarian raid** (tribute). Epidemic, Flood, Earthquake/volcano, and Drought cannot be bought off. Example: Superstition strikes a village with Superstition marked and 30 in the treasury: 10 is paid, nothing happens, and the chance falls back to its base.
+
+### Stone Age calamities (v0.22)
+
+Eight calamities exist in the Stone Age. Civil war, heresy, piracy, and market crash wait for the systems they need (independent settlements, institutions, sea trade, later eras).
+
+| Calamity | Weight (per settlement) | Effect | Softened by |
+|---|---|---|---|
+| **Famine** | 2 if it ate food for support last turn, 1 if it gathers food; doubled for towns and larger | Tokens lost from its support areas (next to it, nearest first): village 3, town 4, city 6, metropolis 8; +2 local instability | Pottery Developed halves; Pottery Mastered halves again |
+| **Superstition** | 1; 2 while the civilization lacks Ritual Known | +3 local instability, and its manpower is idle next turn. Ritual also gains 1 free High Learning (2 progress) toward its next step, Known or Developed, while plausible | Ritual Developed halves; Ritual Mastered halves again |
+| **Civil disorder** | 1 per point of instability (local plus civ-wide), only at half its collapse threshold or more | Its manpower is idle next turn (strikes, riots); +2 local instability | Tallies Developed halves; Tallies Mastered halves again |
+| **Epidemic** | Town 2, city 3, metropolis 4 (villages 0); +1 if it is in a market with other civilizations | Tokens lost from its support areas: town 4, city 6, metropolis 8; each other settlement of the civilization within 2 steps loses 1. **Spreads**: each civilization in the victim's market is struck at its settlement nearest the victim, with the same effect; this counts as its calamity for the turn and resets its build-up | Nothing until Medicine |
+| **Barbarian raid** | 1 per adjacent unsettled land area with no tokens | Raiders strike the support around it: 3 tokens lost from its support areas, +2 local instability; towns and larger also drop a tier | Archery, Palisades, and Masonry each halve the loss and instability (archers defend the fields); Palisades or Masonry prevents the tier drop (the people shelter inside) |
+| **Flood** | Its own area: floodplain 2, river 1; +1 per adjacent floodplain or river area | Half the loose tokens (rounded up) in its own and adjacent floodplain and river areas are lost, and the food it gathered this turn is lost | Nothing until Irrigation |
+| **Earthquake/volcano** | Its own area volcanic 3; +1 per adjacent volcanic area | Tier drop (with refugees) | Masonry Developed: a town or larger does not drop, and loses 3 tokens from its support areas instead |
+| **Drought** | Its own area desert 2; +1 per adjacent desert area | It gathers no food for 2 turns, and each of its support areas has its limit lowered by 1 for 2 turns (tokens over the limit are removed as surplus) | Pottery Developed halves the food part (1 turn) |
+
+Halving counts each unit separately and rounds down: a raid on a village with Archery and Palisades costs 3 → 1 → 0 tokens. "Manpower idle" halved idles half the settlement's manpower, rounded down, so a village with the counter keeps working.
+
+### Full list (all eras, v0.2; Stone Age rules above)
 
 | Calamity | Kind | Favored by | Effect | Mitigated by (example) | Spreads |
 |---|---|---|---|---|---|
@@ -652,7 +685,7 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 | Drought | Environmental | Arid areas, climate | Food output drops for N turns | Irrigation, storage | No |
 | Famine | Economic | Food deficit, low stores | Tokens lost; local instability | Pottery/storage, agriculture | No |
 | Epidemic | Social | Dense settlements, trade contact | Tokens lost across settlements | Medicine, sanitation | Yes (market reach) |
-| Superstition | Social | Settlements without belief advances | To be designed (step 5); added v0.14, as in the original | Ritual (as Mysticism in the original) | — |
+| Superstition | Social | Settlements without belief advances | Instability and idle manpower (v0.22, above) | Ritual (as Mysticism in the original) | No |
 | Civil disorder | Social | High instability | Instability spike; output lost | Law, institutions | No |
 | Civil war | Social | Very high instability, large civilization | Settlements break away as independents | Unifying leaders, governance | No |
 | Heresy / schism | Social | Institutions, religious advances | Institution effects suspended | Philosophy, tolerance | Yes (contact) |
@@ -739,8 +772,9 @@ These are choices made knowingly, or risks to watch in playtesting.
 | No support cascades | Settlements are supported by tokens, not lower tiers (v0.3). Simpler and keeps token counts small, but removes tier-to-tier cascades. Fully populated settled areas restore a hinterland requirement |
 | Uneven expansion window on continents | On the continents map type, an isolated civilization may meet no one in the Stone Age while others meet early. Accepted for variety; the inland sea default keeps the 30–40 turn window predictable |
 | Low manpower ceiling | Fully populated settled areas cap how much of the map can be settled (about 40–60% in Phase 0), and high tiers are rare at small limits. Chosen for spatial decisions over density; discoveries that raise limits lift the ceiling |
-| Narrow currency | Currency only buys on the market and builds wonders (v0.20): before Barter and the first wonders, a treasury has no use but to wait. Chosen so currency never replaces governance (calm) or scholarship (learning) |
-| Unlimited game counterparty | A currency-rich civilization can buy its way out of any shortage. Price-change rate is the main brake |
+| Narrow currency | Currency buys on the market, builds wonders (v0.20), and buys off some calamities (v0.22). It does not buy calm or learning directly, so it never replaces governance or scholarship; buying off a Civil disorder or Superstition strike comes close to buying calm, but only against a strike, at a flat 10 |
+| Unlimited game counterparty | A currency-rich civilization can buy its way out of any shortage. Price-change rate is the main brake (v0.21: 10% of the starting price per unit, capped at triple, no quantity limit) |
+| No price recovery | Prices move only with imbalance (v0.21), so one heavy buyer can keep a market expensive for its neighbours for many turns. Chosen so prices carry memory; watch in tuning |
 | Mild AST regression | Regression costs position within an era, never the era itself |
 | Derived track lengths | Poor starts are already penalized by requirements; shorter rows for good starts penalize them twice. Offered as a setup option only |
 | Deterministic combat | Uncertainty comes from figures and calamities instead |
@@ -759,7 +793,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 - [ ] Conditions for absorbing independent settlements peacefully.
 - [ ] Barbarian spawn rules.
 - [x] Whether token cap rises from adoption are permanent. Resolved v0.16: adoption no longer falls, so Mastered rises (Agriculture's +5) are permanent.
-- [ ] Calamity mitigators: confirm or change the candidate tags on Stone Age advances (§8) when calamities are designed.
+- [x] Calamity mitigators: confirmed in v0.22 (§12): Pottery (Famine, Drought), Ritual (Superstition), Tallies (Civil disorder), Archery, Palisades, Masonry (Barbarian raid), Masonry (Earthquake). Dropped: Fishing, Agriculture, Herding, Barter (Famine), Chiefdom (Civil war, not in the Stone Age), Copper Working (Civil disorder).
 - [ ] Technology-by-technology design: plausibility conditions, Known and Developed inputs and costs, what each stage does, what drives adoption and how benefit scales, counters, mitigated calamities. Every advance is reviewed one at a time.
 - [ ] Final resource category list.
 - [ ] Game name. Placeholder: *Succession* (after the Archaeological Succession Table).
@@ -780,11 +814,11 @@ No balance changes until the Stone Age is complete (development plan §4, Tuning
 - [ ] Starting limit range and resource options per terrain; terrain mix on procedural maps; food odds per terrain and feature
 - [ ] Tier exclusive abilities and tax per tier (the town tier especially; first values village 0, town 2, city 3, metropolis 4, v0.20)
 - [ ] Base manpower per tier; stability, discovery, and culture yields per specialist
-- [ ] Market starting prices and price-change rate
+- [ ] Market starting prices and price-change rate (first values v0.21: food 5, luxury 10; 10% per unit; bounds half to triple; base reach 2)
 - [ ] Conflict state duration
 - [ ] Settlement attack thresholds and defense values (set when settlements were worth 6/12/24/48 tokens; now 6/12/20/30)
 - [ ] Instability thresholds, source and stabilizer magnitudes, partial-reset amount (first-version values in §10)
-- [ ] Calamity exposure rate and condition weights
+- [ ] Calamity exposure rate and condition weights (first values v0.22: 1% per tier point, +5% per quiet turn; weights and effects in §12)
 - [ ] Figure emergence odds
 - [ ] AST track lengths, gate requirements, settlement point values
 - [ ] Endgame countdown length and scoring weights
@@ -803,6 +837,8 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.22 (October 25, 2026):** Calamities designed (§12). One roll per civilization a turn: 1% per settlement tier point plus 5% per turn in a row without a calamity, reset when one strikes. One weighted draw over settlement × calamity pairs picks both; the weights are the shown risk (low, medium, high). Softening advances halve the damage once Developed (some again when Mastered), not the chance. Eight Stone Age calamities: Famine (Pottery), Superstition (Ritual; a strike also gives Ritual 1 free learning), Civil disorder (Tallies), Epidemic (spreads through the victim's market; no counter yet), Barbarian raid (Archery, Palisades, Masonry), Flood, Earthquake/volcano (Masonry), Drought (Pottery). Civil war, heresy, piracy, and market crash wait for later systems. Buying off: a standing choice to pay 10 when a marked calamity strikes (Famine with Barter Developed, Superstition, Civil disorder, Barbarian raid); it is averted but still resets the build-up; currency gains this use (§6). The candidate calamity tags of §8 are confirmed or dropped (§17).
+- **0.21 (October 25, 2026):** Market details (§7). Sell any good you can use and hold; buy any good, which works as its category says without its advance. Starting prices food 5, luxury 10. Prices move 10% of the starting price per unit of imbalance, rounded, within half to triple the start; no quantity limit and no recovery on quiet turns. Bought goods go to a civ-wide pool (food covers any settlement's shortfall after local food). Base market reach 2 steps settlement to settlement (3 with Barter Mastered). Orders stand until changed. The minimal AI buys food for shortfalls and luxuries for settlements near collapse, and does not sell.
 - **0.20 (October 25, 2026):** Currency designed (§6). Towns and larger pay a fixed tax each turn in the resources phase: village 0, town 2, city 3, metropolis 4; villages pay nothing, so tax starts with the first town (Chiefdom), as only cities paid tax in the original. Tax is free in the Stone Age; a later advance (Coinage) adds a tax rate lever. The treasury keeps from turn to turn with no cap, lost only to spoils and currency calamities. Currency is used only to buy on the market and, new, to build wonders (§9: wonders cost manpower, resources, and currency). Currency no longer buys calm: stabilization is removed from allocation (§3) and §10's stabilizers; it does not buy learning or advances. Spoils (§11): a capture takes 10% of the defender's treasury per tier of the settlement lost (village 10% to metropolis 40%).
 - **0.19 (October 25, 2026):** Room to expand (§2) gains **very crowded**: 16 land areas per civilization (0.25×), so borders meet and fighting starts early; crowded, standard, and spacious are unchanged. Very crowded starts may be 3 moves apart (4 elsewhere) so 2–15 civilizations fit (at 4, maps with 10 or more civilizations often failed to generate).
 - **0.18 (October 25, 2026):** Urban growth (§5): a settlement of any tier, villages included, that gathers food and eats some of its own for support adds +1 urban growth that turn, regardless of the amount; food eaten by or from a neighbor does not count.

@@ -312,7 +312,7 @@ describe('Stone Age goods (v0.14)', () => {
   });
 
   it('works cloth instead of food in grain or livestock areas', () => {
-    const bundle = { ...standIn, resources: [...standIn.resources, { id: 'cloth', name: 'Cloth', food: false, luxury: true, requires: 'agriculture', from: ['grain'] }] };
+    const bundle = { ...standIn, resources: [...standIn.resources, { id: 'cloth', name: 'Cloth', food: false, price: 10, luxury: true, requires: 'agriculture', from: ['grain'] }] };
     const content = testContent(bundle);
     const { game, grain, barren } = scene();
     const session = newGame({ unlockedTiers: ['village', 'town'] }, content);

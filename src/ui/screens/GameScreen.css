@@ -1279,3 +1279,81 @@
 .civ-focused td:first-child {
   box-shadow: inset 3px 0 0 var(--accent);
 }
+
+.mk-members {
+  margin: 0 0 0.8rem;
+  color: var(--ink-soft);
+  cursor: help;
+}
+
+.mk-table td:last-child {
+  width: auto;
+  text-align: left;
+}
+
+.mk-kind {
+  color: var(--ink-soft);
+}
+
+.mk-up {
+  color: var(--accent);
+}
+
+.mk-down {
+  color: #4f7f9a;
+}
+
+.mk-order {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.mk-standing {
+  font-weight: 700;
+}
+
+.mk-edit {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.mk-edit select,
+.mk-edit input,
+.mk-edit button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.05rem 0.3rem;
+  background: rgba(255, 250, 236, 0.6);
+  border: 1px solid var(--parchment-edge);
+  color: var(--ink);
+}
+
+.mk-edit input {
+  width: 4.2rem;
+}
+
+.mk-edit button {
+  cursor: pointer;
+}
+
+.mk-edit button:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.mk-edit button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.mk-trades {
+  margin-top: 1.2rem;
+}
+
+.mk-trades ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}

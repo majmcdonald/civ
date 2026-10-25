@@ -192,6 +192,12 @@ function pantryOf(state: GameState, content: Content, area: AreaId, player: Play
   return pantry;
 }
 
+// Food bought on the market: it does not keep.
+function poolOf(state: GameState, content: Content, player: PlayerId): Pantry {
+  const spoils = state.goods.reduce((sum, g) => (g.area === null && g.player === player && isFood(content, g.resource) ? sum + g.count : sum), 0);
+  return { stored: 0, spoils, keeps: 0 };
+}
+
 function takeFood(pantry: Pantry, want: number): number {
   let got = 0;
   for (const kind of ['stored', 'spoils', 'keeps'] as const) {
@@ -257,6 +263,17 @@ export function allocateSupport(
     if (got === 0) continue;
     fed.set(s.area, got);
     support.set(s.area, support.get(s.area)! + got);
+  }
+  // Food bought on the market covers any shortfall left, in the same order (design doc §7).
+  const pools = new Map<PlayerId, Pantry>();
+  for (const s of order) {
+    const short = tierRules(s.tier).support - support.get(s.area)!;
+    if (short <= 0) continue;
+    if (!pools.has(s.player)) pools.set(s.player, poolOf(state, content, s.player));
+    const take = takeFood(pools.get(s.player)!, short);
+    if (take === 0) continue;
+    fed.set(s.area, (fed.get(s.area) ?? 0) + take);
+    support.set(s.area, support.get(s.area)! + take);
   }
   const kept = new Map<AreaId, number>();
   for (const s of state.settlements) {

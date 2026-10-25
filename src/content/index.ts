@@ -307,10 +307,10 @@ export const content: ContentBundle = {
   // Design doc §6: every food good starts at 1 food per manpower; goods differ through advances.
   // Foraging shows grain and fish from turn 1; gathering them needs Agriculture and Fishing.
   resources: [
-    { id: 'grain', name: 'Grain', food: true, requires: 'agriculture', revealedBy: 'foraging' },
-    { id: 'fish', name: 'Fish', food: true, requires: 'fishing', revealedBy: 'foraging' },
-    { id: 'livestock', name: 'Livestock', food: true, requires: 'herding' },
-    { id: 'copper', name: 'Copper', food: false, luxury: true, requires: 'copperWorking' },
-    { id: 'cloth', name: 'Cloth', food: false, luxury: true, requires: 'weaving', from: ['grain', 'livestock'] },
+    { id: 'grain', name: 'Grain', food: true, price: 5, requires: 'agriculture', revealedBy: 'foraging' },
+    { id: 'fish', name: 'Fish', food: true, price: 5, requires: 'fishing', revealedBy: 'foraging' },
+    { id: 'livestock', name: 'Livestock', food: true, price: 5, requires: 'herding' },
+    { id: 'copper', name: 'Copper', food: false, price: 10, luxury: true, requires: 'copperWorking' },
+    { id: 'cloth', name: 'Cloth', food: false, price: 10, luxury: true, requires: 'weaving', from: ['grain', 'livestock'] },
   ],
 };

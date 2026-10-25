@@ -138,11 +138,13 @@ export interface Advance {
 // A good gathered by production manpower (design doc §6). Revealed on the map once its civilization
 // knows `revealedBy` (default: `requires`), usable once `requires` is Developed; food goods can
 // stand in for support tokens. Luxury goods lower instability (design doc §6). A good with `from`
-// is not placed on the map: it is worked instead in areas holding any of those resources.
+// is not placed on the map: it is worked instead in areas holding any of those resources. `price`
+// is its starting market price (design doc §7).
 export interface Resource {
   id: string;
   name: string;
   food: boolean;
+  price: number;
   requires: string;
   revealedBy?: string;
   luxury?: boolean;

@@ -57,7 +57,7 @@ const bundle: ContentBundle = {
       effects: [],
     },
   ],
-  resources: [{ id: 'grain', name: 'Grain', food: true, requires: 'farming' }],
+  resources: [{ id: 'grain', name: 'Grain', food: true, price: 5, requires: 'farming' }],
 };
 
 const content = testContent(bundle);

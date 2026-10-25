@@ -267,7 +267,7 @@ describe('advances and luxuries (v0.14)', () => {
     game.state.players[0]!.capital = home;
     game.state.players[0]!.instability = 2;
     game.state.goods = [{ area: home, player: 'p1', resource: 'copper', count: 4 }];
-    const content = testContent({ ...standIn, advances: standIn.advances, resources: [...standIn.resources, { id: 'copper', name: 'Copper', food: false, luxury: true, requires: 'agriculture' }] });
+    const content = testContent({ ...standIn, advances: standIn.advances, resources: [...standIn.resources, { id: 'copper', name: 'Copper', food: false, price: 10, luxury: true, requires: 'agriculture' }] });
     const ctx = { ...context(game), content };
     resolveInstability(ctx);
     const local = (area: AreaId) => settlementAt(ctx.state, area)!.instability ?? 0;
