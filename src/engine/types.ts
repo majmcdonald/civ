@@ -71,6 +71,8 @@ export interface PlayerState {
   movement: number;
   // Civ-wide instability meter, added to every settlement's local meter (design doc §10).
   instability: number;
+  // Currency held; it keeps from turn to turn (design doc §6, Currency).
+  treasury: number;
   // The capital's area: the first settlement, then the largest remaining (design doc §10).
   capital: AreaId | null;
   // Settlement tiers the civilization can build (design doc §5): the setup's plus its advances'.
@@ -190,6 +192,7 @@ export type GameEvent =
   | { type: 'settlementDropped'; player: PlayerId; area: AreaId; tier: SettlementTier | null; refugees: number; lost: number }
   | { type: 'goodsProduced'; player: PlayerId; area: AreaId; resource: ResourceId; count: number }
   | { type: 'foodSupport'; player: PlayerId; area: AreaId; count: number }
+  | { type: 'taxCollected'; player: PlayerId; amount: number }
   | { type: 'instabilityChanged'; player: PlayerId; area: AreaId | null; amount: number; source: InstabilitySource }
   | { type: 'settlementCollapsed'; player: PlayerId; area: AreaId; tier: SettlementTier }
   | { type: 'capitalMoved'; player: PlayerId; area: AreaId | null }
@@ -210,6 +213,8 @@ export type GameEvent =
       losses: TokenCount[];
       capturedBy: PlayerId | null;
       survivors: number;
+      // Currency the capturer took from the defender's treasury.
+      spoils: number;
     };
 
 export interface StampedEvent {

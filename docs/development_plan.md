@@ -1,7 +1,7 @@
 # Development Plan
 
-**Version:** 0.21  
-**Date:** October 24, 2026  
+**Version:** 0.22  
+**Date:** October 25, 2026  
 **Status:** Working draft
 
 > Companion to the [design document](civilization_game_design_document.md). This plan covers how the game is built; the design document covers what is built.
@@ -44,7 +44,7 @@ What the architecture enables:
 | **1. Foundation** | **Done.** TypeScript project; headless deterministic rules engine with command layer; data + scripts content format; rules test harness; save/load format; game-log format |
 | **2. Basic screens** | **Done.** Title and map screens; an in-game frame (top bar, navigation) with seven status screens: Civilization overview and Rivals and standings laid out, the rest (Economy, Market, Knowledge, Society, Chronicle) as placeholders until their systems are built; no behavior; procedural map generator |
 | **3. Core loop** | **Done.** Turns and resolution order; settlements, conversion, support, growth, migration, surplus removal; first resource; manpower; simple conflict; basic instability and tier drop; working save/load; minimal AI; headless batch runs and downloadable game log |
-| **4. Stone Age systems** | In order, each designed then built: (1) discovery core: advance data, accumulators, stages, High Learning, Knowledge screen; replaces the farming stand-in; (2) Stone Age advances; (3) currency; (4) market (its own work item); (5) calamities; (6) full instability sources and stabilizers (conflict state, institutions, food, currency); (7) AST and endgame countdown; (8) information panels and rules reference; (9) **tuning pass**: batch runs across seeds and settings, then evaluate and set the numbers frozen until now; (10) **full review** before the phase is complete: every advance's steps, effects, and costs, and every screen (e.g., which step the Knowledge screen's Study button feeds). Art and audio for the era alongside |
+| **4. Stone Age systems** | In order, each designed then built: (1) discovery core: advance data, accumulators, stages, High Learning, Knowledge screen; replaces the farming stand-in; (2) Stone Age advances; (3) currency; (4) market (its own work item); (5) calamities; (6) full instability sources and stabilizers (conflict state, institutions, food); (7) AST and endgame countdown; (8) information panels and rules reference; (9) **tuning pass**: batch runs across seeds and settings, then evaluate and set the numbers frozen until now; (10) **full review** before the phase is complete: every advance's steps, effects, and costs, and every screen (e.g., which step the Knowledge screen's Study button feeds). Art and audio for the era alongside |
 | **5. Stone Age content** | First wonders and historical figures; era art and audio; **re-run batch runs with wonders and figures and retune**; **playtest and design review** |
 | **6. Remaining eras** | Repeat Phases 4–5 for each era (Bronze → Modern), with a playtest and design review after each; historical map |
 | **7. AI enhancement** | Strategic depth and difficulty levels; retune balance numbers set against the minimal AI |
@@ -113,6 +113,7 @@ Other costs on the 15-civilization spacious board: map generation 0.3 s, first r
 
 ## Change log
 
+- **0.22 (October 25, 2026):** Phase 4 step 3, currency (design doc v0.20), built. `PlayerState.treasury` keeps from turn to turn; `TierRules` gains `tax` (village 0, town 2, city 3, metropolis 4) and `spoils` (10% per tier). `collectTax` runs in the resources phase after gathering (`taxCollected` event; `taxIncome` for the interface). A capture moves the spoils from the defender's treasury to the capturer (`settlementAttacked.spoils`). The top bar shows the treasury and tax income; turn reports and conflict forecasts show spoils; batch runs report the treasury. Nothing spends currency until the market (step 4). Currency is no longer an instability stabilizer, so step 6 drops it. Save schema 12.
 - **0.21 (October 25, 2026):** Very crowded room to expand for design doc v0.19: `RoomToExpand` gains `veryCrowded` (`ROOM_FACTOR` 0.25); minimum start spacing is per room size (3 very crowded, 4 otherwise). Map tests cover 15 civilizations on very crowded maps; `npm run batch -- --room veryCrowded`.
 - **0.20 (October 25, 2026):** Urban growth for design doc v0.18: `allocateSupport` reports `ateOwn` (settlements that gathered food and ate their own), `resolveSupport` records it as `Settlement.ateOwn` (the turn), and `urbanGrowthOf` adds 1 that turn. `supportSummary` predicts it for the Civilization screen's urban growth figures.
 - **0.19 (October 25, 2026):** Discovery for design doc v0.17: learning is optional again. `AdvanceProgress.learning`, `ORAL_TRADITION`, and the usage and learning halves are removed; usage and learning share one accumulator (`LEARNING_PROGRESS` 2 per unit toward Known and Developed, `LEARNING_ADOPTION` 10 toward Mastered, `ADOPTION_COST` 200 points). `learningPlan` sends each advance only the learning its step needs after this turn's usage. Developed costs doubled in content except Permanent Settlement. `discoveryView` reports one progress, cost, and rate per step; the Knowledge screen shows one bar (done, this turn's usage, this turn's learning). Save schema 11.

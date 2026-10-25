@@ -4,7 +4,7 @@ import { settlementBonus, strength } from './effects';
 import type { AreaId, GameMap } from './map/types';
 import { adjust, tokensAt } from './population';
 import { resetWork } from './resources';
-import { projectTurn, settlementAt, TIERS, tierRules } from './settlements';
+import { projectTurn, settlementAt, TIERS, tierRules, type TierRules } from './settlements';
 import type { Context, GameEvent, GameState, PlayerId, Settlement, TokenCount } from './types';
 
 // Conflict (design doc §11). Each token has a strength (1 plus advance bonuses); a side's power is
@@ -107,7 +107,7 @@ function attackSettlement(ctx: Context, settlement: Settlement): void {
     losses.push({ ...a });
   }
   const fighters: Side[] = attackers.filter((a) => !repelled.includes(a)).map((a) => ({ ...a, strength: attackStrength(a.player) }));
-  const event = { type: 'settlementAttacked' as const, area, defender: settlement.player, tier: settlement.tier, attackers, repelled: repelled.map((a) => a.player), losses, capturedBy: null as PlayerId | null, survivors: 0 };
+  const event = { type: 'settlementAttacked' as const, area, defender: settlement.player, tier: settlement.tier, attackers, repelled: repelled.map((a) => a.player), losses, capturedBy: null as PlayerId | null, survivors: 0, spoils: 0 };
   if (fighters.length === 0) {
     emit(ctx, event);
     return;
@@ -134,6 +134,7 @@ function attackSettlement(ctx: Context, settlement: Settlement): void {
   if (winner && defense.count === 0) {
     event.capturedBy = winner.player;
     event.survivors = winner.count;
+    event.spoils = takeSpoils(state, settlement.player, winner.player, rules);
     const below = TIERS[TIERS.indexOf(rules) - 1];
     if (below) {
       settlement.tier = below.id;
@@ -148,6 +149,16 @@ function attackSettlement(ctx: Context, settlement: Settlement): void {
     }
   }
   emit(ctx, event);
+}
+
+// The capturer takes a share of the defender's treasury by the tier lost, rounded down (design doc
+// §11, Spoils).
+function takeSpoils(state: GameState, from: PlayerId, to: PlayerId, rules: TierRules): number {
+  const loser = state.players.find((p) => p.id === from)!;
+  const amount = Math.floor(loser.treasury * rules.spoils);
+  loser.treasury -= amount;
+  state.players.find((p) => p.id === to)!.treasury += amount;
+  return amount;
 }
 
 export type ConflictEvent = Extract<GameEvent, { type: 'conflict' | 'settlementAttacked' }>;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { content } from '../src/content';
 import { generateMap, mapFor, MAP_TYPES, settlementAt, supportSummary, type AreaId, type Context, type GameMap, type Session, type Settlement, type SettlementTier } from '../src/engine';
 import { resolveConflict } from '../src/engine/conflict';
-import { runResources } from '../src/engine/resources';
+import { collectTax, runResources } from '../src/engine/resources';
 import { dropTier, resolveSupport } from '../src/engine/settlements';
 import { endPhaseAll, eventsOfType, expectRejected, newGame, play, standIn, testContent } from './harness';
 
@@ -341,5 +341,36 @@ describe('Stone Age goods (v0.14)', () => {
     expect(fed(game)).toMatchObject({ food: 0 });
     game.state.players[0]!.effects = [{ type: 'riverLeg', areas: 3 }];
     expect(fed(game)).toMatchObject({ food: 1, support: 2 });
+  });
+});
+
+describe('tax (v0.20)', () => {
+  it('collects a fixed tax from towns and larger into a treasury that keeps', () => {
+    // Village 0, town 2 (design doc §6, Currency).
+    const { game, grain, b, c } = scene();
+    game.state.settlements = [
+      { area: grain, player: 'p1', tier: 'town' },
+      { area: b, player: 'p1', tier: 'village' },
+      { area: c, player: 'ai1', tier: 'village' },
+    ].sort((x, y) => x.area - y.area) as Settlement[];
+    const ctx: Context = { state: game.state, content: testContent(), map: mapFor(game.setup), events: [], refugees: [] };
+    collectTax(ctx);
+    collectTax(ctx);
+    expect(game.state.players.find((p) => p.id === 'p1')!.treasury).toBe(4);
+    expect(game.state.players.find((p) => p.id === 'ai1')!.treasury).toBe(0);
+    expect(eventsOfType(ctx.events, 'taxCollected')).toEqual([
+      { type: 'taxCollected', player: 'p1', amount: 2 },
+      { type: 'taxCollected', player: 'p1', amount: 2 },
+    ]);
+  });
+
+  it('is collected in the resources phase', () => {
+    const { game, grain, b } = scene();
+    game.state.settlements = [{ area: grain, player: 'p1', tier: 'town' }];
+    place(game, b, 'p1', 3);
+    const before = game.state.turn;
+    while (game.state.turn === before) endPhaseAll(game);
+    expect(settlementAt(game.state, grain)?.tier).toBe('town');
+    expect(game.state.players.find((p) => p.id === 'p1')!.treasury).toBe(2);
   });
 });

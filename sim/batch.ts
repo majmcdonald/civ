@@ -65,6 +65,7 @@ interface Sample {
   manpower: number;
   bureaucracy: number;
   instability: number;
+  treasury: number;
 }
 
 // Counts of notable events over a whole game.
@@ -93,6 +94,7 @@ function sample(session: Session, game: string): Sample[] {
       manpower: own.reduce((sum, s) => sum + manpower(s), 0),
       bureaucracy: own.reduce((sum, s) => sum + ((s.work ?? []).find((w) => w.resource === BUREAUCRACY)?.count ?? 0), 0),
       instability: p.instability,
+      treasury: p.treasury,
     };
   });
 }
@@ -170,11 +172,11 @@ console.log('Per civilization at each sampled turn: median (min–max) across al
 const turns = [...new Set(samples.map((s) => s.turn))].sort((a, b) => a - b);
 console.log(
   table(
-    ['Turn', 'Loose tokens', 'Villages', 'Towns', 'Manpower', 'Bureaucracy', 'Civ-wide instability'],
+    ['Turn', 'Loose tokens', 'Villages', 'Towns', 'Manpower', 'Bureaucracy', 'Civ-wide instability', 'Treasury'],
     turns.map((t) => {
       const at = samples.filter((s) => s.turn === t);
       const col = (f: (s: Sample) => number) => stats(at.map(f));
-      return [String(t), col((s) => s.tokens), col((s) => s.villages), col((s) => s.towns), col((s) => s.manpower), col((s) => s.bureaucracy), col((s) => s.instability)];
+      return [String(t), col((s) => s.tokens), col((s) => s.villages), col((s) => s.towns), col((s) => s.manpower), col((s) => s.bureaucracy), col((s) => s.instability), col((s) => s.treasury)];
     }),
   ),
 );

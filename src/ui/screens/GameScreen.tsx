@@ -33,6 +33,7 @@ import {
   startSession,
   submit,
   supportSummary,
+  taxIncome,
   toJsonLines,
   tierRules,
   TIERS,
@@ -152,13 +153,14 @@ function conflictLine(e: ConflictEvent, me: string, who: (player: string) => str
   const rules = tierRules(e.tier);
   const name = `${place} (${rules.name.toLowerCase()})`;
   if (e.defender === me) {
-    if (e.capturedBy) return `${name} falls to ${who(e.capturedBy)}`;
+    if (e.capturedBy) return `${name} falls to ${who(e.capturedBy)}${e.spoils > 0 ? ` · ${e.spoils} currency taken` : ''}`;
     return `${name} holds against ${e.attackers.map((a) => who(a.player)).join(' and ')}${lost(me) > 0 ? ` · you lose ${lost(me)}` : ''}`;
   }
   const sent = e.attackers.find((a) => a.player === me)!.count;
   if (e.repelled.includes(me)) return `Attack on ${name}: ${sent} of ${rules.attack} needed — all ${sent} lost`;
   if (e.capturedBy === me) {
-    return e.tier === 'village' ? `${name} destroyed · ${plural(e.survivors, 'token')} remain` : `${name} captured as a ${TIERS[TIERS.indexOf(rules) - 1]!.name.toLowerCase()} · ${e.survivors} garrison it`;
+    const spoils = e.spoils > 0 ? ` · ${e.spoils} currency taken` : '';
+    return e.tier === 'village' ? `${name} destroyed · ${plural(e.survivors, 'token')} remain${spoils}` : `${name} captured as a ${TIERS[TIERS.indexOf(rules) - 1]!.name.toLowerCase()} · ${e.survivors} garrison it${spoils}`;
   }
   if (e.capturedBy) return `Attack on ${name}: ${who(e.capturedBy)} takes it · all ${sent} lost`;
   return `Attack on ${name} fails against ${rules.defense} defense — all ${sent} lost`;
@@ -480,6 +482,8 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   const mine = pieces.settlements.filter((s) => s.civ === HUMAN);
   const towns = mine.filter((s) => s.tier === 'town').length;
   const villages = mine.length - towns;
+  const treasury = state.players[HUMAN]!.treasury;
+  const income = taxIncome(state, state.players[HUMAN]!.id);
   const hoveredArea = hovered === null ? null : map.areas[hovered];
   const hoveredSettlement = hovered === null ? undefined : pieces.settlements.find((s) => s.area === hovered);
 
@@ -708,6 +712,13 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
             <dt>Settlements</dt>
             <dd>
               {towns} town{towns === 1 ? '' : 's'} · {villages} village{villages === 1 ? '' : 's'}
+            </dd>
+          </div>
+          <div title={`Currency, kept from turn to turn; spent on the market and on wonders. Tax: ${income > 0 ? `+${income} a turn from towns (town 2, city 3, metropolis 4)` : 'none — villages pay no tax; towns pay 2 a turn'} (design doc §6)`}>
+            <dt>Treasury</dt>
+            <dd>
+              {treasury}
+              {income > 0 && ` (+${income})`}
             </dd>
           </div>
           <button type="button" className="game-menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>

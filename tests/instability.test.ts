@@ -44,7 +44,7 @@ describe('instability sources', () => {
     settle(game, home, 'village');
     const ctx = context(game, [
       { type: 'resolutionStep', step: 'conflict' },
-      { type: 'settlementAttacked', area: 999, defender: 'p1', tier: 'town', attackers: [{ player: 'ai1', count: 12 }], repelled: [], losses: [], capturedBy: 'ai1', survivors: 3 },
+      { type: 'settlementAttacked', area: 999, defender: 'p1', tier: 'town', attackers: [{ player: 'ai1', count: 12 }], repelled: [], losses: [], capturedBy: 'ai1', survivors: 3, spoils: 0 },
       { type: 'resolutionStep', step: 'support' },
       { type: 'settlementDropped', player: 'p1', area: home, tier: 'village', refugees: 6, lost: 0 },
       { type: 'resolutionStep', step: 'instability' },

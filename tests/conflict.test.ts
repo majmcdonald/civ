@@ -126,6 +126,34 @@ describe('attacking a settlement', () => {
     expect(eventsOfType(ctx.events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: 'p1', survivors: 5 });
   });
 
+  it('takes a share of the defender’s treasury by the tier lost, rounded down', () => {
+    // Town 20%, village 10% (design doc §11, Spoils).
+    const { game, area, next } = scene();
+    settle(game, area, 'town', 'ai1');
+    place(game, area, 'p1', 13);
+    game.state.players[1]!.treasury = 23;
+    game.state.players[0]!.treasury = 1;
+    const ctx = conflict(game);
+    expect(ctx.state.players.map((p) => p.treasury)).toEqual([5, 19, 0]);
+    expect(eventsOfType(ctx.events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: 'p1', spoils: 4 });
+
+    const raid = scene().game;
+    settle(raid, next, 'village', 'ai1');
+    place(raid, next, 'p1', 9);
+    raid.state.players[1]!.treasury = 23;
+    expect(conflict(raid).state.players[1]!.treasury).toBe(21);
+  });
+
+  it('takes no spoils when the attack fails', () => {
+    const { game, area } = scene();
+    settle(game, area, 'village', 'ai1');
+    place(game, area, 'p1', 6);
+    game.state.players[1]!.treasury = 20;
+    const ctx = conflict(game);
+    expect(ctx.state.players[1]!.treasury).toBe(20);
+    expect(eventsOfType(ctx.events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: null, spoils: 0 });
+  });
+
   it('adds the defender’s tokens in the area to the defense', () => {
     // 8 attackers meet the village threshold, but 6 + 3 reinforcements is stronger.
     const { game, area } = scene();

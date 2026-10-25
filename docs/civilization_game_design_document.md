@@ -1,7 +1,7 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.19  
-**Date:** October 24, 2026  
+**Version:** 0.20  
+**Date:** October 25, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
 > This is a living design document. Sections marked **Decided** are current design commitments (still subject to playtesting). Items under **Open** and **Tuning** are unresolved. Ideas documented here do not become rules until they are moved into a Decided section.
@@ -56,9 +56,9 @@ Four phases. All players act simultaneously within each phase.
 
 | Phase | What happens |
 |---|---|
-| **1. Resources** | Settlements produce from manpower assigned to production. Taxes are collected as currency |
+| **1. Resources** | Settlements produce from manpower assigned to production. Towns and larger pay tax into the treasury (§6, Currency) |
 | **2. Trade** | Players with the trade discovery place market orders; prices are set and orders filled. Goods are usable this turn |
-| **3. Allocation** | Players assign manpower (production, Bureaucracy, High Learning, Artists, wonders), set the study queue (§8), spend currency (stabilization), order movement and migration, and order settlement conversions |
+| **3. Allocation** | Players assign manpower (production, Bureaucracy, High Learning, Artists, wonders), set the study queue (§8), order movement and migration, and order settlement conversions |
 | **4. Resolution** | The game resolves all consequences in a fixed order (below) |
 
 ### Resolution order (starting point; adjust in playtesting)
@@ -237,7 +237,7 @@ Each tier keeps the abilities of the tiers below it. Higher tiers justify their 
 | Metropolis | 4 | Build great wonders; extends market range; raises the civilization's administrative capacity (reduces overextension) |
 
 - Base manpower is raised by advance bonuses (§6).
-- Tax per settlement climbs with tier.
+- Tax per settlement climbs with tier: village 0, town 2, city 3, metropolis 4 (v0.20, §6).
 - **Historical figures can emerge in any settlement**, with odds that scale with tier.
 
 ## 6. Resources, labor, and currency — Decided
@@ -297,8 +297,11 @@ Manpower is a settlement's labor. Every unit is spent each turn on exactly one a
 
 ### Currency
 
-- A single generic currency, collected as tax from settlements.
-- **Uses:** buying on the market, stabilizing settlements. (Setting discovery focus was a use until v0.16, when the study queue replaced the focus; whether currency speeds learning is for the currency design, Phase 4 step 3.)
+- A single generic currency, held in each civilization's **treasury**.
+- **Tax** (v0.20). Towns and larger pay a fixed tax each turn in the resources phase (phase 1): **village 0, town 2, city 3, metropolis 4**. Villages pay nothing, so a civilization collects no tax until its first town (Chiefdom), as only cities paid tax in the original; chiefs collected tribute, villages did not. Before then, currency comes only from selling on the market (Barter, §7). Example: 2 villages and 1 town collect 2 a turn.
+- **Tax is free** in the Stone Age: no token, instability, or manpower cost. A later advance (Coinage, as in the original, where it let a player set 1–3 per city) adds a **tax rate lever**: lighter or heavier tax, with heavier tax raising local instability. Designed with that era's advances.
+- **The treasury keeps** (v0.20) from turn to turn with no cap or decay, unlike goods (§6, Goods last one turn). It is lost only to spoils when a settlement is captured (§11) and to calamities that take currency (Piracy, Market crash; §12).
+- **Uses** (v0.20): **buying on the market** (§7) and **building wonders** (§9). Nothing else: currency does not buy calm (calm comes from Bureaucracy, luxuries, advances, institutions, and wonders), does not buy learning or advances (unlike the original's treasury, which bought civilization cards), and cannot fund specialists.
 
 ## 7. Trade and the market — Decided
 
@@ -516,7 +519,7 @@ Each advance below is final for the Stone Age content (numbers still placeholder
 - **Ordinary construction** (roads, irrigation, granaries) is also automatic. There are no player-built projects.
 - **Named wonders** (e.g., Angkor Wat when temples are unlocked) are the player's direct construction choice, buildable once the enabling advance is **Developed**.
 - Named wonders require a **city**; great wonders require a **metropolis**.
-- Wonders cost **manpower plus resources** (not currency). Manpower can come from settlements within range.
+- Wonders cost **manpower, resources, and currency** (v0.20; currency was excluded until then). Manpower can come from settlements within range. Amounts are set with the wonders (Phase 5).
 - Institutions and wonders **reduce instability**. Wonders score victory points.
 
 ## 10. Instability and collapse — Decided
@@ -530,7 +533,7 @@ Each advance below is final for the Stone Age content (numbers still placeholder
 |---|---|---|
 | Food shortage | Overextension | Food surplus and stores |
 | Lost support | War | Institutions and wonders |
-| Nearby conflict | Settlement losses anywhere | Currency spending |
+| Nearby conflict | Settlement losses anywhere | Luxury goods |
 | Harsh figures (e.g., a tyrannical governor) | Rapid change (fast adoption) | Calming figures |
 | Disasters (pending calamity tuning) | | Manpower in Bureaucracy (and, slightly, Artists) |
 
@@ -623,7 +626,7 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 
 - **Capture:** the attacker takes the settlement **one tier lower** (§5, Tier drop). Figure marks on it transfer to the new owner.
 - **Surviving attackers.** When a town or larger is captured, the survivors garrison it and are removed, since a settled area holds no loose tokens (§5). When a village is captured, it is destroyed and the survivors stay as loose tokens up to the area's limit; any extra is surplus. A capture releases no refugees (§5, Tier drop). Example: 13 attackers take a town (defends as 9), win with 5, and the 5 garrison the new village. The new owner must support the captured settlement the same turn (§5).
-- **Spoils:** a share of the defender's currency (scaled by tier) plus discovery progress toward the defender's advances.
+- **Spoils:** a share of the defender's currency plus discovery progress toward the defender's advances (designed later). **Currency** (v0.20): the capturing attacker takes a share of the defender's treasury by the tier of the settlement lost: **village 10%, town 20%, city 30%, metropolis 40%**, rounded down, taken at the capture. A destroyed village counts. Example: a treasury of 20 loses 4 to the capture of a town, 2 to a village. Failed attacks take nothing.
 
 ### Conflict state
 
@@ -728,7 +731,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 | Civ-wide adoption % | Conflicts with the v0.1 idea that adoption spreads unevenly by region. Chosen for simplicity |
 | Institutions auto-build at Known | Conflicts with "knowledge is not capability." Wonders still require Developed |
 | Higher-tier value | With token-based tiers, tokens tied up per base manpower is roughly flat (village 8, town 7.5, city 8, metropolis 9). Accepted: climbing is justified by exclusive abilities and by advances, not by raw manpower |
-| Weak town tier | With specialists available at any tier, the town's only exclusive ability is auto-built institutions |
+| Weak town tier | With specialists available at any tier, the town's exclusive abilities are auto-built institutions and tax (v0.20: villages pay none) |
 | Development ratio replaced | v0.2 initially derived manpower from a population ratio that rose with development. Replaced by tier base plus advance bonuses, which keeps manpower in small, readable whole units |
 | No instability decay | Meters accumulate over a long game unless the ruler actively stabilizes |
 | Collapse cascades | Settlement losses raise the civ-wide meter, which raises every local meter, so one collapse can trigger others. Must not become routine |
@@ -736,6 +739,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 | No support cascades | Settlements are supported by tokens, not lower tiers (v0.3). Simpler and keeps token counts small, but removes tier-to-tier cascades. Fully populated settled areas restore a hinterland requirement |
 | Uneven expansion window on continents | On the continents map type, an isolated civilization may meet no one in the Stone Age while others meet early. Accepted for variety; the inland sea default keeps the 30–40 turn window predictable |
 | Low manpower ceiling | Fully populated settled areas cap how much of the map can be settled (about 40–60% in Phase 0), and high tiers are rare at small limits. Chosen for spatial decisions over density; discoveries that raise limits lift the ceiling |
+| Narrow currency | Currency only buys on the market and builds wonders (v0.20): before Barter and the first wonders, a treasury has no use but to wait. Chosen so currency never replaces governance (calm) or scholarship (learning) |
 | Unlimited game counterparty | A currency-rich civilization can buy its way out of any shortage. Price-change rate is the main brake |
 | Mild AST regression | Regression costs position within an era, never the era itself |
 | Derived track lengths | Poor starts are already penalized by requirements; shorter rows for good starts penalize them twice. Offered as a setup option only |
@@ -774,7 +778,7 @@ No balance changes until the Stone Age is complete (development plan §4, Tuning
 
 - [ ] Settlement conversion costs and support requirements
 - [ ] Starting limit range and resource options per terrain; terrain mix on procedural maps; food odds per terrain and feature
-- [ ] Tier exclusive abilities and tax per tier (the town tier especially)
+- [ ] Tier exclusive abilities and tax per tier (the town tier especially; first values village 0, town 2, city 3, metropolis 4, v0.20)
 - [ ] Base manpower per tier; stability, discovery, and culture yields per specialist
 - [ ] Market starting prices and price-change rate
 - [ ] Conflict state duration
@@ -799,6 +803,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.20 (October 25, 2026):** Currency designed (§6). Towns and larger pay a fixed tax each turn in the resources phase: village 0, town 2, city 3, metropolis 4; villages pay nothing, so tax starts with the first town (Chiefdom), as only cities paid tax in the original. Tax is free in the Stone Age; a later advance (Coinage) adds a tax rate lever. The treasury keeps from turn to turn with no cap, lost only to spoils and currency calamities. Currency is used only to buy on the market and, new, to build wonders (§9: wonders cost manpower, resources, and currency). Currency no longer buys calm: stabilization is removed from allocation (§3) and §10's stabilizers; it does not buy learning or advances. Spoils (§11): a capture takes 10% of the defender's treasury per tier of the settlement lost (village 10% to metropolis 40%).
 - **0.19 (October 25, 2026):** Room to expand (§2) gains **very crowded**: 16 land areas per civilization (0.25×), so borders meet and fighting starts early; crowded, standard, and spacious are unchanged. Very crowded starts may be 3 moves apart (4 elsewhere) so 2–15 civilizations fit (at 4, maps with 10 or more civilizations often failed to generate).
 - **0.18 (October 25, 2026):** Urban growth (§5): a settlement of any tier, villages included, that gathers food and eats some of its own for support adds +1 urban growth that turn, regardless of the amount; food eaten by or from a neighbor does not count.
 - **0.17 (October 25, 2026):** Learning optional again (§8): v0.16's required learning halves are reverted. Usage alone reaches every step; learning adds to the same accumulator, **2 progress per unit** toward Known or Developed and **10 adoption points** toward Mastered, taking only what usage leaves unfinished. To make learning matter, **Developed costs are doubled** (except Permanent Settlement, which keeps the opening pace) and **Mastered takes 200 adoption points**; Known costs are unchanged. Kept from v0.16: the study queue (fill in order, then an even split, with the empty-queue warning; only plausible advances can be queued), nothing decays, and the minimal AI's third of manpower on High Learning with an empty queue. Oral tradition and the Permanent Settlement Known exception are retired. Discovery outliers are logged for the tuning pass (§17).

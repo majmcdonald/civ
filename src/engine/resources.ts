@@ -15,6 +15,25 @@ export function manpower(settlement: Settlement): number {
   return tierRules(settlement.tier).manpower;
 }
 
+// Towns and larger pay a fixed tax into their owner's treasury in the resources phase (design doc
+// §6, Currency).
+export function taxOf(settlement: Settlement): number {
+  return tierRules(settlement.tier).tax;
+}
+
+export function taxIncome(state: GameState, player: PlayerId): number {
+  return state.settlements.reduce((sum, s) => (s.player === player ? sum + taxOf(s) : sum), 0);
+}
+
+export function collectTax(ctx: Context): void {
+  for (const p of ctx.state.players) {
+    const amount = taxIncome(ctx.state, p.id);
+    if (amount === 0) continue;
+    p.treasury += amount;
+    emit(ctx, { type: 'taxCollected', player: p.id, amount });
+  }
+}
+
 export function assigned(settlement: Settlement): number {
   return (settlement.work ?? []).reduce((sum, w) => sum + w.count, 0);
 }
