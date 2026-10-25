@@ -1,4 +1,5 @@
 import type { Content } from './content';
+import { HIGH_LEARNING, highLearning } from './discovery';
 import { applyCommand } from './engine';
 import { BUREAUCRACY, CAPITAL_BUREAUCRACY, overextension, threshold, totalInstability } from './instability';
 import type { AreaId, GameMap } from './map/types';
@@ -26,13 +27,18 @@ import { mapFor } from './world';
 //    adds overextension again, so the AI looks two turns of overextension ahead. A settlement
 //    within 3 of its collapse threshold by then moves 1 manpower to Bureaucracy (unassigned first,
 //    else from its most recent assignment); one 6 or more below it moves 1 back to work.
-// 4. Put idle manpower to work: on the area's first food the civilization can gather, else the
+// 4. Study: while High Learning is below a third of the civilization's manpower (rounded down),
+//    idle manpower goes to it, largest settlements first. The study queue stays empty, so learning
+//    splits evenly (design doc §8, v0.17).
+// 5. Put idle manpower to work: on the area's first food the civilization can gather, else the
 //    first good it can (copper, cloth).
 
 const FOUND_MIN_LOOSE = 12;
 const CALM_WITHIN = 3;
 const CALM_CLEAR = 6;
 const FOUND_MIN_REACH = 8;
+// Share of manpower the AI keeps on High Learning (placeholder until the tuning pass).
+const STUDY_SHARE = 1 / 3;
 
 function landNeighbors(map: GameMap, area: AreaId): AreaId[] {
   return map.areas[area]!.neighbors.filter((n) => map.areas[n]!.kind === 'land');
@@ -97,7 +103,18 @@ export function aiCommands(state: GameState, content: Content, player: PlayerId)
     }
   }
 
-  for (const area of current.settlements.filter((x) => x.player === player).map((x) => x.area)) {
+  const own = () => current.settlements.filter((x) => x.player === player);
+  const target = Math.floor(own().reduce((sum, s) => sum + manpower(s), 0) * STUDY_SHARE);
+  for (const area of [...own()].sort((a, b) => manpower(b) - manpower(a) || a.area - b.area).map((s) => s.area)) {
+    const s = settlementAt(current, area)!;
+    const idle = manpower(s) - assigned(s);
+    const studying = highLearning(current, player);
+    if (idle <= 0 || studying >= target) continue;
+    const on = (s.work ?? []).find((w) => w.resource === HIGH_LEARNING)?.count ?? 0;
+    issue({ type: 'assignWork', player, area, resource: HIGH_LEARNING, count: on + Math.min(idle, target - studying) });
+  }
+
+  for (const area of own().map((x) => x.area)) {
     const s = settlementAt(current, area)!;
     const idle = manpower(s) - assigned(s);
     if (idle <= 0) continue;

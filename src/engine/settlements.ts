@@ -208,17 +208,18 @@ function keepLimit(state: GameState, content: Content, player: PlayerId): number
 // food covers what tokens could not, 1 food per token, from the settlement's own goods and stores
 // or those of its civilization's settlements one transport step away (adjacent, or along a river
 // with Dugout Canoes), in the same order (design doc §6, Food). `support` counts both; `fed` is the
-// food part; `kept` is the food each settlement stores for next turn. Also returns the tokens left
-// over, by "area:player".
+// food part; `ateOwn` holds the settlements that gathered food and ate some of their own; `kept` is
+// the food each settlement stores for next turn. Also returns the tokens left over, by "area:player".
 export function allocateSupport(
   state: GameState,
   map: GameMap,
   content: Content,
-): { support: Map<AreaId, number>; fed: Map<AreaId, number>; kept: Map<AreaId, number>; spare: Map<string, number> } {
+): { support: Map<AreaId, number>; fed: Map<AreaId, number>; ateOwn: Set<AreaId>; kept: Map<AreaId, number>; spare: Map<string, number> } {
   const spare = new Map(state.stacks.map((s) => [`${s.area}:${s.player}`, s.count]));
   const order = [...state.settlements].sort((a, b) => tierRules(b.tier).value - tierRules(a.tier).value || a.area - b.area);
   const support = new Map<AreaId, number>();
   const fed = new Map<AreaId, number>();
+  const ateOwn = new Set<AreaId>();
   const pantries = new Map<string, Pantry>();
   const pantry = (area: AreaId, player: PlayerId) => {
     const key = `${area}:${player}`;
@@ -244,7 +245,10 @@ export function allocateSupport(
     let got = 0;
     for (const a of [s.area, ...transportNeighbors(map, s.area, riverLeg(state, s.player))]) {
       if (support.get(s.area)! + got >= need) break;
-      got += takeFood(pantry(a, s.player), need - support.get(s.area)! - got);
+      const gathering = a === s.area && state.goods.some((g) => g.area === a && g.player === s.player && g.count > 0 && isFood(content, g.resource));
+      const take = takeFood(pantry(a, s.player), need - support.get(s.area)! - got);
+      if (gathering && take > 0) ateOwn.add(s.area);
+      got += take;
     }
     if (got === 0) continue;
     fed.set(s.area, got);
@@ -256,7 +260,7 @@ export function allocateSupport(
     const keep = Math.min(keepLimit(state, content, s.player), left.stored + left.keeps);
     if (keep > 0) kept.set(s.area, keep);
   }
-  return { support, fed, kept, spare };
+  return { support, fed, ateOwn, kept, spare };
 }
 
 export function assignSupport(state: GameState, map: GameMap, content: Content): Map<AreaId, number> {
@@ -266,8 +270,9 @@ export function assignSupport(state: GameState, map: GameMap, content: Content):
 // Resolution step 6: a settlement short of support drops one tier. Food that keeps and is left
 // over is stored for next turn's check (Pottery).
 export function resolveSupport(ctx: Context): void {
-  const { support, fed, kept } = allocateSupport(ctx.state, ctx.map, ctx.content);
+  const { support, fed, ateOwn, kept } = allocateSupport(ctx.state, ctx.map, ctx.content);
   for (const s of ctx.state.settlements) {
+    if (ateOwn.has(s.area)) s.ateOwn = ctx.state.turn;
     const count = fed.get(s.area);
     if (count) emit(ctx, { type: 'foodSupport', player: s.player, area: s.area, count });
     const keep = kept.get(s.area);
@@ -333,9 +338,14 @@ function placeRefugees(ctx: Context, player: PlayerId, area: AreaId, count: numb
   return count;
 }
 
-// Urban growth, part of resolution step 8: towns and larger add tokens to adjacent unsettled areas
-// that are the civilization's own or empty and have room, most room first; within the token cap.
-// Growth with nowhere to go is lost.
+// Urban growth, part of resolution step 8: settlements add tokens to adjacent unsettled areas that
+// are the civilization's own or empty and have room, most room first; within the token cap. Towns
+// and larger add by tier, and any settlement that gathered food and ate its own this turn adds 1
+// more. Growth with nowhere to go is lost.
+export function urbanGrowthOf(state: GameState, s: Settlement): number {
+  return tierRules(s.tier).urbanGrowth + (s.ateOwn === state.turn ? 1 : 0);
+}
+
 export function resolveUrbanGrowth(ctx: Context): void {
   const { state, map } = ctx;
   const totals = areaTotals(state);
@@ -343,7 +353,7 @@ export function resolveUrbanGrowth(ctx: Context): void {
     const player = state.players.find((p) => p.id === s.player)!;
     const room = (a: AreaId) => looseLimit(state, map, a) - (totals.get(a) ?? 0);
     const added = new Map<AreaId, number>();
-    for (let k = 0; k < tierRules(s.tier).urbanGrowth; k++) {
+    for (let k = 0; k < urbanGrowthOf(state, s); k++) {
       if (looseTokens(state, player.id) >= player.tokenCap) break;
       const to = map.areas[s.area]!.neighbors
         .filter((n) => map.areas[n]!.kind === 'land' && room(n) > 0 && !state.stacks.some((x) => x.area === n && x.player !== player.id))
@@ -410,8 +420,9 @@ export interface SupportSummary {
   supplied: number;
   // Loose tokens not supporting any settlement.
   free: number;
-  // Support counts food; `food` is the part food covers.
-  settlements: { area: AreaId; tier: SettlementTier; support: number; food: number; needed: number }[];
+  // Support counts food; `food` is the part food covers; `ateOwn` when it eats its own gathered
+  // food, for +1 urban growth.
+  settlements: { area: AreaId; tier: SettlementTier; support: number; food: number; ateOwn: boolean; needed: number }[];
   // Unsettled areas where a new village would have its 6 tokens and 2 support from free tokens
   // alone: at least 8 free tokens in the area and its neighbors.
   villageSites: AreaId[];
@@ -419,11 +430,11 @@ export interface SupportSummary {
 
 export function supportSummary(state: GameState, map: GameMap, content: Content, player: PlayerId): SupportSummary {
   const projected = projectTurn(state, map, content).state;
-  const { support, fed, spare } = allocateSupport(projected, map, content);
+  const { support, fed, ateOwn, spare } = allocateSupport(projected, map, content);
   const free = (area: AreaId) => spare.get(`${area}:${player}`) ?? 0;
   const settlements = projected.settlements
     .filter((s) => s.player === player)
-    .map((s) => ({ area: s.area, tier: s.tier, support: support.get(s.area)!, food: fed.get(s.area) ?? 0, needed: tierRules(s.tier).support }));
+    .map((s) => ({ area: s.area, tier: s.tier, support: support.get(s.area)!, food: fed.get(s.area) ?? 0, ateOwn: ateOwn.has(s.area), needed: tierRules(s.tier).support }));
   const villageCost = TIERS[0]!.value + TIERS[0]!.support;
   const villageSites = map.areas
     .filter((a) => a.kind === 'land' && !settlementAt(projected, a.id) && !projected.stacks.some((s) => s.area === a.id && s.player !== player))

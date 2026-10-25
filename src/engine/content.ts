@@ -95,7 +95,6 @@ function checkDiscovery(advance: Advance, advances: Set<string>, resources: Set<
   }
   if (advance.adoption) {
     advance.adoption.inputs.forEach(input);
-    if (!(advance.adoption.fall >= 0)) problems.push(`adoption fall must be 0 or more (got ${advance.adoption.fall})`);
   }
   return problems;
 }

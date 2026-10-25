@@ -99,6 +99,8 @@ export type Input =
   | { per: 'goodKind'; amount: number }
   // The civilization's settlements attacked this turn.
   | { per: 'attacked'; amount: number }
+  // Conflicts the civilization's tokens or settlements took part in this turn (design doc §11).
+  | { per: 'fought'; amount: number }
   // The civilization's settlements struck by `calamity` this turn (calamities: Phase 4 step 5).
   | { per: 'struck'; amount: number; calamity: string }
   // Kinds of goods the civilization bought or sold on the market this turn (market: step 4).
@@ -110,10 +112,10 @@ export interface StageRules {
   inputs: Input[];
 }
 
-// Adoption after Developed: percentage points a turn from `inputs`; with none, it falls by `fall`.
+// Adoption after Developed: points a turn from `inputs` toward the 200 that make Mastered (design
+// doc §8, v0.17); it never falls.
 export interface AdoptionRules {
   inputs: Input[];
-  fall: number;
 }
 
 export interface Advance {

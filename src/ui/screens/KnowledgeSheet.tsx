@@ -1,8 +1,9 @@
 import type { AreaFilter, Condition, DomainId, Effect, Gathering, Input } from '../../content/types';
-import type { AdvanceView, Content, ProgressPart } from '../../engine';
+import type { AdvanceView, Content, LearningPlan, ProgressPart } from '../../engine';
 
-// Knowledge (design doc §8): the whole advance tree by domain, each advance's stage, progress, and
-// the sources of its rate; the discovery focus. Every number shows where it comes from.
+// Knowledge (design doc §8): the whole advance tree by domain, each advance's stage, its progress
+// and the sources of its rate (usage and learning), and the study queue. Every number shows where it
+// comes from.
 
 const DOMAIN_NAMES: Record<DomainId, string> = {
   land: 'Land and food',
@@ -70,6 +71,8 @@ function describeInput(input: Input, names: Names): string {
       return 'per kind of good gathered';
     case 'attacked':
       return 'per settlement attacked this turn';
+    case 'fought':
+      return 'per conflict fought this turn';
     case 'struck':
       return `per settlement struck by ${input.calamity} this turn`;
     case 'traded':
@@ -78,7 +81,7 @@ function describeInput(input: Input, names: Names): string {
 }
 
 function describePart(part: ProgressPart, names: Names): string {
-  if (part.input === 'highLearning') return `+${number(part.value)} from High Learning`;
+  if (part.input === 'learning') return `+${number(part.value)}: ${number(part.count)} learning`;
   if (part.input.per === 'turn') return `+${number(part.value)} each turn`;
   return `+${number(part.value)}: ${number(part.input.amount)} ${describeInput(part.input, names)} (${part.count})`;
 }
@@ -133,13 +136,52 @@ function capital(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
+// An advance with no adoption shows as Developed only; it has nothing more to reach.
 function stageText(view: AdvanceView): string {
+  if (view.stage === 'developed' && (!view.advance.adoption || view.advance.baseline)) return 'Developed';
   if (view.stage === 'developed') return view.adoption >= 100 ? 'Mastered' : `Developed · ${number(view.adoption)}% adopted`;
   if (view.stage === 'known') return 'Known';
   return view.plausible ? 'In progress' : 'Not yet plausible';
 }
 
-function AdvanceCard({ view, content, names }: { view: AdvanceView; content: Content; names: Names }) {
+// Whether learning can go to the advance: anything plausible short of Mastered.
+export function studiable(view: AdvanceView): boolean {
+  if (view.advance.baseline) return false;
+  if (view.stage === 'developed') return view.next === 'mastered';
+  return view.plausible && view.next !== null;
+}
+
+const STEP_NAMES = { known: 'Known', developed: 'Developed', mastered: 'Mastered' } as const;
+
+// The next step's progress in one bar: what usage has filled, and this turn's usage and learning
+// ahead of it.
+function StepMeter({ view }: { view: AdvanceView }) {
+  const share = (n: number) => (view.cost > 0 ? Math.max(0, Math.min(100, (n / view.cost) * 100)) : 100);
+  const usage = Math.min(view.usageRate, view.cost - view.progress);
+  const learning = Math.min(view.learningRate, view.cost - view.progress - usage);
+  return (
+    <div className="civ-meter kn-meter" role="meter" aria-valuenow={view.progress} aria-valuemax={view.cost}>
+      <div className="kn-done" style={{ width: `${share(view.progress)}%` }} />
+      <div className="kn-usage" style={{ width: `${share(usage)}%` }} />
+      <div className="kn-learning" style={{ width: `${share(learning)}%` }} />
+    </div>
+  );
+}
+
+function StepText({ view }: { view: AdvanceView }) {
+  const step = STEP_NAMES[view.next!];
+  const unit = view.next === 'mastered' ? ' adoption' : '';
+  const turns = view.turns !== null ? ` · ${plural(view.turns, 'turn')} at +${number(view.rate)} a turn` : view.plausible || view.stage === 'developed' ? ' · nothing adds progress yet' : '';
+  return (
+    <div className="kn-rate">
+      {number(view.progress)} / {number(view.cost)}
+      {unit} toward {step}
+      {turns}
+    </div>
+  );
+}
+
+function AdvanceCard({ view, content, names, canStudy, onAdd }: { view: AdvanceView; content: Content; names: Names; canStudy: boolean; onAdd: () => void }) {
   const { advance } = view;
   const effects = [
     ...content.resources.filter((r) => (r.revealedBy ?? r.requires) === advance.id && !r.from).map((r) => `Known: reveals ${r.name.toLowerCase()}`),
@@ -148,20 +190,15 @@ function AdvanceCard({ view, content, names }: { view: AdvanceView; content: Con
     ...(advance.mastered ?? []).map((e) => `Mastered: ${describeEffect(e, names)}`),
   ];
   return (
-    <li className={`kn-card kn-${view.stage} ${view.plausible || view.stage !== 'none' ? '' : 'kn-closed'} ${view.focused ? 'kn-focused' : ''}`}>
+    <li className={`kn-card kn-${view.stage} ${view.plausible || view.stage !== 'none' ? '' : 'kn-closed'} ${view.queued ? 'kn-queued' : ''}`}>
       <div className="kn-card-head">
         <strong>{advance.name}</strong>
         <span className="kn-stage">{stageText(view)}</span>
       </div>
       {view.next && (
         <>
-          <div className="civ-meter" role="meter" aria-valuenow={view.progress} aria-valuemax={view.cost}>
-            <div className="civ-meter-fill" style={{ width: `${Math.min(100, (view.progress / view.cost) * 100)}%` }} />
-          </div>
-          <div className="kn-rate">
-            {number(view.progress)} / {view.cost} toward {view.next === 'known' ? 'Known' : 'Developed'}
-            {view.turns !== null ? ` · ${plural(view.turns, 'turn')} at +${number(view.rate)} a turn` : view.plausible ? ' · nothing adds progress yet' : ''}
-          </div>
+          <StepMeter view={view} />
+          <StepText view={view} />
           {view.parts.length > 0 && (
             <ul className="kn-parts">
               {view.parts.map((p, i) => (
@@ -171,8 +208,16 @@ function AdvanceCard({ view, content, names }: { view: AdvanceView; content: Con
           )}
         </>
       )}
-      {view.stage === 'developed' && view.adoption < 100 && advance.adoption && (
-        <div className="kn-rate">{view.adoptionRate > 0 ? `Adoption +${number(view.adoptionRate)} a turn` : `Adoption falling ${number(advance.adoption.fall)} a turn`}</div>
+      {studiable(view) && (
+        <div className="kn-study">
+          {view.queued ? (
+            <span>#{view.queued} in the study queue</span>
+          ) : (
+            <button type="button" disabled={!canStudy} onClick={onAdd} title={canStudy ? 'Add to the end of the study queue' : 'Set in the Allocation phase'}>
+              Study
+            </button>
+          )}
+        </div>
       )}
       {view.conditions.length > 0 && view.stage === 'none' && (
         <ul className="kn-conditions">
@@ -197,48 +242,77 @@ function AdvanceCard({ view, content, names }: { view: AdvanceView; content: Con
 interface KnowledgeSheetProps {
   views: AdvanceView[];
   content: Content;
-  focus: DomainId | null;
-  highLearning: number;
-  // The focus is set in allocation.
-  canFocus: boolean;
-  onFocus: (domain: DomainId | null) => void;
+  queue: string[];
+  plan: LearningPlan;
+  // The queue is set in allocation.
+  canStudy: boolean;
+  onStudy: (queue: string[]) => void;
 }
 
-export function KnowledgeSheet({ views, content, focus, highLearning, canFocus, onFocus }: KnowledgeSheetProps) {
+export function KnowledgeSheet({ views, content, queue, plan, canStudy, onStudy }: KnowledgeSheetProps) {
   const names: Names = {
     advance: (id) => content.advances.find((a) => a.id === id)?.name ?? id,
     resource: (id) => content.resources.find((r) => r.id === id)?.name ?? id,
   };
   const domains = Object.keys(DOMAIN_NAMES) as DomainId[];
+  const waiting = views.filter((v) => v.next !== null && v.progress + v.usageRate < v.cost && (v.stage === 'developed' || v.plausible)).length;
+  const move = (i: number, by: number) => {
+    const next = [...queue];
+    const [id] = next.splice(i, 1);
+    next.splice(i + by, 0, id!);
+    onStudy(next);
+  };
   return (
     <div className="civ-sheet kn-sheet">
       <header className="civ-head">
         <h1>Knowledge</h1>
-        <p>
-          High Learning: {plural(highLearning, 'unit')}, {focus ? `focused on ${DOMAIN_NAMES[focus]}` : 'split across every advance in progress'}
+        <p title="Each High Learning unit adds 1 learning a turn. A unit of learning adds 2 progress toward Known or Developed, or 10 adoption toward Mastered; it speeds advances up but is never required (§8)">
+          Learning: {number(plan.pool)} a turn from High Learning
         </p>
       </header>
-      <div className="kn-focus" role="group" aria-label="Discovery focus">
-        <span title="High Learning goes to the focused domain's advances, split evenly; at half rate toward Developed (§8)">Focus</span>
-        {[null, ...domains].map((d) => (
-          <button key={d ?? 'none'} type="button" aria-pressed={focus === d} className={focus === d ? 'selected' : ''} disabled={!canFocus} onClick={() => onFocus(d)}>
-            {d ? DOMAIN_NAMES[d] : 'None'}
-          </button>
-        ))}
-        {!canFocus && <small>Set in the Allocation phase</small>}
-      </div>
+      <section className="kn-queue" aria-label="Study queue">
+        <h2>Study queue</h2>
+        {queue.length === 0 ? (
+          <p className="civ-note">Empty: learning splits evenly among {plural(waiting, 'advance')} waiting for it. Press Study on an advance to queue it.</p>
+        ) : (
+          <ol>
+            {queue.map((id, i) => {
+              const view = views.find((v) => v.advance.id === id)!;
+              return (
+                <li key={id}>
+                  <span>
+                    {names.advance(id)} <small>{view.learning > 0 ? `${number(view.learning)} learning, +${number(view.learningRate)}` : view.stage !== 'developed' && !view.plausible ? 'not plausible now' : view.progress + view.usageRate >= view.cost ? 'usage finishes it this turn' : 'no learning left this turn'}</small>
+                  </span>
+                  <button type="button" aria-label={`Move ${names.advance(id)} up`} disabled={!canStudy || i === 0} onClick={() => move(i, -1)}>
+                    ↑
+                  </button>
+                  <button type="button" aria-label={`Move ${names.advance(id)} down`} disabled={!canStudy || i === queue.length - 1} onClick={() => move(i, 1)}>
+                    ↓
+                  </button>
+                  <button type="button" aria-label={`Remove ${names.advance(id)}`} disabled={!canStudy} onClick={() => onStudy(queue.filter((q) => q !== id))}>
+                    ✕
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        {plan.split > 0 && queue.length > 0 && <p className="civ-note">{number(plan.split)} learning the queue cannot use splits evenly among the advances waiting for it.</p>}
+        {plan.unused > 0 && <p className="civ-note">{number(plan.unused)} learning unused: nothing is waiting for it.</p>}
+        {!canStudy && <small>Set in the Allocation phase</small>}
+      </section>
       <div className="kn-domains">
         {domains.map((d) => {
           const here = views.filter((v) => v.advance.domain === d);
           return (
-            <section key={d} className={`kn-domain ${focus === d ? 'kn-focused' : ''}`}>
+            <section key={d} className="kn-domain">
               <h2>{DOMAIN_NAMES[d]}</h2>
               {here.length === 0 ? (
                 <p className="civ-note">No advances yet</p>
               ) : (
                 <ul className="kn-list">
                   {here.map((v) => (
-                    <AdvanceCard key={v.advance.id} view={v} content={content} names={names} />
+                    <AdvanceCard key={v.advance.id} view={v} content={content} names={names} canStudy={canStudy} onAdd={() => onStudy([...queue, v.advance.id])} />
                   ))}
                 </ul>
               )}

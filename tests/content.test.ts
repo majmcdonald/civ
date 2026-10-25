@@ -106,7 +106,7 @@ describe('content loading', () => {
           domain: 'land',
           plausible: [{ type: 'knows', advance: 'missing', stage: 'known' }, { type: 'presence', where: { resource: 'gold' } }],
           known: { cost: 0, inputs: [{ per: 'turn', amount: -1 }] },
-          adoption: { inputs: [{ per: 'worker', amount: 1, resource: 'gold' }], fall: -2 },
+          adoption: { inputs: [{ per: 'worker', amount: 1, resource: 'gold' }] },
           effects: [],
         },
       ],
@@ -118,7 +118,6 @@ describe('content loading', () => {
       'Advance "a": input amount must be positive (got -1)',
       'Advance "a": needs developed rules (or baseline)',
       'Advance "a": unknown resource "gold"',
-      'Advance "a": adoption fall must be 0 or more (got -2)',
     ]);
   });
 

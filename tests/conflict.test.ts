@@ -294,6 +294,10 @@ describe('strength, volley, and power thresholds (v0.14)', () => {
     const held = conflict(game);
     expect(eventsOfType(held.events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: null });
     expect(settlementAt(held.state, area)!.attacked).toBe(game.state.turn);
+    expect(held.state.players.filter((p) => p.fought).map((p) => [p.id, p.fought])).toEqual([
+      ['p1', { turn: game.state.turn, count: 1 }],
+      ['ai1', { turn: game.state.turn, count: 1 }],
+    ]);
     game.state.stacks = [];
     place(game, area, 'p1', 12);
     expect(eventsOfType(conflict(game).events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: 'p1', survivors: 2 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { aiCommands, looseTokens, submit, type Session } from '../src/engine';
-import { newGame } from './harness';
+import { aiCommands, looseTokens, mapFor, submit, type Session } from '../src/engine';
+import { endPhaseAll, newGame } from './harness';
 
 // Every player is run by the minimal AI. Fails on any rejected command.
 function playTurns(game: Session, turns: number): void {
@@ -34,6 +34,17 @@ describe('minimal AI', () => {
       expect(villages).toBeGreaterThan(0);
       expect(looseTokens(game.state, p.id)).toBeGreaterThan(10);
     }
+  });
+
+  it('puts a third of its manpower on High Learning and leaves the study queue empty', () => {
+    const game = newGame();
+    while (game.state.phase !== 'allocation') endPhaseAll(game);
+    const land = mapFor(game.setup).areas.filter((a) => a.kind === 'land');
+    game.state.stacks = [];
+    game.state.settlements = land.slice(0, 3).map((a) => ({ area: a.id, player: 'ai1', tier: 'village' as const }));
+    const commands = aiCommands(game.state, game.content, 'ai1');
+    expect(commands.filter((c) => c.type === 'assignWork' && c.resource === 'highLearning')).toEqual([{ type: 'assignWork', player: 'ai1', area: land[0]!.id, resource: 'highLearning', count: 1 }]);
+    expect(commands.some((c) => c.type === 'setStudy')).toBe(false);
   });
 
   it('gives the same orders for the same state', () => {

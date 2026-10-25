@@ -11,7 +11,7 @@ export { mapFor, mapOptions } from './world';
 export { BASE_MOVEMENT, GROWTH_PER_TOKEN, looseTokens, reachable, STARTING_TOKEN_CAP, tokensAt } from './population';
 export { assigned, manpower, revealed, usable, workable } from './resources';
 export { calm, capitalReach, gatherBonus, marketAccess, riverLeg, settlementBonus, storeCap, strength } from './effects';
-export { discoveryView, DOMAINS, HIGH_LEARNING, highLearning, stageOf, type AdvanceView, type ProgressPart, type Stage } from './discovery';
+export { discoveryView, DOMAINS, HIGH_LEARNING, highLearning, learningPlan, learningPool, stageOf, type AdvanceView, type LearningPlan, type ProgressPart, type Stage } from './discovery';
 export {
   BUREAUCRACY,
   bureaucracyAt,

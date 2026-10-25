@@ -581,6 +581,30 @@
   font-variant-numeric: tabular-nums;
 }
 
+.civ-resource.closed {
+  opacity: 0.55;
+}
+
+.civ-resource button {
+  padding: 0 0.15rem;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  color: inherit;
+  cursor: pointer;
+}
+
+.civ-resource button:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.civ-resource button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 /* Rivals and standings */
 
 .rivals-diamond {
@@ -854,18 +878,18 @@
   opacity: 0.75;
 }
 
-.game-plan-stability {
+.game-plan-instability {
   display: flex;
   flex-direction: column;
   align-items: center;
   margin-bottom: 0.2rem;
 }
 
-.game-plan-stability strong {
+.game-plan-instability strong {
   color: var(--ink);
 }
 
-.game-plan-stability.warn strong {
+.game-plan-instability.warn strong {
   color: #a3301c;
 }
 
@@ -1027,56 +1051,98 @@
 }
 
 /* Knowledge (design doc §8) */
-.kn-focus {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
+.kn-queue {
   margin-bottom: 1.2rem;
-}
-
-.kn-focus > span {
-  font-family: var(--font-display);
-  font-size: 0.8rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  margin-right: 0.3rem;
-}
-
-.kn-focus button {
-  font: inherit;
-  font-size: 0.9rem;
-  padding: 0.2rem 0.7rem;
+  padding: 0.6rem 0.8rem;
   background: rgba(255, 250, 236, 0.45);
+  border: 1px solid var(--parchment-edge);
+}
+
+.kn-queue h2 {
+  margin: 0 0 0.4rem;
+}
+
+.kn-queue ol {
+  margin: 0;
+  padding-left: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.kn-queue li {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.kn-queue li > span {
+  flex: 1;
+}
+
+.kn-queue small {
+  color: var(--ink-soft);
+}
+
+.kn-queue button,
+.kn-study button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.05rem 0.45rem;
+  background: rgba(255, 250, 236, 0.6);
   border: 1px solid var(--parchment-edge);
   color: var(--ink);
   cursor: pointer;
 }
 
-.kn-focus button.selected {
-  background: var(--ink);
-  color: var(--parchment);
+.kn-queue button:hover:not(:disabled),
+.kn-study button:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
-.kn-focus button:disabled {
+.kn-queue button:disabled,
+.kn-study button:disabled {
   cursor: default;
-  opacity: 0.6;
+  opacity: 0.45;
 }
 
-.kn-focus small {
-  color: var(--ink-soft);
+.kn-study {
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
+  color: #8a6418;
+}
+
+.kn-card.kn-queued {
+  border-color: #c9962e;
+}
+
+.kn-meter {
+  display: flex;
+}
+
+.kn-done,
+.kn-usage,
+.kn-learning {
+  height: 100%;
+}
+
+.kn-done {
+  background: #4f7f9a;
+}
+
+.kn-usage {
+  background: rgba(79, 127, 154, 0.45);
+}
+
+.kn-learning {
+  background: #c9962e;
 }
 
 .kn-domains {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: 1rem;
-}
-
-.kn-domain.kn-focused h2 {
-  color: var(--ink);
-  border-bottom-color: var(--ink);
 }
 
 .kn-list {
@@ -1140,4 +1206,76 @@
 
 .kn-effects li {
   font-style: italic;
+}
+
+.game-name-dialog {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translate(-50%, -50%);
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 20rem;
+  padding: 1rem 1.2rem;
+  background: var(--parchment);
+  border: 1px solid var(--parchment-edge);
+  box-shadow: 0 6px 24px rgba(10, 6, 2, 0.45);
+}
+
+.game-name-dialog h2 {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.05rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.game-name-row,
+.game-name-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.game-name-actions {
+  justify-content: center;
+}
+
+.game-name-dialog input,
+.game-name-dialog button {
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: #f7eed8;
+  border: 1px solid var(--parchment-edge);
+  padding: 0.25rem 0.5rem;
+}
+
+.game-name-dialog input {
+  flex: 1;
+  min-width: 0;
+}
+
+.game-name-dialog button {
+  cursor: pointer;
+}
+
+.game-name-dialog button:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.game-name-dialog button[type='submit'] {
+  color: var(--accent);
+}
+
+.civ-focused td {
+  background: rgba(226, 179, 60, 0.22);
+}
+
+.civ-focused td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
 }

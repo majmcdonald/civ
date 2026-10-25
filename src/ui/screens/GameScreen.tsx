@@ -7,7 +7,7 @@ import {
   bureaucracyAt,
   discoveryView,
   HIGH_LEARNING,
-  highLearning,
+  learningPlan,
   revealed,
   capitalDistance,
   capitalOf,
@@ -23,6 +23,7 @@ import {
   loadContent,
   manpower,
   mapFor,
+  NAME_MAX_LENGTH,
   nextTier,
   previewConflicts,
   previewConversions,
@@ -44,18 +45,21 @@ import {
   type ConflictEvent,
   type Content,
   type ConversionPreview,
+  type GameState,
   type GameEvent,
   type MapSetup,
   type Phase,
   type PlayerSetup,
   type Session,
+  type Settlement,
   type SettlementTier as Tier,
 } from '../../engine';
 import { CIV_COLORS, IsoMap, type ClickButton, type IsoMapHandle, type PlannedSettlement } from '../art/IsoMap';
 import type { MapPieces, SettlementTier } from '../art/pieces';
-import { CivilizationSheet } from './CivilizationSheet';
+import { CivilizationSheet, type WorkOption } from './CivilizationSheet';
 import { KnowledgeSheet } from './KnowledgeSheet';
 import { RivalsSheet } from './RivalsSheet';
+import { CITY_NAMES } from '../cityNames';
 import { AUTOSAVE_ID, downloadLog, downloadSave, writeSave } from '../saves';
 import './GameScreen.css';
 
@@ -175,11 +179,17 @@ function turnReport(events: GameEvent[], me: string, conflict: (e: ConflictEvent
     if (e.type === 'conversionFailed') lines.push(`Not built: ${e.reason}`);
     if (e.type === 'settlementCollapsed') lines.push(`A ${e.tier} collapsed in unrest`);
     if (e.type === 'capitalMoved' && e.area !== null) lines.push(`Capital: ${place(e.area)}`);
+    if (e.type === 'studyQueueEmpty') lines.push(`Study queue empty: ${Math.round(e.learning * 10) / 10} learning split evenly`);
     if (e.type === 'advanceReached') lines.push(`${advanceName(e.advance)} is ${e.stage === 'known' ? 'Known' : e.stage === 'developed' ? 'Developed' : 'Mastered'}`);
     if (e.type === 'settlementDropped' && !collapsed.has(e.area)) lines.push(e.tier ? `A settlement dropped to ${e.tier} for lack of support` : 'A village dissolved for lack of support');
     if (e.type === 'foodSupport') lines.push(`Food stood in for ${plural(e.count, 'support token')}`);
   }
   return lines;
+}
+
+// A settlement's shown name; an unnamed capital is called "Capital".
+function settlementName(state: GameState, s: Settlement): string | undefined {
+  return s.name ?? (capitalOf(state, s.player) === s.area ? 'Capital' : undefined);
 }
 
 function capitalize(s: string): string {
@@ -220,7 +230,7 @@ function thresholdReason(distance: number | null, capital: boolean): string {
 
 // A settlement's instability (design doc §10): local plus civ-wide against its threshold, and what
 // changed them last turn.
-interface StabilityOption {
+interface InstabilityOption {
   local: number;
   civ: number;
   threshold: number;
@@ -229,10 +239,10 @@ interface StabilityOption {
   changes: string[];
 }
 
-function StabilityRow({ option }: { option: StabilityOption }) {
+function InstabilityRow({ option }: { option: InstabilityOption }) {
   const risk = option.threshold - option.local - option.civ <= 2;
   return (
-    <div className={`game-plan-stability ${risk ? 'warn' : ''}`} title="Local meter plus the civ-wide meter; at the threshold the settlement collapses one tier (§10)">
+    <div className={`game-plan-instability ${risk ? 'warn' : ''}`} title="Local meter plus the civ-wide meter; at the threshold the settlement collapses one tier (§10)">
       <strong>
         Instability {option.local} + {option.civ} of {option.threshold}
       </strong>
@@ -243,12 +253,6 @@ function StabilityRow({ option }: { option: StabilityOption }) {
 }
 
 // A settlement's manpower and what its area offers (design doc §6, Manpower).
-interface WorkOption {
-  total: number;
-  free: number;
-  rows: { resource: string; count: number; usable: boolean }[];
-}
-
 // What the panel shows about any selected land area.
 interface AreaDetails {
   title: string;
@@ -263,7 +267,7 @@ interface PlanPanelProps {
   state: { tokens: number; left: number };
   conversion: ConversionOption | null;
   work: WorkOption | null;
-  stability: StabilityOption | null;
+  instability: InstabilityOption | null;
   previews: ConversionPreview[];
   conflicts: { area: AreaId; text: string }[];
   // Overextension the civilization's Bureaucracy does not cover, if any (design doc §10).
@@ -278,7 +282,7 @@ interface PlanPanelProps {
 
 // The selected area's details, and in allocation its actions (moves, founding, upgrading,
 // manpower) and the turn's planned settlements, each with what will happen if the turn resolved now.
-function PlanPanel({ source, details, planning, state, conversion, work, stability, previews, conflicts, unrest, idle, areaName, onConvert, onWork, onSelect }: PlanPanelProps) {
+function PlanPanel({ source, details, planning, state, conversion, work, instability, previews, conflicts, unrest, idle, areaName, onConvert, onWork, onSelect }: PlanPanelProps) {
   const others = planning ? previews.filter((p) => p.area !== source) : [];
   const idleElsewhere = planning ? idle.filter((i) => i.area !== source) : [];
   return (
@@ -290,7 +294,7 @@ function PlanPanel({ source, details, planning, state, conversion, work, stabili
           {details.stacks.length > 0 && <span>{details.stacks.map((s) => `${s.mine ? 'Your tokens' : s.name}: ${s.count}`).join(' · ')}</span>}
         </div>
       )}
-      {stability && <StabilityRow option={stability} />}
+      {instability && <InstabilityRow option={instability} />}
       {source !== null && planning && (
         <>
           {work && <WorkRow area={source} work={work} onWork={onWork} />}
@@ -355,7 +359,7 @@ function WorkRow({ area, work, onWork }: { area: AreaId; work: WorkOption; onWor
         Manpower: {work.total - work.free} of {work.total} working
       </strong>
       {work.rows.map((r) => (
-        <span key={r.resource} className="game-plan-work-row" title={r.resource === BUREAUCRACY ? 'Each unit lowers this settlement’s instability by 1 a turn, then the civ-wide meter' : r.resource === HIGH_LEARNING ? 'Each unit adds 1 discovery progress a turn to the focused domain’s advances (half toward Developed); see Knowledge' : r.usable ? '1 per manpower, gathered at the start of next turn' : 'Your civilization cannot gather this yet'}>
+        <span key={r.resource} className="game-plan-work-row" title={r.resource === BUREAUCRACY ? 'Each unit lowers this settlement’s instability by 1 a turn, then the civ-wide meter' : r.resource === HIGH_LEARNING ? 'Each unit adds 1 learning a turn, sent down the study queue; it speeds advances up (see Knowledge)' : r.usable ? '1 per manpower, gathered at the start of next turn' : 'Your civilization cannot gather this yet'}>
           <span>{r.resource === HIGH_LEARNING ? 'High Learning' : capitalize(r.resource)}</span>
           <button type="button" aria-label={`Less ${r.resource}`} disabled={r.count === 0} onClick={() => onWork(area, r.resource, r.count - 1)}>
             −
@@ -421,6 +425,10 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   const [report, setReport] = useState<string[]>(message ? [message] : []);
   const [lastEvents, setLastEvents] = useState<GameEvent[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  // The player's settlements founded in the last resolution, waiting for a name.
+  const [toName, setToName] = useState<AreaId[]>([]);
+  // The settlement to highlight in the Civilization screen, when opened from the map.
+  const [listed, setListed] = useState<AreaId | null>(null);
 
   // Open on the player's starting area.
   useEffect(() => {
@@ -451,7 +459,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
         area: s.area,
         civ: civ.get(s.player)!,
         tier: pieceTier(s.tier),
-        ...(s.name ? { name: s.name } : {}),
+        ...(settlementName(state, s) ? { name: settlementName(state, s)! } : {}),
         work: s.work ?? [],
         instability: localInstability(s),
         threshold: threshold(state, map, s),
@@ -461,7 +469,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
       roads: [],
     };
   }, [state]);
-  const names = useMemo(() => new Map(state.settlements.flatMap((s) => (s.name ? [[s.area, s.name] as const] : []))), [state]);
+  const names = useMemo(() => new Map(state.settlements.flatMap((s) => (settlementName(state, s) ? [[s.area, settlementName(state, s)!] as const] : []))), [state]);
   const shownResources = useMemo(
     () => new Set(session.content.resources.filter((r) => revealed(state, session.content, state.players[HUMAN]!.id, r.id)).map((r) => r.id)),
     [state, session],
@@ -511,8 +519,12 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
         if (result.ok) events.push(...result.events.map((e) => e.event));
       }
     } while (session.state.phase === 'trade');
-    setReport(turnReport(events, me, describeConflict, (area) => areaName(area), (id) => session.content.advances.find((a) => a.id === id)?.name ?? id));
+    // An advance with no adoption is Mastered when Developed; only Developed is reported.
+    const reported = events.filter((e) => !(e.type === 'advanceReached' && e.stage === 'mastered' && !session.content.advances.find((a) => a.id === e.advance)?.adoption));
+    setReport(turnReport(reported, me, describeConflict, (area) => areaName(area), (id) => session.content.advances.find((a) => a.id === id)?.name ?? id));
     setLastEvents(events);
+    const founded = events.filter((e) => e.type === 'settlementBuilt' && e.player === me && e.tier === 'village').map((e) => (e as Extract<GameEvent, { type: 'settlementBuilt' }>).area);
+    setToName((queue) => [...queue, ...founded.filter((area) => settlementAt(session.state, area)?.player === me && !settlementAt(session.state, area)!.name)]);
     if (session.state.turn > turn) {
       const failed = writeSave(session, `${gameName(session)} - autosave`, AUTOSAVE_ID);
       if (failed) setNotice(failed);
@@ -582,7 +594,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     rows.push({ resource: BUREAUCRACY, count: count(BUREAUCRACY), usable: true }, { resource: HIGH_LEARNING, count: count(HIGH_LEARNING), usable: true });
     return { total: manpower(here), free: manpower(here) - assigned(here), rows };
   };
-  const stabilityOption = (area: AreaId): StabilityOption | null => {
+  const instabilityOption = (area: AreaId): InstabilityOption | null => {
     const here = settlementAt(state, area);
     if (!here || here.player !== me) return null;
     const changes = lastEvents.flatMap((e) => {
@@ -636,6 +648,14 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     setSelected(area === selected || map.areas[area]!.kind !== 'land' ? null : area);
   };
 
+  // Double-clicking one of the player's settlements opens its row in the Civilization screen.
+  const onAreaDoubleClick = (area: AreaId) => {
+    if (settlementAt(state, area)?.player !== me) return;
+    setSelected(null);
+    setListed(area);
+    setScreen('civilization');
+  };
+
   const onMoveDrop = (from: AreaId, to: AreaId, all: boolean) => {
     if (left(from) === 0) return;
     order(from, to, planned(from, to) + (all ? left(from) : 1));
@@ -662,7 +682,16 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
 
         <nav className="game-tabs" aria-label="Screens">
           {SCREENS.map((s) => (
-            <button key={s.id} type="button" className={s.id === screen ? 'selected' : ''} aria-pressed={s.id === screen} onClick={() => setScreen(s.id)}>
+            <button
+              key={s.id}
+              type="button"
+              className={s.id === screen ? 'selected' : ''}
+              aria-pressed={s.id === screen}
+              onClick={() => {
+                setListed(null);
+                setScreen(s.id);
+              }}
+            >
               {s.label}
             </button>
           ))}
@@ -698,6 +727,8 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
           hovered={hovered}
           onHover={setHovered}
           onAreaClick={onAreaClick}
+          onAreaDoubleClick={onAreaDoubleClick}
+          keyboardPan={screen === 'map' && !menuOpen}
           moves={myOrders}
           onMoveClick={onMoveClick}
           moveTargets={moveTargets}
@@ -722,7 +753,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                 state={{ tokens: source === null ? 0 : tokensAt(state, source, me), left: source === null ? 0 : left(source) }}
                 conversion={source === null ? null : conversionOption(source)}
                 work={source === null ? null : workOption(source)}
-                stability={source === null ? null : stabilityOption(source)}
+                instability={source === null ? null : instabilityOption(source)}
                 previews={previews}
                 conflicts={conflicts.map((e) => ({ area: e.area, text: describeConflict(e)! }))}
                 unrest={unrest}
@@ -733,6 +764,17 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                 onSelect={(area) => {
                   setSelected(area);
                   mapHandle.current?.focus(area);
+                }}
+              />
+            )}
+            {toName.length > 0 && (
+              <NameDialog
+                key={toName[0]}
+                capital={capitalOf(state, me) === toName[0]}
+                taken={state.settlements.flatMap((s) => (s.name ? [s.name] : []))}
+                onDone={(name) => {
+                  if (name) rename(toName[0]!, name);
+                  setToName((queue) => queue.slice(1));
                 }}
               />
             )}
@@ -758,7 +800,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   </>
                 )
               ) : (
-                <span className="game-hint">{planning ? 'Drag your tokens to move them (Shift-drag for all) · click an area for details and actions' : 'Drag to pan · scroll to zoom · click an area for details'}</span>
+                <span className="game-hint">{planning ? 'Drag your tokens to move them (Shift-drag for all) · click an area for details and actions · double-click a settlement to see it in your list · arrow keys scroll' : 'Drag or use the arrow keys to pan · scroll to zoom · click an area for details'}</span>
               )}
             </div>
             <div className="game-turn-panel">
@@ -794,8 +836,12 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   cap={STARTING_TOKEN_CAP}
                   names={names}
                   support={supportSummary(state, map, session.content, me)}
-                  stability={{ civ: civInstability(state, me), overextension: overextension(state, me), free: OVEREXTENSION_FREE, capital: capitalOf(state, me) }}
+                  instability={{ civ: civInstability(state, me), overextension: overextension(state, me), free: OVEREXTENSION_FREE, capital: capitalOf(state, me) }}
                   planned={myOrders.length > 0 || state.conversions.some((c) => c.player === me)}
+                  work={workOption}
+                  canAssign={planning && !state.players[HUMAN]!.endedPhase}
+                  onWork={assignWork}
+                  focus={listed}
                   onRename={rename}
                   onShow={showOnMap}
                 />
@@ -813,11 +859,11 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                 <KnowledgeSheet
                   views={discoveryView(state, map, session.content, me)}
                   content={session.content}
-                  focus={state.players[HUMAN]!.focus}
-                  highLearning={highLearning(state, me)}
-                  canFocus={planning}
-                  onFocus={(domain) => {
-                    const result = submit(session, { type: 'setFocus', player: me, domain });
+                  queue={state.players[HUMAN]!.study}
+                  plan={learningPlan(state, map, session.content, me)}
+                  canStudy={planning && !state.players[HUMAN]!.endedPhase}
+                  onStudy={(queue) => {
+                    const result = submit(session, { type: 'setStudy', player: me, queue });
                     if (!result.ok) setNotice(result.reason);
                     setVersion((v) => v + 1);
                   }}
@@ -835,6 +881,46 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
 
 function gameName(session: Session): string {
   return session.setup.name ?? 'Untitled game';
+}
+
+// Asks the player to name a settlement they just founded, offering a famous city not yet in use.
+function NameDialog({ capital, taken, onDone }: { capital: boolean; taken: string[]; onDone: (name: string) => void }) {
+  const offer = () => {
+    const free = CITY_NAMES.filter((n) => !taken.includes(n));
+    const pool = free.length > 0 ? free : CITY_NAMES;
+    return pool[Math.floor(Math.random() * pool.length)]!;
+  };
+  const [name, setName] = useState(offer);
+  return (
+    <form
+      className="game-name-dialog"
+      role="dialog"
+      aria-label="Name your settlement"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onDone(name.trim());
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onDone('');
+      }}
+    >
+      <h2>{capital ? 'Name your capital' : 'Name your new village'}</h2>
+      <div className="game-name-row">
+        <input value={name} maxLength={NAME_MAX_LENGTH} onChange={(e) => setName(e.target.value)} onFocus={(e) => e.target.select()} autoFocus />
+        <button type="button" onClick={() => setName(offer())} title="Offer another famous city">
+          Another
+        </button>
+      </div>
+      <div className="game-name-actions">
+        <button type="submit" disabled={!name.trim()}>
+          Found
+        </button>
+        <button type="button" onClick={() => onDone('')} title={capital ? 'It will be called "Capital"' : 'You can name it later from the Civilization screen'}>
+          Skip
+        </button>
+      </div>
+    </form>
+  );
 }
 
 // In-game menu: save to a browser slot, export to a file, or return to the title screen.

@@ -285,7 +285,7 @@ describe('support summary', () => {
     const away = landNeighbors(map, b).find((n) => n !== area && !map.areas[area]!.neighbors.includes(n))!;
     play(game, { type: 'orderMove', player: 'p1', from: b, to: away, count: 2 });
     const summary = supportSummary(game.state, map, game.content, 'p1');
-    expect(summary.settlements).toEqual([{ area, tier: 'village', support: 0, food: 0, needed: 2 }]);
+    expect(summary.settlements).toEqual([{ area, tier: 'village', support: 0, food: 0, ateOwn: false, needed: 2 }]);
   });
 
   it('counts village sites with 8 free tokens in reach', () => {

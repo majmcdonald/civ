@@ -185,6 +185,28 @@ describe('goods', () => {
 });
 
 describe('food as support', () => {
+  it('adds 1 urban growth to a settlement that gathers food and eats its own', () => {
+    const { game, grain, b } = scene();
+    settle(game, grain, 'village', [{ resource: 'grain', count: 1 }]);
+    place(game, b, 'p1', 1);
+    game.state.goods = [{ area: grain, player: 'p1', resource: 'grain', count: 1 }];
+    toAllocation(game);
+    const turn = game.state.turn;
+    const grown = eventsOfType(endPhaseAll(game), 'urbanGrowth');
+    expect(settlementAt(game.state, grain)!.ateOwn).toBe(turn);
+    expect(grown).toEqual([expect.objectContaining({ player: 'p1', from: grain, count: 1 })]);
+  });
+
+  it('adds no urban growth when tokens cover the support and the food goes uneaten', () => {
+    const { game, grain, b } = scene();
+    settle(game, grain, 'village', [{ resource: 'grain', count: 1 }]);
+    place(game, b, 'p1', 2);
+    game.state.goods = [{ area: grain, player: 'p1', resource: 'grain', count: 1 }];
+    toAllocation(game);
+    expect(eventsOfType(endPhaseAll(game), 'urbanGrowth')).toEqual([]);
+    expect(settlementAt(game.state, grain)!.ateOwn).toBeUndefined();
+  });
+
   it('covers missing support tokens, 1 food per token', () => {
     const { game, grain, b } = scene();
     settle(game, grain, 'village');

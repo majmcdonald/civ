@@ -1,4 +1,4 @@
-import type { DomainId, Effect, EraId } from '../content/types';
+import type { Effect, EraId } from '../content/types';
 import type { Content } from './content';
 import type { InstabilitySource } from './instability';
 import type { AreaId, GameMap, MapType, ResourceId, RoomToExpand } from './map/types';
@@ -39,8 +39,8 @@ export interface GameSetup {
   advancedStart?: boolean;
 }
 
-// One civilization's standing on one advance (design doc §8). `progress` builds toward the next
-// stage; `adoption` (0–100) applies once Developed, and 100 is Mastered.
+// One civilization's standing on one advance (design doc §8). `progress` is usage and learning
+// toward Known or Developed. `adoption` (0–100) applies once Developed, and 100 is Mastered.
 export interface AdvanceProgress {
   advance: string;
   stage: 'none' | 'known' | 'developed';
@@ -80,8 +80,10 @@ export interface PlayerState {
   effects: Effect[];
   // Advances with any progress or stage, in content order (design doc §8).
   advances: AdvanceProgress[];
-  // The domain High Learning goes to; null splits it across every advance in progress.
-  focus: DomainId | null;
+  // Advances learning goes to, in order (design doc §8, study queue).
+  study: string[];
+  // Conflicts it took part in during `turn`'s resolution (design doc §8, Archery); absent means none.
+  fought?: { turn: number; count: number };
 }
 
 // Manpower on one resource of the settlement's area, or on Bureaucracy ('bureaucracy') (design doc
@@ -113,6 +115,9 @@ export interface Settlement {
   stored?: number;
   // The last turn it was attacked (design doc §8, Palisades).
   attacked?: number;
+  // The last turn it gathered food and ate some of its own for support: +1 urban growth (design
+  // doc §5, Urban growth).
+  ateOwn?: number;
 }
 
 // A founding (no settlement in the area) or an upgrade to the next tier, ordered in allocation.
@@ -154,8 +159,8 @@ export type Command =
   | { type: 'nameSettlement'; player: PlayerId; area: AreaId; name: string }
   // Sets how much of a settlement's manpower works one of its area's resources; 0 unassigns it.
   | { type: 'assignWork'; player: PlayerId; area: AreaId; resource: ResourceId; count: number }
-  // Points High Learning at a discovery domain; null removes the focus.
-  | { type: 'setFocus'; player: PlayerId; domain: DomainId | null };
+  // Orders the study queue; an empty queue splits learning evenly.
+  | { type: 'setStudy'; player: PlayerId; queue: string[] };
 
 // Tokens taken from one area by a conversion.
 export interface TokenSource {
@@ -189,6 +194,8 @@ export type GameEvent =
   | { type: 'settlementCollapsed'; player: PlayerId; area: AreaId; tier: SettlementTier }
   | { type: 'capitalMoved'; player: PlayerId; area: AreaId | null }
   | { type: 'advanceReached'; player: PlayerId; advance: string; stage: 'known' | 'developed' | 'mastered' }
+  // Learning the study queue could not use, split evenly among advances waiting for it.
+  | { type: 'studyQueueEmpty'; player: PlayerId; learning: number }
   | { type: 'urbanGrowth'; player: PlayerId; from: AreaId; to: AreaId; count: number }
   | { type: 'conflict'; area: AreaId; losses: TokenCount[] }
   | {

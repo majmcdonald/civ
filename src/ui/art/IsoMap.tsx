@@ -221,6 +221,9 @@ interface IsoMapProps {
   // from an area that `moveTargets` gives targets for plans a move (Shift for all tokens) instead
   // of panning; the targets are highlighted while dragging.
   onAreaClick?: (area: AreaId, button: ClickButton) => void;
+  onAreaDoubleClick?: (area: AreaId) => void;
+  // The arrow keys pan the map while this is on.
+  keyboardPan?: boolean;
   moves?: PlannedMove[];
   onMoveClick?: (from: AreaId, to: AreaId, button: ClickButton, shift: boolean) => void;
   moveTargets?: (area: AreaId) => AreaId[];
@@ -337,7 +340,7 @@ export interface View {
   zoom: number;
 }
 
-export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hovered, onHover, hideTerrainArt = false, handle, showStarts = true, onAreaClick, moves = [], onMoveClick, moveTargets, onMoveDrop, moveVia, revealedResources, selection = null, plans = [] }: IsoMapProps) {
+export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hovered, onHover, hideTerrainArt = false, handle, showStarts = true, onAreaClick, onAreaDoubleClick, keyboardPan = false, moves = [], onMoveClick, moveTargets, onMoveDrop, moveVia, revealedResources, selection = null, plans = [] }: IsoMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const onHoverRef = useRef(onHover);
   onHoverRef.current = onHover;
@@ -390,6 +393,22 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hov
   const vbW = size.width * unitsPerPixel;
   const vbH = size.height * unitsPerPixel;
   const viewBox = `${view.cx - vbW / 2 - (inset / 2) * unitsPerPixel} ${view.cy - vbH / 2} ${vbW} ${vbH}`;
+
+  // Arrow keys pan by a fixed share of the view, unless a text field has focus.
+  useEffect(() => {
+    if (!keyboardPan) return;
+    const steps: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    const onKey = (event: KeyboardEvent) => {
+      const step = steps[event.key];
+      if (!step || event.altKey || event.ctrlKey || event.metaKey) return;
+      if ((event.target as Element).closest('input, textarea, select, [contenteditable]')) return;
+      event.preventDefault();
+      const pixels = event.shiftKey ? 320 : 120;
+      setView((v) => ({ ...v, cx: v.cx + step[0] * pixels * (fit / v.zoom), cy: v.cy + step[1] * pixels * (fit / v.zoom) }));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [keyboardPan, fit]);
 
   useEffect(() => {
     const svg = svgRef.current;
@@ -566,16 +585,16 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hov
         });
       }
     }
-    // Names (and the capital's star) go on top of everything, just below their settlement.
+    // Names (a capital's with its star) go on top of everything, just below their settlement.
     for (const s of pieces.settlements) {
-      if (!s.name && !s.capital) continue;
+      if (!s.name) continue;
       const [cx, cy] = project(map.areas[s.area]!.center);
       items.push({
         y: Infinity,
         key: `n${s.area}`,
         node: (
           <g key={`n${s.area}`} transform={`translate(${cx} ${cy + (s.tier === 'town' ? 4.5 : 3)}) scale(0.6)`}>
-            <SettlementLabel {...(s.name ? { name: s.name } : {})} capital={Boolean(s.capital)} />
+            <SettlementLabel name={s.name} capital={Boolean(s.capital)} />
           </g>
         ),
       });
@@ -673,6 +692,9 @@ export function IsoMap({ map, insetLeft = 0, pieces, showCounts, viewer = 0, hov
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onDoubleClick={() => {
+        if (pointerArea.current !== null) onAreaDoubleClick?.(pointerArea.current);
+      }}
       onPointerCancel={onPointerCancel}
       onPointerLeave={() => {
         pointerArea.current = null;

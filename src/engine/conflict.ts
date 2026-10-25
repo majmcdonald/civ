@@ -50,6 +50,14 @@ function fight(sides: Side[], done: () => boolean): void {
 
 const aliveCount = (sides: Side[]) => sides.filter((s) => s.count > 0).length;
 
+// Counts one conflict this turn for each civilization taking part (Archery adoption, design doc §8).
+function noteFight(state: GameState, players: PlayerId[]): void {
+  for (const id of new Set(players)) {
+    const p = state.players.find((x) => x.id === id)!;
+    p.fought = { turn: state.turn, count: p.fought?.turn === state.turn ? p.fought.count + 1 : 1 };
+  }
+}
+
 // Resolution step 2, in area order, from positions after movement.
 export function resolveConflict(ctx: Context): void {
   const areas = [...new Set(ctx.state.stacks.map((s) => s.area))].sort((a, b) => a - b);
@@ -68,6 +76,7 @@ function fightOverLimit(ctx: Context, area: AreaId): void {
   const limit = map.areas[area]!.limit;
   const total = () => sides.reduce((sum, s) => sum + s.count, 0);
   if (sides.length < 2 || total() <= limit) return;
+  noteFight(state, sides.map((s) => s.player));
   const before = sides.map((s) => s.count);
   fight(sides, () => total() <= limit || aliveCount(sides) <= 1);
   const losses = sides.map((s, i) => ({ player: s.player, count: before[i]! - s.count }));
@@ -89,6 +98,7 @@ function attackSettlement(ctx: Context, settlement: Settlement): void {
   const attackers: TokenCount[] = state.stacks.filter((s) => s.area === area && s.player !== settlement.player).map((s) => ({ player: s.player, count: s.count }));
   if (attackers.length === 0) return;
   settlement.attacked = state.turn;
+  noteFight(state, [settlement.player, ...attackers.map((a) => a.player)]);
   const losses: TokenCount[] = [];
   const attackStrength = (player: PlayerId) => strength(state, player, settlement.player);
   const repelled = attackers.filter((a) => a.count * attackStrength(a.player) < rules.attack + bonus);

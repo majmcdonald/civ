@@ -1,6 +1,6 @@
 import type { Content } from './content';
 import { clone, emit } from './context';
-import { grantStartingKnowledge, setFocus, validateFocus } from './discovery';
+import { grantStartingKnowledge, setStudy, validateStudy } from './discovery';
 import { runResolution, runResourcesPhase } from './phases';
 import { BASE_MOVEMENT, setMoveOrder, STARTING_TOKEN_CAP, validateMoveOrder } from './population';
 import { setWork, validateWork } from './resources';
@@ -18,7 +18,7 @@ import {
   type Phase,
 } from './types';
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 11;
 
 interface CommandHandler<C extends Command> {
   validate(ctx: Pick<Context, 'state' | 'map' | 'content'>, command: C): string | null;
@@ -79,12 +79,12 @@ const handlers: CommandHandlers = {
       setWork(ctx, command);
     },
   },
-  setFocus: {
+  setStudy: {
     validate(ctx, command) {
-      return validateFocus(ctx, command);
+      return validateStudy(ctx, command);
     },
     execute(ctx, command) {
-      setFocus(ctx, command);
+      setStudy(ctx, command);
     },
   },
 };
@@ -111,7 +111,7 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
     rng: createRng(setup.seed),
     turn: 1,
     phase: 'resources',
-    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, capital: null, tiers: [...(setup.unlockedTiers ?? [])], effects: [], advances: [], focus: null })),
+    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, capital: null, tiers: [...(setup.unlockedTiers ?? [])], effects: [], advances: [], study: [] })),
     // Each civilization starts with one token in its starting area (design doc §4).
     stacks: setup.players
       .map((p, i) => ({ area: map.starts[i]!, player: p.id, count: 1 }))

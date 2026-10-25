@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GROWTH_PER_TOKEN, type AreaId, type GameMap, type SupportSummary } from '../../engine';
 import type { MapPieces, SettlementTier } from '../art/pieces';
 
@@ -26,6 +26,49 @@ interface SettlementRow {
   instability: number;
   threshold: number;
   capital: boolean;
+}
+
+export interface WorkOption {
+  total: number;
+  free: number;
+  rows: { resource: string; count: number; usable: boolean }[];
+}
+
+const JOB_NAMES: Record<string, string> = { bureaucracy: 'Bureaucracy', highLearning: 'High Learning' };
+
+function jobTitle(resource: string, usable: boolean): string {
+  if (resource === 'bureaucracy') return 'Each unit lowers this settlement’s instability by 1 a turn, then the civ-wide meter';
+  if (resource === 'highLearning') return 'Each unit adds 1 learning a turn, sent down the study queue; it speeds advances up (see Knowledge)';
+  return usable ? '1 per manpower, gathered at the start of next turn' : 'Your civilization cannot gather this yet';
+}
+
+// A settlement's jobs as chips; dark ones have manpower on them. In allocation each has − and +.
+function WorkChips({ area, option, canAssign, onWork }: { area: AreaId; option: WorkOption; canAssign: boolean; onWork: (area: AreaId, resource: string, count: number) => void }) {
+  const rows = canAssign ? option.rows : option.rows.filter((r) => r.count > 0 || (r.resource !== 'bureaucracy' && r.resource !== 'highLearning'));
+  return (
+    <span className="civ-resources">
+      {rows.length === 0 && '—'}
+      {rows.map((r) => {
+        const name = JOB_NAMES[r.resource] ?? r.resource;
+        return (
+          <span key={r.resource} className={`civ-resource ${r.count > 0 ? 'worked' : ''} ${r.usable ? '' : 'closed'}`} title={jobTitle(r.resource, r.usable)}>
+            {canAssign && (
+              <button type="button" aria-label={`Less ${name}`} disabled={r.count === 0} onClick={() => onWork(area, r.resource, r.count - 1)}>
+                −
+              </button>
+            )}
+            {name}
+            {(canAssign || r.count > 0) && <b>{r.count}</b>}
+            {canAssign && (
+              <button type="button" aria-label={`More ${name}`} disabled={!r.usable || option.free === 0} onClick={() => onWork(area, r.resource, r.count + 1)}>
+                +
+              </button>
+            )}
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
 function capitalize(s: string): string {
@@ -58,11 +101,12 @@ function summarize(map: GameMap, pieces: MapPieces, civ: number, cap: number) {
 
   const settled = rows.reduce((sum, r) => sum + TIER[r.tier].value, 0);
   const manpower = rows.reduce((sum, r) => sum + TIER[r.tier].manpower, 0);
-  const unitsOn = (r: SettlementRow, bureaucracy: boolean) => r.work.reduce((n, w) => ((w.resource === 'bureaucracy') === bureaucracy ? n + w.count : n), 0);
-  const working = rows.reduce((sum, r) => sum + unitsOn(r, false), 0);
-  const bureaucracy = rows.reduce((sum, r) => sum + unitsOn(r, true), 0);
+  const unitsOn = (job: (resource: string) => boolean) => rows.reduce((sum, r) => sum + r.work.reduce((n, w) => (job(w.resource) ? n + w.count : n), 0), 0);
+  const bureaucracy = unitsOn((r) => r === 'bureaucracy');
+  const learning = unitsOn((r) => r === 'highLearning');
+  const working = unitsOn((r) => r !== 'bureaucracy' && r !== 'highLearning');
   const urban = rows.reduce((sum, r) => sum + TIER[r.tier].growth, 0);
-  return { loose, growth, rows, settled, manpower, working, bureaucracy, urban };
+  return { loose, growth, rows, settled, manpower, working, bureaucracy, learning, urban };
 }
 
 function Meter({ value, max, tone = 'ink' }: { value: number; max: number; tone?: 'ink' | 'warn' }) {
@@ -131,22 +175,33 @@ interface CivilizationSheetProps {
   // Whether moves or settlements are planned this turn, so the numbers include them.
   planned: boolean;
   // The civ-wide instability meter and overextension (engine, design doc §10).
-  stability: { civ: number; overextension: number; free: number; capital: AreaId | null };
+  instability: { civ: number; overextension: number; free: number; capital: AreaId | null };
+  // A settlement's manpower jobs (design doc §6): its revealed goods, Bureaucracy, and High Learning.
+  work: (area: AreaId) => WorkOption | null;
+  // Manpower is assigned in the allocation phase.
+  canAssign: boolean;
+  onWork: (area: AreaId, resource: string, count: number) => void;
+  // A settlement to highlight and scroll to, e.g. one double-clicked on the map.
+  focus?: AreaId | null;
   onRename: (area: AreaId, name: string) => void;
   onShow: (area: AreaId) => void;
 }
 
-export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, cap, names, support, planned, stability, onRename, onShow }: CivilizationSheetProps) {
-  const { loose, growth, rows, settled, manpower, working, bureaucracy, urban } = summarize(map, pieces, civ, cap);
-  const gap = (r: SettlementRow) => r.threshold - r.instability - stability.civ;
+export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, cap, names, support, planned, instability, work, canAssign, onWork, focus = null, onRename, onShow }: CivilizationSheetProps) {
+  const focused = useRef<HTMLTableRowElement>(null);
+  useEffect(() => focused.current?.scrollIntoView({ block: 'center' }), [focus]);
+  const { loose, growth, rows, settled, manpower, working, bureaucracy, learning, urban } = summarize(map, pieces, civ, cap);
+  const gap = (r: SettlementRow) => r.threshold - r.instability - instability.civ;
   // The capital's free Bureaucracy unit counts with the assigned ones.
-  const calming = bureaucracy + (stability.capital === null ? 0 : 1);
+  const calming = bureaucracy + (instability.capital === null ? 0 : 1);
   const atRisk = rows.filter((r) => gap(r) <= 2);
   const closest = [...rows].sort((a, b) => gap(a) - gap(b))[0];
   const counts = (tier: TierId) => rows.filter((r) => r.tier === tier).length;
   const supportOf = (area: AreaId) => support.settlements.find((s) => s.area === area)?.support ?? 0;
   const foodOf = (area: AreaId) => support.settlements.find((s) => s.area === area)?.food ?? 0;
   const fed = support.settlements.reduce((sum, s) => sum + s.food, 0);
+  const ateOwn = (area: AreaId) => support.settlements.some((s) => s.area === area && s.ateOwn);
+  const urbanNext = urban + support.settlements.filter((s) => s.ateOwn).length;
   const short = support.settlements.filter((s) => s.support < s.needed);
   const label = (area: AreaId) => {
     const s = support.settlements.find((x) => x.area === area)!;
@@ -174,8 +229,8 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
           <dl className="civ-facts">
             <dt title="Area growth: 0.5 per token, carried over until it makes a whole token, within area limits and the cap (§4)">Growth next turn</dt>
             <dd>+{growth}</dd>
-            <dt title="Urban growth from towns and larger (§5)">Urban growth</dt>
-            <dd>+{urban}</dd>
+            <dt title="Urban growth next turn: towns and larger by tier, plus 1 for each settlement that eats its own gathered food (§5)">Urban growth</dt>
+            <dd>+{urbanNext}</dd>
             <dt title="Token value of all settlements; outside the cap (§5)">In settlements</dt>
             <dd>{settled}</dd>
           </dl>
@@ -235,7 +290,7 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
           <div className="civ-big" title="Village 1, town 2, plus advance bonuses (§6)">{manpower}</div>
           <ul className="civ-assign">
             {[...ASSIGNMENTS, 'Unassigned'].map((a, i) => {
-              const units = i === 0 ? working : a === 'Bureaucracy' ? bureaucracy : a === 'Unassigned' ? manpower - working - bureaucracy : 0;
+              const units = i === 0 ? working : a === 'Bureaucracy' ? bureaucracy : a === 'High Learning' ? learning : a === 'Unassigned' ? manpower - working - bureaucracy - learning : 0;
               return (
                 <li key={a}>
                   <span>{a}</span>
@@ -248,25 +303,25 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
         </section>
 
         <section className="civ-card">
-          <h2>Stability</h2>
-          <div className="civ-big" title="Adds to every settlement's local meter; it falls only through Bureaucracy (§10)">
-            {stability.civ}
+          <h2>Instability</h2>
+          <div className="civ-big" title="Adds to every settlement's local meter; it falls through Bureaucracy, calm (Ritual), and luxury goods (§10)">
+            {instability.civ}
             <span> civ-wide</span>
           </div>
-          {closest && <Meter value={closest.instability + stability.civ} max={closest.threshold} tone={atRisk.length > 0 ? 'warn' : 'ink'} />}
+          {closest && <Meter value={closest.instability + instability.civ} max={closest.threshold} tone={atRisk.length > 0 ? 'warn' : 'ink'} />}
           <dl className="civ-facts">
-            <dt title={`+1 civ-wide each turn for every settlement beyond ${stability.free}`}>Overextension</dt>
-            <dd>{stability.overextension > 0 ? `+${stability.overextension} a turn` : `none (${rows.length} of ${stability.free})`}</dd>
+            <dt title={`+1 civ-wide each turn for every settlement beyond ${instability.free}`}>Overextension</dt>
+            <dd>{instability.overextension > 0 ? `+${instability.overextension} a turn` : `none (${rows.length} of ${instability.free})`}</dd>
             <dt title="Manpower in Bureaucracy, plus the capital's free unit: each lowers its settlement's meter by 1 a turn, then the civ-wide meter">Bureaucracy</dt>
             <dd>{calming > 0 ? `−${calming} a turn` : 'none'}</dd>
             <dt title="Settlements far from the capital collapse sooner: −1 threshold for every 2 areas beyond 2">Capital</dt>
-            <dd>{stability.capital === null ? 'none' : (names.get(stability.capital) ?? 'Unnamed')}</dd>
+            <dd>{instability.capital === null ? 'none' : (names.get(instability.capital) ?? 'Unnamed')}</dd>
           </dl>
           {atRisk.length > 0 ? (
             <ul className="civ-warnings">
               {atRisk.map((r) => (
                 <li key={r.area}>
-                  {names.get(r.area) ?? 'Unnamed'} – {TIER[r.tier].name}: {r.instability + stability.civ} of {r.threshold} — close to collapse
+                  {names.get(r.area) ?? 'Unnamed'} – {TIER[r.tier].name}: {r.instability + instability.civ} of {r.threshold} — close to collapse
                 </li>
               ))}
             </ul>
@@ -282,9 +337,9 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
           <thead>
             <tr>
               <th>Settlement</th>
-              <th title="Resources in the settlement's area; dark ones are being worked, with the manpower on each (§6). Assign manpower by selecting the settlement on the map">Resources</th>
+              <th title="Jobs for the settlement's manpower: the goods in its area, Bureaucracy, and High Learning; dark ones have manpower on them (§6). Assigned in the Allocation phase; changes take effect next turn">Work</th>
               <th title="Loose tokens in adjacent unsettled areas, plus food standing in for missing tokens, at the end of this turn, against the tier's need (§5, §6)">Support</th>
-              <th title="Units of labor each turn (§6)">Manpower</th>
+              <th title="Manpower assigned to jobs, of the settlement's total; idle manpower produces nothing (§6)">Manpower</th>
               <th title="Tokens added to adjacent areas each turn (§5)">Urban growth</th>
               <th title="Local instability meter plus the civ-wide meter, against the threshold at which it collapses (§10)">Instability</th>
             </tr>
@@ -300,9 +355,9 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
             {rows.map((r) => {
               const t = TIER[r.tier];
               const ok = supportOf(r.area) >= t.support;
-              const workedOn = (res: string) => r.work.find((w) => w.resource === res)?.count ?? 0;
+              const option = work(r.area);
               return (
-                <tr key={r.area}>
+                <tr key={r.area} ref={r.area === focus ? focused : undefined} className={r.area === focus ? 'civ-focused' : undefined}>
                   <td>
                     <span className="civ-place">
                       <button type="button" className="civ-show" title="Show on the map" onClick={() => onShow(r.area)}>
@@ -317,25 +372,17 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
                       </span>
                     </span>
                   </td>
-                  <td>
-                    <span className="civ-resources">
-                      {r.resources.length === 0 && '—'}
-                      {r.resources.map((res) => (
-                        <span key={res} className={`civ-resource ${workedOn(res) > 0 ? 'worked' : ''}`}>
-                          {res}
-                          {workedOn(res) > 0 && <b>{workedOn(res)}</b>}
-                        </span>
-                      ))}
-                    </span>
-                  </td>
+                  <td>{option && <WorkChips area={r.area} option={option} canAssign={canAssign} onWork={onWork} />}</td>
                   <td className={ok ? '' : 'warn'} title={ok ? undefined : 'Drops a tier if not supported at resolution'}>
                     {supportOf(r.area)} / {t.support}
                     {foodOf(r.area) > 0 && <small title="Covered by food"> ({foodOf(r.area)} food)</small>}
                   </td>
-                  <td>{t.manpower}</td>
-                  <td>{t.growth > 0 ? `+${t.growth}` : '—'}</td>
-                  <td className={gap(r) <= 2 ? 'warn' : ''} title={`Local ${r.instability} + civ-wide ${stability.civ}; collapses at ${r.threshold}, lower far from the capital`}>
-                    {r.instability + stability.civ} / {r.threshold}
+                  <td className={option && option.free > 0 ? 'warn' : ''} title={option && option.free > 0 ? `${option.free} idle` : undefined}>
+                    {option ? `${option.total - option.free} of ${option.total}` : t.manpower}
+                  </td>
+                  <td title={ateOwn(r.area) ? `${t.growth} by tier, +1 for eating its own food` : undefined}>{t.growth + (ateOwn(r.area) ? 1 : 0) > 0 ? `+${t.growth + (ateOwn(r.area) ? 1 : 0)}` : '—'}</td>
+                  <td className={gap(r) <= 2 ? 'warn' : ''} title={`Local ${r.instability} + civ-wide ${instability.civ}; collapses at ${r.threshold}, lower far from the capital`}>
+                    {r.instability + instability.civ} / {r.threshold}
                   </td>
                 </tr>
               );
