@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.18  
+**Version:** 0.19  
 **Date:** October 24, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -48,7 +48,7 @@ Where a system has a clear equivalent in the original game, the default is to **
 | Advanced start | Off (default) or on. On: each civilization draws **2 advances** of its own from the first ring (advances that build only on the starting baseline, §8), granted Developed and Mastered like the baseline. Draws come from the game seed, so civilizations differ from turn 1 and a game still replays exactly |
 | AST track length | Same for everyone / derived from starting conditions / authored per civilization (historical maps only) |
 | Final era | Any era; e.g., end of the Iron Age for a single evening, end of the Modern era for a full campaign |
-| Room to expand | Land per civilization: **crowded** (half of standard, 32 land areas), **standard** (default, 64), **spacious** (2×, 128). Standard targets about 30–40 turns of expansion before a civilization's land meets a neighbor's (roughly the Stone Age); crowded makes neighbors meet early, spacious keeps the early game peaceful longer |
+| Room to expand | Land per civilization: **very crowded** (a quarter of standard, 16 land areas; v0.19), **crowded** (half of standard, 32 land areas), **standard** (default, 64), **spacious** (2×, 128). Standard targets about 30–40 turns of expansion before a civilization's land meets a neighbor's (roughly the Stone Age); crowded makes neighbors meet early, spacious keeps the early game peaceful longer. Very crowded is for fighting from the start: a civilization's land holds fewer tokens than the starting cap, so tokens press into neighbors within about 15 turns, and starts may be 3 moves apart instead of 4 so that 2–15 civilizations fit |
 
 ## 3. Turn structure — Decided
 
@@ -99,7 +99,7 @@ Four phases. All players act simultaneously within each phase.
 ### Procedural maps
 
 - Size scales with the civilization count and room to expand (§2): about **64 land areas per civilization** on a standard map (Phase 0), plus sea areas. The map type (§2) sets the land and sea layout. Rivers and fault chains scale with the land.
-- **Starting positions use fair spacing.** Starts are placed as far apart as possible by travel distance, and each must pass a quality check: enough total area limit within about 3 moves and no more than a set share of mountains or desert. Among passing layouts, the generator prefers balanced nearby land (each start's share of the land closer to it than to any other start). If no layout passes, the generator re-rolls. On the continents type, the check applies per landmass. The original used hand-tuned printed starting regions instead.
+- **Starting positions use fair spacing.** Starts are placed as far apart as possible by travel distance, at least 4 moves apart (3 on very crowded maps), and each must pass a quality check: enough total area limit within about 3 moves and no more than a set share of mountains or desert. Among passing layouts, the generator prefers balanced nearby land (each start's share of the land closer to it than to any other start). If no layout passes, the generator re-rolls. On the continents type, the check applies per landmass. The original used hand-tuned printed starting regions instead.
 - **Food resources** are placed by chance per area, from terrain and features (starting odds; tuning):
 
   | Area | Chance of food |
@@ -799,6 +799,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.19 (October 25, 2026):** Room to expand (§2) gains **very crowded**: 16 land areas per civilization (0.25×), so borders meet and fighting starts early; crowded, standard, and spacious are unchanged. Very crowded starts may be 3 moves apart (4 elsewhere) so 2–15 civilizations fit (at 4, maps with 10 or more civilizations often failed to generate).
 - **0.18 (October 25, 2026):** Urban growth (§5): a settlement of any tier, villages included, that gathers food and eats some of its own for support adds +1 urban growth that turn, regardless of the amount; food eaten by or from a neighbor does not count.
 - **0.17 (October 25, 2026):** Learning optional again (§8): v0.16's required learning halves are reverted. Usage alone reaches every step; learning adds to the same accumulator, **2 progress per unit** toward Known or Developed and **10 adoption points** toward Mastered, taking only what usage leaves unfinished. To make learning matter, **Developed costs are doubled** (except Permanent Settlement, which keeps the opening pace) and **Mastered takes 200 adoption points**; Known costs are unchanged. Kept from v0.16: the study queue (fill in order, then an even split, with the empty-queue warning; only plausible advances can be queued), nothing decays, and the minimal AI's third of manpower on High Learning with an empty queue. Oral tradition and the Permanent Settlement Known exception are retired. Discovery outliers are logged for the tuning pass (§17).
 - **0.16 (October 24, 2026):** Discovery needs study (§8): every step is **half usage, half learning**: Known, Developed, and Mastered, except Permanent Settlement, which becomes Known from usage alone. Known and Developed each split their cost into a usage half (its inputs) and a learning half (High Learning); both must fill, and excess in either is wasted; shown as one two-colour bar. Mastered is 50 adoption from usage (the adoption drivers) plus 50 from learning, the learning half costing twice the Developed learning half. Nothing decays: adoption no longer falls, so Mastered is permanent (the fall rates are retired; Agriculture's cap rise is permanent, closing that §17 item). The domain focus is replaced by a **study queue**: learning fills the first advance waiting for it, then the next; only plausible advances can be queued; an empty queue splits learning evenly among every advance waiting, with a warning in the turn report. Every civilization gets +1 learning a turn from **oral tradition**, which breaks the deadlock of needing learning for villages and settlements for High Learning. High Learning no longer counts toward Known's usage. The minimal AI puts about 1 manpower in 3 on High Learning and leaves its queue empty. Currency no longer pays for a focus. Timing targets are superseded until the tuning pass.

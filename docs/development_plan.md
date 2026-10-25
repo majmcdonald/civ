@@ -1,6 +1,6 @@
 # Development Plan
 
-**Version:** 0.20  
+**Version:** 0.21  
 **Date:** October 24, 2026  
 **Status:** Working draft
 
@@ -113,6 +113,7 @@ Other costs on the 15-civilization spacious board: map generation 0.3 s, first r
 
 ## Change log
 
+- **0.21 (October 25, 2026):** Very crowded room to expand for design doc v0.19: `RoomToExpand` gains `veryCrowded` (`ROOM_FACTOR` 0.25); minimum start spacing is per room size (3 very crowded, 4 otherwise). Map tests cover 15 civilizations on very crowded maps; `npm run batch -- --room veryCrowded`.
 - **0.20 (October 25, 2026):** Urban growth for design doc v0.18: `allocateSupport` reports `ateOwn` (settlements that gathered food and ate their own), `resolveSupport` records it as `Settlement.ateOwn` (the turn), and `urbanGrowthOf` adds 1 that turn. `supportSummary` predicts it for the Civilization screen's urban growth figures.
 - **0.19 (October 25, 2026):** Discovery for design doc v0.17: learning is optional again. `AdvanceProgress.learning`, `ORAL_TRADITION`, and the usage and learning halves are removed; usage and learning share one accumulator (`LEARNING_PROGRESS` 2 per unit toward Known and Developed, `LEARNING_ADOPTION` 10 toward Mastered, `ADOPTION_COST` 200 points). `learningPlan` sends each advance only the learning its step needs after this turn's usage. Developed costs doubled in content except Permanent Settlement. `discoveryView` reports one progress, cost, and rate per step; the Knowledge screen shows one bar (done, this turn's usage, this turn's learning). Save schema 11.
 - **0.18 (October 24, 2026):** Phase 4 gains step 10, a full review of advances and screens before the phase is complete. Discovery reworked for design doc v0.16 (between steps 2 and 3). Known, Developed, and Mastered take half usage, half learning (`StageRules.usageOnly` exempts a step; Permanent Settlement's Known uses it); only plausible advances can be queued: `AdvanceProgress` gains `learning`; `progress` is usage toward the next step (after Developed, the usage half of adoption, 0–50); adoption never falls (`AdoptionRules.fall` removed). Learning is a pool (High Learning plus `ORAL_TRADITION`, 1) sent down `PlayerState.study` (`setStudy` command, allocation phase) by `learningPlan`: queue in order, then an even split, with a `studyQueueEmpty` event; finished advances leave the queue. The domain focus (`focus`, `setFocus`) is removed. `discoveryView` reports each step's usage and learning halves and rates. Archery: `fought` input (conflicts per turn, `PlayerState.fought`), adoption, and a Mastered +0.25 strength (design doc v0.15). Knowledge screen: study queue (reorder, remove, Study buttons), two-colour step bars, no focus picker; advances without adoption show Developed only. Civilization screen: manpower assigned from the settlement table. The minimal AI keeps a third of its manpower on High Learning, queue empty. Save schema 10.

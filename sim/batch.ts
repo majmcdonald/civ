@@ -2,7 +2,7 @@
 // reports pacing. It measures; it does not tune (no balance changes until the Stone Age is complete).
 //
 // Run: npm run batch -- [--games 5] [--civs 5] [--map inlandSea|continents|singleLandmass|all]
-//                       [--room crowded|standard|spacious] [--turns 60] [--every 10]
+//                       [--room veryCrowded|crowded|standard|spacious] [--turns 60] [--every 10]
 //                       [--json out.json] [--logs dir]
 
 import fs from 'node:fs';
