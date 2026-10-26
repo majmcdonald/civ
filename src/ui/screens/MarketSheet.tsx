@@ -45,7 +45,7 @@ export function MarketSheet({ view, treasury, members, canOrder, trades, onOrder
                 <th title="Food covers support anywhere in your civilization; luxuries calm (§6)">Good</th>
                 <th title="What orders fill at now; it starts at food 5, luxury 10 and stays between half and triple">Price</th>
                 <th title="The price next turn, when the standing orders in your market fill: 10% of the starting price per unit bought minus sold">Next turn</th>
-                <th title="Goods gathered this turn, plus stored grain, that you can sell">Held</th>
+                <th title="Goods gathered this turn, your stock of durable goods (stone, copper, cloth), and stored grain: what you can sell">Held</th>
                 <th>Order</th>
               </tr>
             </thead>

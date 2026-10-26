@@ -1,4 +1,4 @@
-import type { Advance, AreaFilter, Calamity, ContentBundle, Effect, Era, Gathering, Input, Resource } from '../content/types';
+import type { Advance, AreaFilter, Calamity, ContentBundle, Effect, Era, Gathering, Input, Resource, Wonder } from '../content/types';
 import { CALAMITY_RULES } from './calamities';
 import { hooks as defaultHooks, type HookRegistry } from './hooks';
 
@@ -7,6 +7,7 @@ export interface Content {
   advances: readonly Advance[];
   resources: readonly Resource[];
   calamities: readonly Calamity[];
+  wonders: readonly Wonder[];
   hooks: HookRegistry;
 }
 
@@ -26,7 +27,7 @@ export function loadContent(bundle: ContentBundle, hooks: HookRegistry = default
     for (const [name, gate] of [['gate', era.gate], ['closing gate', era.closing]] as const) {
       if (gate && ![gate.settlement, gate.knowledge].every((n) => Number.isInteger(n) && n >= 0)) errors.push(`Era "${era.id}": ${name} values must be whole numbers, 0 or more`);
     }
-    if (era.points && ![era.points.developed, era.points.mastered, era.points.culture].every((n) => Number.isInteger(n) && n > 0)) errors.push(`Era "${era.id}": points must be positive integers`);
+    if (era.points && ![era.points.developed, era.points.mastered, era.points.culture, era.points.wonder ?? 1].every((n) => Number.isInteger(n) && n > 0)) errors.push(`Era "${era.id}": points must be positive integers`);
     if (era.gate && !era.points) errors.push(`Era "${era.id}" has a gate but no points`);
   }
   const last = [...bundle.eras].sort((a, b) => b.order - a.order)[0];
@@ -83,9 +84,33 @@ export function loadContent(bundle: ContentBundle, hooks: HookRegistry = default
     }
   }
 
+  const wonderIds = new Set<string>();
+  for (const wonder of bundle.wonders) {
+    const at = `Wonder "${wonder.id}"`;
+    if (wonderIds.has(wonder.id)) errors.push(`Duplicate wonder id "${wonder.id}"`);
+    wonderIds.add(wonder.id);
+    const era = bundle.eras.find((e) => e.id === wonder.era);
+    if (!era) errors.push(`${at} references unknown era "${wonder.era}"`);
+    else if (era.points?.wonder === undefined) errors.push(`${at}: era "${wonder.era}" has no wonder points`);
+    if (wonder.requires.length === 0) errors.push(`${at} needs an advance to open it`);
+    for (const id of wonder.requires) if (!advanceIds.has(id)) errors.push(`${at} requires unknown advance "${id}"`);
+    if (![wonder.turns, wonder.manpower].every((n) => Number.isInteger(n) && n > 0)) errors.push(`${at}: turns and manpower must be positive integers`);
+    for (const g of wonder.goods) {
+      if (g.resource !== FOOD && !resourceIds.has(g.resource)) errors.push(`${at} needs unknown good "${g.resource}"`);
+      if (!(Number.isInteger(g.count) && g.count > 0)) errors.push(`${at}: goods counts must be positive integers`);
+    }
+    for (const effect of wonder.effects) {
+      const problem = checkEffect(effect, hooks, advanceIds, resourceIds);
+      if (problem) errors.push(`${at}: ${problem}`);
+    }
+  }
+
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, content: { eras: bundle.eras, advances: bundle.advances, resources: bundle.resources, calamities: bundle.calamities, hooks } };
+  return { ok: true, content: { eras: bundle.eras, advances: bundle.advances, resources: bundle.resources, calamities: bundle.calamities, wonders: bundle.wonders, hooks } };
 }
+
+// A wonder's goods entry for any food good.
+export const FOOD = 'food';
 
 const DOMAIN_IDS = ['land', 'crafts', 'beliefs', 'travel', 'war'];
 
@@ -138,6 +163,7 @@ function checkEffect(effect: Effect, hooks: HookRegistry, advances: Set<string>,
   switch (effect.type) {
     case 'unlockTier':
     case 'marketAccess':
+    case 'raidImmunity':
       return null;
     case 'strength':
       if (effect.counteredBy !== undefined && !advances.has(effect.counteredBy)) return `strength countered by unknown advance "${effect.counteredBy}"`;
@@ -146,6 +172,9 @@ function checkEffect(effect: Effect, hooks: HookRegistry, advances: Set<string>,
     case 'calm':
     case 'capitalReach':
     case 'marketReach':
+    case 'manpower':
+    case 'culture':
+    case 'learning':
       return Number.isInteger(effect.amount) && effect.amount > 0 ? null : `${effect.type} amount must be a positive integer (got ${effect.amount})`;
     case 'riverLeg':
       return Number.isInteger(effect.areas) && effect.areas >= 2 ? null : `riverLeg areas must be a whole number, 2 or more (got ${effect.areas})`;

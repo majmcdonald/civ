@@ -10,6 +10,7 @@ import { setWork, validateWork } from './resources';
 import { nameSettlement, setConversionOrder, TIERS, validateConversionOrder, validateName } from './settlements';
 import { createRng } from './rng';
 import { mapFor, validateMap } from './world';
+import { redirectWonder, startWonder, validateRedirect, validateStart } from './wonders';
 import {
   PHASES,
   PLAYER_PHASES,
@@ -21,7 +22,7 @@ import {
   type Phase,
 } from './types';
 
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 
 interface CommandHandler<C extends Command> {
   validate(ctx: Pick<Context, 'state' | 'map' | 'content'>, command: C): string | null;
@@ -107,6 +108,22 @@ const handlers: CommandHandlers = {
       setBuyOff(ctx, command);
     },
   },
+  startWonder: {
+    validate(ctx, command) {
+      return validateStart(ctx, command);
+    },
+    execute(ctx, command) {
+      startWonder(ctx, command);
+    },
+  },
+  redirectWonder: {
+    validate(ctx, command) {
+      return validateRedirect(ctx, command);
+    },
+    execute(ctx, command) {
+      redirectWonder(ctx, command);
+    },
+  },
 };
 
 export function validateSetup(setup: GameSetup, content: Content): string | null {
@@ -142,6 +159,8 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
     conversions: [],
     goods: [],
     dry: [],
+    builds: [],
+    wonders: [],
     endgame: null,
     over: false,
   };

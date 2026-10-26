@@ -30,6 +30,7 @@ export const standIn: ContentBundle = {
     { id: 'fish', name: 'Fish', food: true, price: 5, requires: 'fishing' },
   ],
   calamities: [],
+  wonders: [],
 };
 
 export function testContent(bundle: ContentBundle = standIn, hooks?: HookRegistry): Content {

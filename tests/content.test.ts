@@ -11,6 +11,7 @@ const base: ContentBundle = {
   advances: [],
   resources: [],
   calamities: [],
+  wonders: [],
 };
 
 function errorsFor(bundle: ContentBundle, hooks = {}): string[] {

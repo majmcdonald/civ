@@ -2,7 +2,7 @@ import type { Calamity, SettlementTier } from '../content/types';
 import type { Content } from './content';
 import { emit } from './context';
 import { adoptionOf, grantLearning, reached } from './discovery';
-import { riverLeg } from './effects';
+import { riverLeg, raidImmune } from './effects';
 import { addLocal, civInstability, landDistances, localInstability, threshold } from './instability';
 import type { AreaId, GameMap } from './map/types';
 import { marketOf } from './market';
@@ -87,6 +87,8 @@ const WEIGHTS: Record<(typeof CALAMITY_RULES)[number], (view: View, calamity: Ca
     return { weight: rank(s.tier) + 1 + (traders ? 1 : 0), reasons: [`dense: a ${s.tier}`, ...(traders ? ['trades with other peoples'] : [])] };
   },
   raid({ state, map }, _, s) {
+    // Walls of Jericho (design doc §9).
+    if (raidImmune(state, s.player)) return { weight: 0, reasons: [] };
     const open = landAround(map, s.area).filter((a) => !settlementAt(state, a) && !state.stacks.some((x) => x.area === a)).length;
     return { weight: open, reasons: open > 0 ? [`${plural(open, 'empty area')} next to it`] : [] };
   },
@@ -162,7 +164,7 @@ function loseSupport(state: GameState, map: GameMap, s: Settlement, count: numbe
 }
 
 function idleNextTurn(state: GameState, s: Settlement, units: number): void {
-  if (units > 0) s.idle = { turn: state.turn + 1, units: Math.min(units, manpower(s)) };
+  if (units > 0) s.idle = { turn: state.turn + 1, units: Math.min(units, manpower(state, s)) };
 }
 
 interface Damage {
@@ -178,12 +180,12 @@ const EFFECTS: Record<(typeof CALAMITY_RULES)[number], (ctx: Context, calamity: 
   },
   superstition(ctx, calamity, s, n) {
     addLocal(ctx, s, halve(SUPERSTITION_UNREST, n), 'calamity');
-    idleNextTurn(ctx.state, s, halve(manpower(s), n));
+    idleNextTurn(ctx.state, s, halve(manpower(ctx.state, s), n));
     if (calamity.grants) grantLearning(ctx, s.player, calamity.grants.advance, calamity.grants.learning);
     return { tokens: 0, dropped: false };
   },
   civilDisorder(ctx, _, s, n) {
-    idleNextTurn(ctx.state, s, halve(manpower(s), n));
+    idleNextTurn(ctx.state, s, halve(manpower(ctx.state, s), n));
     addLocal(ctx, s, halve(UNREST, n), 'calamity');
     return { tokens: 0, dropped: false };
   },

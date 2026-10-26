@@ -2,7 +2,9 @@ import type { Era, EraId, Gate } from '../content/types';
 import { tierPoints } from './calamities';
 import type { Content } from './content';
 import { emit } from './context';
+import { cultureBonus } from './effects';
 import { activeWork } from './resources';
+import { wondersScore } from './wonders';
 import type { Context, GameState, PlayerId, PlayerState, Score, Settlement } from './types';
 
 // Eras, culture, and victory (design doc §6, §14, §15, v0.26). No track and no turn clock: a
@@ -73,7 +75,8 @@ export function scoreOf(state: GameState, content: Content, id: PlayerId): Score
   const knowledge = knowledgePoints(state, content, id);
   const settlement = settlementPoints(state, id);
   const culture = player(state, id).culture;
-  return { player: id, knowledge, settlement, wonders: 0, culture, total: knowledge + settlement + culture };
+  const wonders = wondersScore(state, content, id);
+  return { player: id, knowledge, settlement, wonders, culture, total: knowledge + settlement + wonders + culture };
 }
 
 // Every civilization's score, highest first (player order on ties).
@@ -121,7 +124,7 @@ export function culturePerAward(state: GameState, content: Content, id: PlayerId
 export function runArtists(ctx: Context): void {
   const { state, content } = ctx;
   for (const p of state.players) {
-    const units = artists(state, p.id);
+    const units = artists(state, p.id) + cultureBonus(state, p.id);
     if (units === 0) continue;
     p.cultureProgress += units;
     const awards = Math.floor(p.cultureProgress / CULTURE_PROGRESS);

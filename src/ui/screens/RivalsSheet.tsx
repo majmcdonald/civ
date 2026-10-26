@@ -1,8 +1,8 @@
 import type { Endgame, EraView, GameMap, Score } from '../../engine';
 import type { MapPieces } from '../art/pieces';
 
-// Rivals and standings (design doc §11, §14, §15): each civilization's era and progress to its next
-// gate, its points, and the endgame countdown.
+// Rivals and standings (design doc §9, §11, §14, §15): each civilization's era and progress to its
+// next gate, its points, the endgame countdown, and who is building or has built each wonder.
 
 interface Civ {
   name: string;
@@ -27,7 +27,7 @@ function Diamond({ color }: { color: string }) {
 }
 
 export function scoreText(s: Score): string {
-  return `Knowledge ${s.knowledge} + settlement ${s.settlement} + culture ${s.culture}${s.wonders > 0 ? ` + wonders ${s.wonders}` : ''} = ${s.total}`;
+  return `Knowledge ${s.knowledge} + settlement ${s.settlement} + wonders ${s.wonders} + culture ${s.culture} = ${s.total}`;
 }
 
 // Progress to the next gate, e.g. "Bronze Age: 4/5 settlement · 9/12 knowledge".
@@ -58,9 +58,11 @@ interface RivalsSheetProps {
   endgame: Endgame | null;
   over: boolean;
   turn: number;
+  // Each wonder: who completed it, or who is building it (not how far; design doc §9).
+  wonders: { name: string; completed: string | null; builders: string[] }[];
 }
 
-export function RivalsSheet({ map, pieces, civs, human, views, ids, finalEra, finalGate, endgame, over, turn }: RivalsSheetProps) {
+export function RivalsSheet({ map, pieces, civs, human, views, ids, finalEra, finalGate, endgame, over, turn, wonders }: RivalsSheetProps) {
   const fighting = conflicts(map, pieces);
   const name = (player: string) => civs[ids.indexOf(player)]?.name ?? player;
 
@@ -110,6 +112,17 @@ export function RivalsSheet({ map, pieces, civs, human, views, ids, finalEra, fi
               <dd>{countdownText(endgame, over, turn, name)}</dd>
             </dl>
           </section>
+          <section className="civ-card">
+            <h2>Wonders</h2>
+            <dl className="civ-facts">
+              {wonders.map((w) => (
+                <div key={w.name} className="rivals-wonder">
+                  <dt>{w.name}</dt>
+                  <dd>{w.completed ? `Built by ${w.completed}` : w.builders.length > 0 ? `Building: ${w.builders.join(', ')}` : 'Not started'}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
         </aside>
         <section>
           <h2>Standings</h2>
@@ -124,7 +137,8 @@ export function RivalsSheet({ map, pieces, civs, human, views, ids, finalEra, fi
                 <th title="Loose tokens on the map (§4)">Tokens</th>
                 <th title="Knowledge points: Stone Age advances score 1 Developed, 3 Mastered (§14)">Knowledge</th>
                 <th title="Settlement points: village 1, town 2, city 3, metropolis 4 (§14)">Settlement</th>
-                <th title="Culture points from Artists (§6)">Culture</th>
+                <th title="Victory points from the wonders it built (§9)">Wonders</th>
+                <th title="Culture points from Artists and lost wonder races (§6, §9)">Culture</th>
                 <th title="Knowledge + settlement + wonders + culture points (§15)">Score</th>
                 <th title="Fighting in an area puts two civilizations in conflict; all civilizations start neutral (§11)">Toward you</th>
               </tr>
@@ -150,6 +164,7 @@ export function RivalsSheet({ map, pieces, civs, human, views, ids, finalEra, fi
                     <td>{tokens}</td>
                     <td title={view.knowledge.map((k) => `${k.developed} Developed, ${k.mastered} Mastered`).join('; ') || 'No advances yet'}>{view.score.knowledge}</td>
                     <td>{view.score.settlement}</td>
+                    <td>{view.score.wonders}</td>
                     <td>{view.score.culture}</td>
                     <td title={scoreText(view.score)}>
                       <strong>{view.score.total}</strong>
@@ -194,6 +209,7 @@ export function FinalStandings({ civs, ids, scores, winners, human, onClose, onE
             <th>Civilization</th>
             <th>Knowledge</th>
             <th>Settlement</th>
+            <th>Wonders</th>
             <th>Culture</th>
             <th>Score</th>
           </tr>
@@ -210,6 +226,7 @@ export function FinalStandings({ civs, ids, scores, winners, human, onClose, onE
               </td>
               <td>{s.knowledge}</td>
               <td>{s.settlement}</td>
+              <td>{s.wonders}</td>
               <td>{s.culture}</td>
               <td title={scoreText(s)}>
                 <strong>{s.total}</strong>

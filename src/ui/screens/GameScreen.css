@@ -623,8 +623,13 @@
 }
 
 .rivals-gate {
+  min-width: 9rem;
   font-size: 0.85rem;
-  white-space: nowrap;
+}
+
+.rivals-table th {
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
 }
 
 .rivals-columns {
@@ -664,6 +669,7 @@
 }
 
 .rivals-civ {
+  white-space: nowrap;
   display: flex;
   align-items: center;
 }
@@ -1392,4 +1398,51 @@
 
 .game-menu-report select {
   font: inherit;
+}
+
+/* Wonders (design doc §9) */
+.rivals-wonder {
+  display: contents;
+}
+
+.wonder-cards {
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+}
+
+.wonder-card.done {
+  opacity: 0.75;
+}
+
+.wonder-effect {
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+}
+
+.wonder-place {
+  padding: 0;
+  font: inherit;
+  font-style: normal;
+  color: inherit;
+  background: none;
+  border: none;
+  border-bottom: 1px dotted var(--ink-soft);
+  cursor: pointer;
+}
+
+.wonder-place:hover {
+  color: var(--accent);
+}
+
+.wonder-start {
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+
+.wonder-start select {
+  max-width: 100%;
+}
+
+.wonder-lost {
+  margin-bottom: 1rem;
+  border-color: var(--accent);
 }

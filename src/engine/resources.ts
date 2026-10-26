@@ -1,19 +1,21 @@
 import type { Content } from './content';
 import { emit } from './context';
 import { HIGH_LEARNING, reached } from './discovery';
-import { gatherBonus } from './effects';
+import { gatherBonus, wonderManpower } from './effects';
 import { ARTISTS } from './eras';
 import { BUREAUCRACY } from './instability';
 import type { AreaId, GameMap, ResourceId } from './map/types';
 import { settlementAt, tierRules } from './settlements';
-import type { Command, Context, GameState, PlayerId, Settlement, Work } from './types';
+import type { Command, Context, GameState, Good, PlayerId, Settlement, Work } from './types';
+import { buildAt, WONDER } from './wonders';
 
 // Manpower and goods (design doc §6). Each settlement has whole units of manpower by tier; standing
 // assignments gather one of the area's resources per unit in the resources phase. Goods last one
-// turn.
+// turn, except durable goods, which keep in the civilization's stock (v0.28).
 
-export function manpower(settlement: Settlement): number {
-  return tierRules(settlement.tier).manpower;
+// By tier, plus any wonder at the settlement that adds manpower (Çatalhöyük).
+export function manpower(state: GameState, settlement: Settlement): number {
+  return tierRules(settlement.tier).manpower + wonderManpower(state, settlement);
 }
 
 // Towns and larger pay a fixed tax into their owner's treasury in the resources phase (design doc
@@ -69,12 +71,23 @@ export function revealed(state: GameState, content: Content, player: PlayerId, r
   return Boolean(rule && reached(state, player, rule.revealedBy ?? rule.requires, 'known'));
 }
 
-// Goods a settlement in this area could work: the area's resources, and goods worked from them
-// (cloth from grain or livestock), whether or not the civilization can use them yet.
+// Goods a settlement in this area could work: the area's resources, goods worked from them (cloth
+// from grain or livestock), and goods worked from its terrain (stone in hills and mountains),
+// whether or not the civilization can use them yet.
 export function workable(map: GameMap, content: Content, area: AreaId): ResourceId[] {
-  const here = map.areas[area]!.resources;
+  const { resources: here, terrain } = map.areas[area]!;
   const made = content.resources.filter((r) => r.from?.some((f) => here.includes(f))).map((r) => r.id);
-  return [...here, ...made];
+  const worked = content.resources.filter((r) => terrain && r.terrain?.includes(terrain)).map((r) => r.id);
+  return [...here, ...made, ...worked];
+}
+
+export function isDurable(content: Content, resource: ResourceId): boolean {
+  return content.resources.some((r) => r.id === resource && r.durable);
+}
+
+// Units of a good a player holds now, anywhere: gathered, bought, or in its stock.
+export function goodsHeld(state: GameState, player: PlayerId, resource: ResourceId): number {
+  return state.goods.reduce((sum, g) => (g.player === player && g.resource === resource ? sum + g.count : sum), 0);
 }
 
 export function isFood(content: Content, resource: ResourceId): boolean {
@@ -89,7 +102,7 @@ function areaFood(state: GameState, map: GameMap, content: Content, player: Play
 // A new or captured settlement starts with all its manpower on its area's food, if any.
 export function resetWork(ctx: Context, settlement: Settlement): void {
   const food = areaFood(ctx.state, ctx.map, ctx.content, settlement.player, settlement.area);
-  settlement.work = food ? [{ resource: food, count: manpower(settlement) }] : [];
+  settlement.work = food ? [{ resource: food, count: manpower(ctx.state, settlement) }] : [];
 }
 
 // After an upgrade: the new units start on the area's food, if any.
@@ -102,8 +115,8 @@ export function addManpower(ctx: Context, settlement: Settlement, units: number)
 }
 
 // After a tier drop: unassigned manpower goes first, then the most recently changed assignment.
-export function trimWork(settlement: Settlement): void {
-  let over = assigned(settlement) - manpower(settlement);
+export function trimWork(state: GameState, settlement: Settlement): void {
+  let over = assigned(settlement) - manpower(state, settlement);
   const work = [...(settlement.work ?? [])];
   while (over > 0) {
     const last = work[work.length - 1]!;
@@ -124,12 +137,14 @@ export function validateWork(ctx: Pick<Context, 'state' | 'map' | 'content'>, co
   const here = settlementAt(state, command.area);
   if (!here || here.player !== command.player) return 'You have no settlement there';
   if (!Number.isInteger(command.count) || command.count < 0) return 'Manpower must be a whole number, 0 or more';
-  if (command.resource !== BUREAUCRACY && command.resource !== HIGH_LEARNING && command.resource !== ARTISTS) {
+  if (command.resource === WONDER) {
+    if (command.count > 0 && !buildAt(state, command.player, command.area)) return 'No wonder is being built here';
+  } else if (command.resource !== BUREAUCRACY && command.resource !== HIGH_LEARNING && command.resource !== ARTISTS) {
     if (!workable(map, content, command.area).includes(command.resource)) return 'That resource is not in this area';
     if (!usable(state, content, command.player, command.resource)) return 'Your civilization cannot gather that resource yet';
   }
   const others = (here.work ?? []).filter((w) => w.resource !== command.resource).reduce((sum, w) => sum + w.count, 0);
-  if (others + command.count > manpower(here)) return `Only ${manpower(here) - others} manpower free in this settlement`;
+  if (others + command.count > manpower(state, here)) return `Only ${manpower(state, here) - others} manpower free in this settlement`;
   return null;
 }
 
@@ -140,11 +155,19 @@ export function setWork(ctx: Context, command: Extract<Command, { type: 'assignW
   here.work = work;
 }
 
-// Resources phase: last turn's goods are gone; each settlement gathers 1 of a resource per unit
-// working it, if its civilization can use it, plus any Mastered gathering bonus.
+// Resources phase: last turn's goods are gone, except durable goods, which join the stock; each
+// settlement gathers 1 of a resource per unit working it, if its civilization can use it, plus any
+// Mastered gathering bonus.
 export function runResources(ctx: Context): void {
   const { state, content } = ctx;
-  state.goods = [];
+  const stock: Good[] = [];
+  for (const g of state.goods) {
+    if (g.count <= 0 || !isDurable(content, g.resource)) continue;
+    const kept = stock.find((x) => x.player === g.player && x.resource === g.resource);
+    if (kept) kept.count += g.count;
+    else stock.push({ area: null, player: g.player, resource: g.resource, count: g.count });
+  }
+  state.goods = stock;
   for (const s of state.settlements) {
     const parched = s.drought !== undefined && state.turn <= s.drought;
     for (const w of activeWork(state, s)) {

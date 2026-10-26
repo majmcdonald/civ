@@ -29,9 +29,9 @@ export interface Era {
   // The last era's closing gate, which starts the endgame countdown (design doc §15).
   closing?: Gate;
   // Knowledge points per advance of this era once Developed, and once Mastered (in all; an advance
-  // with no adoption stage scores `developed`), and culture points per 5 Artists progress for a
-  // civilization in this era (design doc §6, §14).
-  points?: { developed: number; mastered: number; culture: number };
+  // with no adoption stage scores `developed`), culture points per 5 Artists progress for a
+  // civilization in this era, and victory points per wonder of this era (design doc §6, §9, §14).
+  points?: { developed: number; mastered: number; culture: number; wonder?: number };
 }
 
 export type SettlementTier = 'village' | 'town' | 'city' | 'metropolis';
@@ -64,6 +64,14 @@ export type Effect =
   | { type: 'marketAccess' }
   // Steps of market reach added (design doc §7).
   | { type: 'marketReach'; amount: number }
+  // Manpower added to the wonder's own settlement (Çatalhöyük, design doc §9).
+  | { type: 'manpower'; amount: number }
+  // Artists progress added each turn (Newgrange).
+  | { type: 'culture'; amount: number }
+  // Learning added each turn, sent down the study queue like High Learning (Stonehenge).
+  | { type: 'learning'; amount: number }
+  // Barbarian raids cannot strike the civilization's settlements (Walls of Jericho).
+  | { type: 'raidImmunity' }
   | { type: 'hook'; hook: string; params?: HookParams };
 
 // Discovery domains; a discovery focus picks one (design doc §8, Ruler levers).
@@ -153,8 +161,10 @@ export interface Advance {
 // A good gathered by production manpower (design doc §6). Revealed on the map once its civilization
 // knows `revealedBy` (default: `requires`), usable once `requires` is Developed; food goods can
 // stand in for support tokens. Luxury goods lower instability (design doc §6). A good with `from`
-// is not placed on the map: it is worked instead in areas holding any of those resources. `price`
-// is its starting market price (design doc §7).
+// is not placed on the map: it is worked instead in areas holding any of those resources; a good
+// with `terrain` is worked in areas of that terrain (stone, v0.28). A `durable` good keeps from turn
+// to turn in the civilization's stock (design doc §6, v0.28). `price` is its starting market price
+// (design doc §7).
 export interface Resource {
   id: string;
   name: string;
@@ -164,6 +174,25 @@ export interface Resource {
   revealedBy?: string;
   luxury?: boolean;
   from?: string[];
+  terrain?: Terrain[];
+  durable?: boolean;
+}
+
+// A named wonder (design doc §9, v0.28): one in the world, built at one of the builder's
+// settlements once every `requires` advance is Developed. Each turn of work needs `goods` ('food'
+// is any food good) and `manpower` at the site, or CURRENCY_PER_MANPOWER for each unit missing.
+// `effects` work for whoever holds the site.
+export interface Wonder {
+  id: string;
+  name: string;
+  era: EraId;
+  requires: string[];
+  turns: number;
+  manpower: number;
+  goods: { resource: string; count: number }[];
+  effects: Effect[];
+  // The effect in a few words, for screens.
+  summary: string;
 }
 
 // A calamity (design doc §12). Its weights and effects are rules in the engine, keyed by `id`
@@ -189,4 +218,5 @@ export interface ContentBundle {
   advances: Advance[];
   resources: Resource[];
   calamities: Calamity[];
+  wonders: Wonder[];
 }

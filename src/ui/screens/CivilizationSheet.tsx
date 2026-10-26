@@ -34,8 +34,8 @@ export interface WorkOption {
   rows: { resource: string; count: number; usable: boolean }[];
 }
 
-const JOB_NAMES: Record<string, string> = { bureaucracy: 'Bureaucracy', highLearning: 'High Learning', artists: 'Artists' };
-const SPECIALISTS = ['bureaucracy', 'highLearning', 'artists'];
+const JOB_NAMES: Record<string, string> = { bureaucracy: 'Bureaucracy', highLearning: 'High Learning', artists: 'Artists', wonder: 'Wonder' };
+const SPECIALISTS = ['bureaucracy', 'highLearning', 'artists', 'wonder'];
 
 function jobTitle(resource: string, usable: boolean): string {
   if (resource === 'bureaucracy') return 'Each unit lowers this settlement’s instability by 1 a turn, then the civ-wide meter';
@@ -107,9 +107,10 @@ function summarize(map: GameMap, pieces: MapPieces, civ: number, cap: number) {
   const bureaucracy = unitsOn((r) => r === 'bureaucracy');
   const learning = unitsOn((r) => r === 'highLearning');
   const artists = unitsOn((r) => r === 'artists');
+  const wonders = unitsOn((r) => r === 'wonder');
   const working = unitsOn((r) => !SPECIALISTS.includes(r));
   const urban = rows.reduce((sum, r) => sum + TIER[r.tier].growth, 0);
-  return { loose, growth, rows, settled, manpower, working, bureaucracy, learning, artists, urban };
+  return { loose, growth, rows, settled, manpower, working, bureaucracy, learning, artists, wonders, urban };
 }
 
 function Meter({ value, max, tone = 'ink' }: { value: number; max: number; tone?: 'ink' | 'warn' }) {
@@ -192,12 +193,16 @@ interface CivilizationSheetProps {
   calamities: CalamityView;
   treasury: number;
   onBuyOff: (calamities: string[]) => void;
+  // Manpower added by wonders at the civilization's settlements (Çatalhöyük).
+  bonusManpower: number;
 }
 
-export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, cap, names, support, planned, instability, work, canAssign, onWork, focus = null, onRename, onShow, calamities, treasury, onBuyOff }: CivilizationSheetProps) {
+export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, cap, names, support, planned, instability, work, canAssign, onWork, focus = null, onRename, onShow, calamities, treasury, onBuyOff, bonusManpower }: CivilizationSheetProps) {
   const focused = useRef<HTMLTableRowElement>(null);
   useEffect(() => focused.current?.scrollIntoView({ block: 'center' }), [focus]);
-  const { loose, growth, rows, settled, manpower, working, bureaucracy, learning, artists, urban } = summarize(map, pieces, civ, cap);
+  const summary = summarize(map, pieces, civ, cap);
+  const { loose, growth, rows, settled, working, bureaucracy, learning, artists, wonders, urban } = summary;
+  const manpower = summary.manpower + bonusManpower;
   const gap = (r: SettlementRow) => r.threshold - r.instability - instability.civ;
   // The capital's free Bureaucracy unit counts with the assigned ones.
   const calming = bureaucracy + (instability.capital === null ? 0 : 1);
@@ -298,10 +303,10 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
 
         <section className="civ-card">
           <h2>Manpower</h2>
-          <div className="civ-big" title="Village 1, town 2, plus advance bonuses (§6)">{manpower}</div>
+          <div className="civ-big" title="Village 1, town 2, plus wonders that add manpower (§6, §9)">{manpower}</div>
           <ul className="civ-assign">
             {[...ASSIGNMENTS, 'Unassigned'].map((a, i) => {
-              const units = i === 0 ? working : a === 'Bureaucracy' ? bureaucracy : a === 'High Learning' ? learning : a === 'Artists' ? artists : a === 'Unassigned' ? manpower - working - bureaucracy - learning - artists : 0;
+              const units = i === 0 ? working : a === 'Bureaucracy' ? bureaucracy : a === 'High Learning' ? learning : a === 'Artists' ? artists : a === 'Wonders' ? wonders : a === 'Unassigned' ? manpower - working - bureaucracy - learning - artists - wonders : 0;
               return (
                 <li key={a}>
                   <span>{a}</span>

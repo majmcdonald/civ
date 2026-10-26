@@ -59,6 +59,7 @@ const bundle: ContentBundle = {
   ],
   resources: [{ id: 'grain', name: 'Grain', food: true, price: 5, requires: 'farming' }],
   calamities: [],
+  wonders: [],
 };
 
 const content = testContent(bundle);

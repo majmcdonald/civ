@@ -46,6 +46,10 @@ import {
   usable,
   workable,
   calm,
+  goodsHeld,
+  WONDER,
+  wonderManpower,
+  wonderViews,
   type AreaId,
   type ConflictEvent,
   type Content,
@@ -65,6 +69,7 @@ import type { MapPieces, SettlementTier } from '../art/pieces';
 import { CivilizationSheet, type WorkOption } from './CivilizationSheet';
 import { KnowledgeSheet } from './KnowledgeSheet';
 import { MarketSheet } from './MarketSheet';
+import { WondersSheet } from './WondersSheet';
 import { buildReport, Chronicle, loadReportMode, REPORT_MODE_NAMES, REPORT_MODES, ReportPage, saveReportMode, SOURCE_NAMES, type ReportEvent, type ReportLine, type ReportMode } from './TurnReport';
 import { countdownText, FinalStandings, RivalsSheet, scoreText } from './RivalsSheet';
 import { CITY_NAMES } from '../cityNames';
@@ -81,6 +86,7 @@ const SCREENS = [
   { id: 'economy', label: 'Economy' },
   { id: 'market', label: 'Market' },
   { id: 'knowledge', label: 'Knowledge' },
+  { id: 'wonders', label: 'Wonders' },
   { id: 'society', label: 'Society' },
   { id: 'rivals', label: 'Rivals' },
   { id: 'chronicle', label: 'Chronicle' },
@@ -573,12 +579,17 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   // Settlement conversions (design doc §5): previewed with this turn's planned moves.
   const previews = useMemo(() => (planning ? previewConversions(state, map, session.content, me) : []), [planning, state, map, session, me]);
   const plans: PlannedSettlement[] = previews.map((p) => ({ area: p.area, civ: HUMAN, tier: pieceTier(p.tier) }));
+  // Goods worked from the area's terrain, not placed on the map (stone in hills and mountains, §6).
+  const terrainGoods = (area: AreaId): string[] => {
+    const terrain = map.areas[area]!.terrain;
+    return session.content.resources.filter((r) => terrain && r.terrain?.includes(terrain) && revealed(state, session.content, me, r.id)).map((r) => `${r.name.toLowerCase()} can be worked here`);
+  };
   const details = (area: AreaId): AreaDetails => {
     const a = map.areas[area]!;
     const here = settlementAt(state, area);
     const capital = here && capitalOf(state, here.player) === area ? ', capital' : '';
     const title = here ? `${names.get(area) ?? 'Unnamed'} – ${tierRules(here.tier).name} of ${who(here.player)}${capital}` : capitalize(a.terrain!);
-    const facts = [here ? capitalize(a.terrain!) : '', ...a.features, `limit ${a.limit}`, ...a.resources.filter((r) => revealed(state, session.content, me, r))].filter(Boolean).join(' · ');
+    const facts = [here ? capitalize(a.terrain!) : '', ...a.features, `limit ${a.limit}`, ...a.resources.filter((r) => revealed(state, session.content, me, r)), ...terrainGoods(area)].filter(Boolean).join(' · ');
     const stacks = state.stacks.filter((st) => st.area === area).map((st) => ({ name: who(st.player), count: st.count, mine: st.player === me }));
     return { title, facts, stacks };
   };
@@ -598,7 +609,9 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
       .filter((resource) => revealed(state, session.content, me, resource))
       .map((resource) => ({ resource, count: count(resource), usable: usable(state, session.content, me, resource) }));
     rows.push({ resource: BUREAUCRACY, count: count(BUREAUCRACY), usable: true }, { resource: HIGH_LEARNING, count: count(HIGH_LEARNING), usable: true }, { resource: ARTISTS, count: count(ARTISTS), usable: true });
-    return { total: manpower(here), free: manpower(here) - assigned(here), rows };
+    // Manpower works on a wonder only at its own settlement (design doc §6, §9).
+    if (state.builds.some((b) => b.player === me && b.area === area && b.outbuilt === undefined) || count(WONDER) > 0) rows.push({ resource: WONDER, count: count(WONDER), usable: true });
+    return { total: manpower(state, here), free: manpower(state, here) - assigned(here), rows };
   };
   const instabilityOption = (area: AreaId): InstabilityOption | null => {
     const here = settlementAt(state, area);
@@ -616,8 +629,8 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   const unrest = rising > 0 ? `Unrest rising: overextension +${overextension(state, me)} a turn, Bureaucracy −${calming}. Assign Bureaucracy or the farthest settlements will collapse first` : null;
   // Unassigned manpower produces nothing; Bureaucracy is open to every settlement.
   const idle = state.settlements
-    .filter((s) => s.player === me && assigned(s) < manpower(s))
-    .map((s) => ({ area: s.area, count: manpower(s) - assigned(s) }));
+    .filter((s) => s.player === me && assigned(s) < manpower(state, s))
+    .map((s) => ({ area: s.area, count: manpower(state, s) - assigned(s) }));
   const assignWork = (area: AreaId, resource: string, count: number) => {
     const result = submit(session, { type: 'assignWork', player: me, area, resource, count });
     if (!result.ok) setNotice(result.reason);
@@ -830,6 +843,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                     {hoveredArea.terrain!.charAt(0).toUpperCase() + hoveredArea.terrain!.slice(1)}
                     {hoveredArea.features.length > 0 && ` · ${hoveredArea.features.join(', ')}`} · limit {hoveredArea.limit}
                     {hoveredArea.resources.some((r) => revealed(state, session.content, me, r)) && ` · ${hoveredArea.resources.filter((r) => revealed(state, session.content, me, r)).join(', ')}`}
+                    {terrainGoods(hoveredArea.id).map((t) => ` · ${t}`)}
                     {tokensAt(state, hoveredArea.id, me) > 0 && ` · ${tokensAt(state, hoveredArea.id, me)} of your tokens`}
                   </>
                 )
@@ -863,7 +877,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
           </>
         ) : (
           <div className="game-sheet-backdrop" onClick={() => setScreen('map')}>
-            <article className={`game-sheet ${screen === 'civilization' || screen === 'rivals' || screen === 'knowledge' || screen === 'market' || screen === 'chronicle' ? 'filled' : ''}`} onClick={(e) => e.stopPropagation()}>
+            <article className={`game-sheet ${screen === 'civilization' || screen === 'rivals' || screen === 'knowledge' || screen === 'market' || screen === 'wonders' || screen === 'chronicle' ? 'filled' : ''}`} onClick={(e) => e.stopPropagation()}>
               {screen === 'civilization' ? (
                 <CivilizationSheet
                   map={map}
@@ -886,6 +900,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   onShow={showOnMap}
                   calamities={calamityView(state, map, session.content, me)}
                   treasury={treasury}
+                  bonusManpower={state.settlements.filter((s) => s.player === me).reduce((sum, s) => sum + wonderManpower(state, s), 0)}
                   onBuyOff={(calamities) => {
                     const result = submit(session, { type: 'setBuyOff', player: me, calamities });
                     if (!result.ok) setNotice(result.reason);
@@ -905,6 +920,10 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   endgame={state.endgame}
                   over={state.over}
                   turn={state.turn}
+                  wonders={session.content.wonders.map((w) => {
+                    const done = state.wonders.find((x) => x.wonder === w.id);
+                    return { name: w.name, completed: done ? who(done.builder) : null, builders: state.builds.filter((b) => b.wonder === w.id && b.outbuilt === undefined).map((b) => who(b.player)) };
+                  })}
                 />
               ) : screen === 'knowledge' ? (
                 <KnowledgeSheet
@@ -931,6 +950,42 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                     if (!result.ok) setNotice(result.reason);
                     setVersion((v) => v + 1);
                   }}
+                />
+              ) : screen === 'wonders' ? (
+                <WondersSheet
+                  views={wonderViews(state, map, session.content, me)}
+                  content={session.content}
+                  me={me}
+                  treasury={treasury}
+                  stock={session.content.resources
+                    .filter((r) => r.durable && goodsHeld(state, me, r.id) > 0)
+                    .map((r) => `${r.name.toLowerCase()} ${goodsHeld(state, me, r.id)}`)
+                    .join(', ')}
+                  last={
+                    new Map(
+                      lastEvents.flatMap((e): [string, string][] =>
+                        e.type === 'wonderWorked' && e.player === me
+                          ? [[e.wonder, `worked${e.currency > 0 ? `, ${e.currency} currency for manpower` : ''}`]]
+                          : e.type === 'wonderStalled' && e.player === me
+                            ? [[e.wonder, `Stalled: ${e.reason}`]]
+                            : [],
+                      ),
+                    )
+                  }
+                  place={areaName}
+                  who={who}
+                  canOrder={planning && !state.players[HUMAN]!.endedPhase}
+                  onStart={(wonder, area) => {
+                    const result = submit(session, { type: 'startWonder', player: me, wonder, area });
+                    if (!result.ok) setNotice(result.reason);
+                    setVersion((v) => v + 1);
+                  }}
+                  onRedirect={(wonder, to) => {
+                    const result = submit(session, { type: 'redirectWonder', player: me, wonder, ...(to ? { to } : {}) });
+                    if (!result.ok) setNotice(result.reason);
+                    setVersion((v) => v + 1);
+                  }}
+                  onShow={showOnMap}
                 />
               ) : screen === 'chronicle' ? (
                 <Chronicle

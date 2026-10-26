@@ -10,8 +10,8 @@ export type { EraId } from '../content/types';
 export * from './map';
 export { mapFor, mapOptions } from './world';
 export { BASE_MOVEMENT, GROWTH_PER_TOKEN, looseTokens, reachable, STARTING_TOKEN_CAP, tokensAt } from './population';
-export { assigned, manpower, revealed, taxIncome, taxOf, usable, workable } from './resources';
-export { calm, capitalReach, gatherBonus, marketAccess, riverLeg, settlementBonus, storeCap, strength } from './effects';
+export { assigned, goodsHeld, isDurable, manpower, revealed, taxIncome, taxOf, usable, workable } from './resources';
+export { calm, cultureBonus, heldWonders, learningBonus, raidImmune, wonderManpower, capitalReach, gatherBonus, marketAccess, riverLeg, settlementBonus, storeCap, strength } from './effects';
 export { discoveryView, DOMAINS, HIGH_LEARNING, highLearning, learningPlan, learningPool, stageOf, type AdvanceView, type LearningPlan, type ProgressPart, type Stage } from './discovery';
 export {
   BUREAUCRACY,
@@ -61,3 +61,5 @@ export {
   type KnowledgePart,
 } from './eras';
 export { BASE_REACH, canTrade, marketOf, marketView, ORDER_MAX, PRICE_CEILING, PRICE_FLOOR, PRICE_STEP, priceOf, type GoodView, type MarketView } from './market';
+export { consolation, CURRENCY_PER_MANPOWER, goodName, isCompleted, movedTurns, WONDER, wonderPoints, wonderRule, wonderViews, wondersScore, type WonderView } from './wonders';
+export { FOOD } from './content';

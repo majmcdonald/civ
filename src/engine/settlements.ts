@@ -219,12 +219,13 @@ function keepLimit(state: GameState, content: Content, player: PlayerId): number
 // or those of its civilization's settlements one transport step away (adjacent, or along a river
 // with Dugout Canoes), in the same order (design doc §6, Food). `support` counts both; `fed` is the
 // food part; `ateOwn` holds the settlements that gathered food and ate some of their own; `kept` is
-// the food each settlement stores for next turn. Also returns the tokens left over, by "area:player".
+// the food each settlement stores for next turn; `left` the food goods not eaten or stored, by
+// "area:player" ("pool:player" for food bought). Also returns the tokens left over, by "area:player".
 export function allocateSupport(
   state: GameState,
   map: GameMap,
   content: Content,
-): { support: Map<AreaId, number>; fed: Map<AreaId, number>; ateOwn: Set<AreaId>; kept: Map<AreaId, number>; spare: Map<string, number> } {
+): { support: Map<AreaId, number>; fed: Map<AreaId, number>; ateOwn: Set<AreaId>; kept: Map<AreaId, number>; left: Map<string, number>; spare: Map<string, number> } {
   const spare = new Map(state.stacks.map((s) => [`${s.area}:${s.player}`, s.count]));
   const order = [...state.settlements].sort((a, b) => tierRules(b.tier).value - tierRules(a.tier).value || a.area - b.area);
   const support = new Map<AreaId, number>();
@@ -276,22 +277,45 @@ export function allocateSupport(
     support.set(s.area, support.get(s.area)! + take);
   }
   const kept = new Map<AreaId, number>();
+  const left = new Map<string, number>();
   for (const s of state.settlements) {
-    const left = pantry(s.area, s.player);
-    const keep = Math.min(keepLimit(state, content, s.player), left.stored + left.keeps);
+    const rest = pantry(s.area, s.player);
+    const keep = Math.min(keepLimit(state, content, s.player), rest.stored + rest.keeps);
     if (keep > 0) kept.set(s.area, keep);
+    left.set(`${s.area}:${s.player}`, rest.spoils + rest.keeps - Math.max(0, keep - rest.stored));
   }
-  return { support, fed, ateOwn, kept, spare };
+  for (const p of state.players) left.set(`pool:${p.id}`, (pools.get(p.id) ?? poolOf(state, content, p.id)).spoils);
+  return { support, fed, ateOwn, kept, left, spare };
 }
 
 export function assignSupport(state: GameState, map: GameMap, content: Content): Map<AreaId, number> {
   return allocateSupport(state, map, content).support;
 }
 
+// Food goods eaten or stored leave the civilization's goods, so only what is left can build
+// wonders (design doc §9, support comes first). Food that spoils goes first, as in the check.
+function eatFood(state: GameState, content: Content, left: Map<string, number>): void {
+  for (const [key, rest] of left) {
+    const [where, player] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
+    const area = where === 'pool' ? null : Number(where);
+    const food = state.goods
+      .filter((g) => g.player === player && g.area === area && isFood(content, g.resource))
+      .sort((a, b) => Number(storeCap(state, player, a.resource) > 0) - Number(storeCap(state, player, b.resource) > 0));
+    let over = food.reduce((sum, g) => sum + g.count, 0) - rest;
+    for (const g of food) {
+      const n = Math.min(over, g.count);
+      g.count -= n;
+      over -= n;
+    }
+  }
+  state.goods = state.goods.filter((g) => g.count > 0);
+}
+
 // Resolution step 6: a settlement short of support drops one tier. Food that keeps and is left
 // over is stored for next turn's check (Pottery).
 export function resolveSupport(ctx: Context): void {
-  const { support, fed, ateOwn, kept } = allocateSupport(ctx.state, ctx.map, ctx.content);
+  const { support, fed, ateOwn, kept, left } = allocateSupport(ctx.state, ctx.map, ctx.content);
+  eatFood(ctx.state, ctx.content, left);
   for (const s of ctx.state.settlements) {
     if (ateOwn.has(s.area)) s.ateOwn = ctx.state.turn;
     const count = fed.get(s.area);
@@ -315,7 +339,7 @@ export function dropTier(ctx: Context, settlement: Settlement): void {
   const below = TIERS[i - 1];
   if (below) {
     settlement.tier = below.id;
-    trimWork(settlement);
+    trimWork(state, settlement);
   } else state.settlements = state.settlements.filter((s) => s !== settlement);
   const placed = placeRefugees(ctx, settlement.player, settlement.area, freed, !below);
   emit(ctx, { type: 'settlementDropped', player: settlement.player, area: settlement.area, tier: below?.id ?? null, refugees: placed, lost: freed - placed });

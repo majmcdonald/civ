@@ -127,6 +127,14 @@ function describeEffect(effect: Effect, names: Names): string {
       return 'Market access';
     case 'marketReach':
       return `Market reach +${effect.amount}`;
+    case 'manpower':
+      return `+${effect.amount} manpower in its settlement`;
+    case 'culture':
+      return `+${effect.amount} culture progress a turn`;
+    case 'learning':
+      return `+${effect.amount} learning a turn`;
+    case 'raidImmunity':
+      return 'Barbarian raids cannot strike your settlements';
     case 'hook':
       return 'Special rule';
   }

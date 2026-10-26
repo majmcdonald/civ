@@ -1,6 +1,7 @@
 import type { Advance, AreaFilter, Condition, DomainId, Effect, Gathering, Input, SettlementTier } from '../content/types';
 import type { Content } from './content';
 import { emit } from './context';
+import { learningBonus } from './effects';
 import { addCiv, capitalDistance, RAPID_CHANGE_FREE } from './instability';
 import type { AreaId, GameMap } from './map/types';
 import { STARTING_TOKEN_CAP } from './population';
@@ -178,9 +179,9 @@ export function grantLearning(ctx: Context, id: PlayerId, advanceId: string, uni
   e.progress = Math.min(cost, e.progress + units * LEARNING_PROGRESS);
 }
 
-// Learning a turn: one per High Learning unit.
+// Learning a turn: one per High Learning unit, plus wonders that add learning (Stonehenge).
 export function learningPool(state: GameState, id: PlayerId): number {
-  return highLearning(state, id);
+  return highLearning(state, id) + learningBonus(state, id);
 }
 
 // What an advance's next step costs, in its own units: progress toward Known or Developed, or

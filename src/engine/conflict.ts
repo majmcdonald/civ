@@ -1,9 +1,9 @@
 import type { Content } from './content';
 import { emit } from './context';
 import { settlementBonus, strength } from './effects';
-import type { AreaId, GameMap } from './map/types';
+import type { AreaId, GameMap, ResourceId } from './map/types';
 import { adjust, tokensAt } from './population';
-import { resetWork } from './resources';
+import { goodsHeld, resetWork } from './resources';
 import { projectTurn, settlementAt, TIERS, tierRules, type TierRules } from './settlements';
 import type { Context, GameEvent, GameState, PlayerId, Settlement, TokenCount } from './types';
 
@@ -107,7 +107,7 @@ function attackSettlement(ctx: Context, settlement: Settlement): void {
     losses.push({ ...a });
   }
   const fighters: Side[] = attackers.filter((a) => !repelled.includes(a)).map((a) => ({ ...a, strength: attackStrength(a.player) }));
-  const event = { type: 'settlementAttacked' as const, area, defender: settlement.player, tier: settlement.tier, attackers, repelled: repelled.map((a) => a.player), losses, capturedBy: null as PlayerId | null, survivors: 0, spoils: 0 };
+  const event: Extract<GameEvent, { type: 'settlementAttacked' }> = { type: 'settlementAttacked', area, defender: settlement.player, tier: settlement.tier, attackers, repelled: repelled.map((a) => a.player), losses, capturedBy: null, survivors: 0, spoils: 0 };
   if (fighters.length === 0) {
     emit(ctx, event);
     return;
@@ -135,6 +135,8 @@ function attackSettlement(ctx: Context, settlement: Settlement): void {
     event.capturedBy = winner.player;
     event.survivors = winner.count;
     event.spoils = takeSpoils(state, settlement.player, winner.player, rules);
+    const goods = takeStock(ctx, settlement.player, winner.player, rules);
+    if (goods.length > 0) event.goods = goods;
     const below = TIERS[TIERS.indexOf(rules) - 1];
     if (below) {
       settlement.tier = below.id;
@@ -159,6 +161,29 @@ function takeSpoils(state: GameState, from: PlayerId, to: PlayerId, rules: TierR
   loser.treasury -= amount;
   state.players.find((p) => p.id === to)!.treasury += amount;
   return amount;
+}
+
+// The same share of each durable good in the defender's stock goes to the capturer's (design doc
+// §11, v0.28).
+function takeStock(ctx: Context, from: PlayerId, to: PlayerId, rules: TierRules): { resource: ResourceId; count: number }[] {
+  const { state, content } = ctx;
+  const taken: { resource: ResourceId; count: number }[] = [];
+  for (const r of content.resources.filter((x) => x.durable)) {
+    const count = Math.floor(goodsHeld(state, from, r.id) * rules.spoils);
+    if (count === 0) continue;
+    let left = count;
+    for (const g of state.goods.filter((x) => x.player === from && x.resource === r.id).sort((x, y) => (x.area ?? Infinity) - (y.area ?? Infinity))) {
+      const n = Math.min(left, g.count);
+      g.count -= n;
+      left -= n;
+    }
+    const pool = state.goods.find((g) => g.player === to && g.area === null && g.resource === r.id);
+    if (pool) pool.count += count;
+    else state.goods.push({ area: null, player: to, resource: r.id, count });
+    taken.push({ resource: r.id, count });
+  }
+  state.goods = state.goods.filter((g) => g.count > 0);
+  return taken;
 }
 
 export type ConflictEvent = Extract<GameEvent, { type: 'conflict' | 'settlementAttacked' }>;

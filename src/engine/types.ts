@@ -113,7 +113,7 @@ export interface Endgame {
   by: PlayerId[];
 }
 
-// One civilization's points (design doc §15). Wonders arrive with the wonder system.
+// One civilization's points (design doc §15).
 export interface Score {
   player: PlayerId;
   knowledge: number;
@@ -124,7 +124,7 @@ export interface Score {
 }
 
 // Manpower on one resource of the settlement's area, or on a specialist assignment ('bureaucracy',
-// 'highLearning', 'artists') (design doc §6, Manpower). Standing orders, most recently changed last; manpower not listed is unassigned.
+// 'highLearning', 'artists', 'wonder') (design doc §6, Manpower). Standing orders, most recently changed last; manpower not listed is unassigned.
 export interface Work {
   resource: ResourceId;
   count: number;
@@ -141,7 +141,8 @@ export interface MarketOrder {
 
 // Goods gathered in the resources phase, held where they were gathered; lost at the end of the
 // turn (design doc §6). Goods bought on the market have no area: they are in the civilization's
-// pool (design doc §7, Delivery).
+// pool (design doc §7, Delivery). Durable goods left at the end of a turn join the pool, the
+// civilization's stock (v0.28).
 export interface Good {
   area: AreaId | null;
   player: PlayerId;
@@ -175,6 +176,32 @@ export interface Settlement {
   drought?: number;
 }
 
+// A wonder under construction (design doc §9, v0.28) at the builder's settlement in `area`:
+// `worked` of its turns done. `labour` is the manpower on it in `turn`'s resources phase. Once a
+// rival completes it, `outbuilt` is that turn, and the builder chooses in its next allocation phase
+// to move the progress or turn it into culture points.
+export interface Build {
+  wonder: string;
+  player: PlayerId;
+  area: AreaId;
+  worked: number;
+  started: number;
+  labour?: { turn: number; units: number };
+  outbuilt?: number;
+}
+
+// A completed wonder: one in the world. Its builder keeps the points; its effects work for whoever
+// holds the settlement in `area` until that settlement is gone (`ruined`).
+export interface WonderRecord {
+  wonder: string;
+  builder: PlayerId;
+  area: AreaId;
+  turn: number;
+  // Copied from the wonder's content at completion.
+  effects: Effect[];
+  ruined?: boolean;
+}
+
 // A founding (no settlement in the area) or an upgrade to the next tier, ordered in allocation.
 export interface ConversionOrder {
   player: PlayerId;
@@ -204,6 +231,8 @@ export interface GameState {
   goods: Good[];
   // Areas whose limit is lowered by 1 through `until` (Drought, design doc §12).
   dry: { area: AreaId; until: number }[];
+  builds: Build[];
+  wonders: WonderRecord[];
   endgame: Endgame | null;
   // The countdown has run out; no further commands are accepted.
   over: boolean;
@@ -224,7 +253,12 @@ export type Command =
   // Sets the standing market order for one good; a count of 0 cancels it.
   | { type: 'setOrder'; player: PlayerId; resource: ResourceId; side: 'buy' | 'sell'; count: number; limit?: number }
   // Sets which calamities to buy off when they strike.
-  | { type: 'setBuyOff'; player: PlayerId; calamities: string[] };
+  | { type: 'setBuyOff'; player: PlayerId; calamities: string[] }
+  // Starts building a wonder at one of the player's settlements.
+  | { type: 'startWonder'; player: PlayerId; wonder: string; area: AreaId }
+  // After losing a race for `wonder`: moves the progress to another wonder at `area`, or with no
+  // `to`, turns it into culture points.
+  | { type: 'redirectWonder'; player: PlayerId; wonder: string; to?: { wonder: string; area: AreaId } };
 
 // Tokens taken from one area by a conversion.
 export interface TokenSource {
@@ -273,6 +307,17 @@ export type GameEvent =
   | { type: 'endgameBegan'; by: PlayerId[]; ends: number }
   // Final scores, highest first; every civilization tied for the top is a winner.
   | { type: 'gameEnded'; scores: Score[]; winners: PlayerId[] }
+  | { type: 'wonderStarted'; player: PlayerId; wonder: string; area: AreaId; worked: number }
+  | { type: 'wonderWorked'; player: PlayerId; wonder: string; worked: number; currency: number }
+  | { type: 'wonderStalled'; player: PlayerId; wonder: string; reason: string }
+  | { type: 'wonderCompleted'; player: PlayerId; wonder: string; area: AreaId }
+  // A rival completed it first; the builder chooses what to do with `worked` turns.
+  | { type: 'wonderOutbuilt'; player: PlayerId; wonder: string; worked: number; by: PlayerId }
+  | { type: 'wonderConverted'; player: PlayerId; wonder: string; points: number }
+  // Its settlement was captured or lost: the progress is gone.
+  | { type: 'wonderLost'; player: PlayerId; wonder: string; area: AreaId; worked: number }
+  // A completed wonder's settlement is gone: its effects end.
+  | { type: 'wonderRuined'; wonder: string; area: AreaId }
   | { type: 'conflict'; area: AreaId; losses: TokenCount[] }
   | {
       type: 'settlementAttacked';
@@ -286,8 +331,9 @@ export type GameEvent =
       losses: TokenCount[];
       capturedBy: PlayerId | null;
       survivors: number;
-      // Currency the capturer took from the defender's treasury.
+      // Currency the capturer took from the defender's treasury, and durable goods from its stock.
       spoils: number;
+      goods?: { resource: ResourceId; count: number }[];
     };
 
 export interface StampedEvent {

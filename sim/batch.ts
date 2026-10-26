@@ -99,6 +99,11 @@ interface Totals {
   countdown: number | null;
   ended: number | null;
   winnerScore: number | null;
+  // Wonders started, turns stalled, turns each was completed, and races lost (design doc §9).
+  wondersStarted: number;
+  wonderStalls: number;
+  wondersDone: number[];
+  outbuilt: number;
 }
 
 function sample(session: Session, game: string): Sample[] {
@@ -112,7 +117,7 @@ function sample(session: Session, game: string): Sample[] {
       tokens: looseTokens(state, p.id),
       villages: own.filter((s) => s.tier === 'village').length,
       towns: own.filter((s) => s.tier === 'town').length,
-      manpower: own.reduce((sum, s) => sum + manpower(s), 0),
+      manpower: own.reduce((sum, s) => sum + manpower(state, s), 0),
       bureaucracy: own.reduce((sum, s) => sum + ((s.work ?? []).find((w) => w.resource === BUREAUCRACY)?.count ?? 0), 0),
       instability: p.instability,
       treasury: p.treasury,
@@ -136,6 +141,10 @@ function count(totals: Totals, event: GameEvent, step: string, turn: number): vo
   if (event.type === 'settlementAttacked' && event.capturedBy) totals.captures += 1;
   if (event.type === 'conflict' || event.type === 'settlementAttacked') totals.fights += 1;
   if (event.type === 'marketTrade' && event.side === 'buy') totals.bought += event.count;
+  if (event.type === 'wonderStarted') totals.wondersStarted += 1;
+  if (event.type === 'wonderStalled') totals.wonderStalls += 1;
+  if (event.type === 'wonderCompleted') totals.wondersDone.push(turn);
+  if (event.type === 'wonderOutbuilt') totals.outbuilt += 1;
   if (event.type === 'calamity') {
     if (event.averted) totals.averted += 1;
     else totals.calamities += 1;
@@ -149,7 +158,7 @@ function playGame(options: Options, seed: number, map: MapType): { samples: Samp
   const session = startSession({ seed, players, finalEra: options.final, map: { type: map, room: options.room } }, loaded.content);
   const game = `${map}/${seed}`;
   const samples: Sample[] = [];
-  const totals: Totals = { game, built: 0, collapses: 0, supportDrops: 0, captures: 0, fights: 0, bought: 0, calamities: 0, averted: 0, firstAtCap: null, eraTurns: [], countdown: null, ended: null, winnerScore: null };
+  const totals: Totals = { game, built: 0, collapses: 0, supportDrops: 0, captures: 0, fights: 0, bought: 0, calamities: 0, averted: 0, firstAtCap: null, eraTurns: [], countdown: null, ended: null, winnerScore: null, wondersStarted: 0, wonderStalls: 0, wondersDone: [], outbuilt: 0 };
   let step = '';
   while (session.state.turn <= options.turns && !session.state.over) {
     const turn = session.state.turn;
@@ -157,6 +166,7 @@ function playGame(options: Options, seed: number, map: MapType): { samples: Samp
       for (const command of aiCommands(session.state, session.content, p.id)) {
         const result = submit(session, command);
         if (!result.ok) throw new Error(`${game} turn ${turn}: AI command rejected: ${result.reason}`);
+        for (const { event } of result.events) count(totals, event, 'allocation', turn);
       }
       const result = submit(session, { type: 'endPhase', player: p.id });
       if (!result.ok) throw new Error(`${game} turn ${turn}: ${result.reason}`);
@@ -217,11 +227,11 @@ console.log(
     }),
   ),
 );
-console.log('\nPer game: settlements built, collapses, support drops, captures, fights, goods bought on the market, calamities suffered and bought off, first turn a civilization reached its token cap, turns civilizations entered a new era (first and median), the turn the endgame countdown began and the game ended, and the winning score.\n');
+console.log('\nPer game: settlements built, collapses, support drops, captures, fights, goods bought on the market, calamities suffered and bought off, first turn a civilization reached its token cap, turns civilizations entered a new era (first and median), the turn the endgame countdown began and the game ended, the winning score, and wonders: started, turns stalled, completed (first and last turn), races lost.\n');
 console.log(
   table(
-    ['Game', 'Built', 'Collapses', 'Support drops', 'Captures', 'Fights', 'Bought', 'Calamities', 'Bought off', 'First at cap', 'New era', 'Countdown', 'Ended', 'Winner'],
-    totals.map((t) => [t.game, String(t.built), String(t.collapses), String(t.supportDrops), String(t.captures), String(t.fights), String(t.bought), String(t.calamities), String(t.averted), t.firstAtCap === null ? '—' : String(t.firstAtCap), t.eraTurns.length === 0 ? '—' : `${t.eraTurns[0]} / ${t.eraTurns[Math.floor(t.eraTurns.length / 2)]} (${t.eraTurns.length})`, opt(t.countdown), opt(t.ended), opt(t.winnerScore)]),
+    ['Game', 'Built', 'Collapses', 'Support drops', 'Captures', 'Fights', 'Bought', 'Calamities', 'Bought off', 'First at cap', 'New era', 'Countdown', 'Ended', 'Winner', 'Wonders', 'Stalls', 'Done', 'Lost'],
+    totals.map((t) => [t.game, String(t.built), String(t.collapses), String(t.supportDrops), String(t.captures), String(t.fights), String(t.bought), String(t.calamities), String(t.averted), t.firstAtCap === null ? '—' : String(t.firstAtCap), t.eraTurns.length === 0 ? '—' : `${t.eraTurns[0]} / ${t.eraTurns[Math.floor(t.eraTurns.length / 2)]} (${t.eraTurns.length})`, opt(t.countdown), opt(t.ended), opt(t.winnerScore), String(t.wondersStarted), String(t.wonderStalls), t.wondersDone.length === 0 ? '0' : `${t.wondersDone.length} (${t.wondersDone[0]}–${t.wondersDone[t.wondersDone.length - 1]})`, String(t.outbuilt)]),
   ),
 );
 if (options.json) fs.writeFileSync(options.json, JSON.stringify({ options, samples, totals }, null, 2));

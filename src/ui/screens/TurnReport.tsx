@@ -108,8 +108,41 @@ export function buildReport(events: readonly ReportEvent[], names: ReportNames):
       add(`Game over: ${e.winners.map((p) => (p === me ? 'you' : names.who(p))).join(' and ')} ${e.winners.length > 1 ? 'share' : 'win with'} the highest score, ${top} points`, null, true);
       continue;
     }
+    // Wonder starts and completions are public (design doc §9, Visibility); progress is not.
+    const wonder = (id: string) => content.wonders.find((w) => w.id === id);
+    const wonderName = (id: string) => wonder(id)?.name ?? id;
+    if (e.type === 'wonderStarted' && e.player !== me) {
+      add(`${names.who(e.player)} began building ${wonderName(e.wonder)}`, null, true);
+      continue;
+    }
+    if (e.type === 'wonderCompleted') {
+      add(e.player === me ? `You completed ${wonderName(e.wonder)} at ${place(e.area)}` : `${names.who(e.player)} completed ${wonderName(e.wonder)}`, e.area, true);
+      continue;
+    }
+    if (e.type === 'wonderRuined') {
+      add(`${wonderName(e.wonder)} at ${place(e.area)} lies in ruins: its effect ends`, e.area, true);
+      continue;
+    }
     if (!('player' in e) || e.player !== me) continue;
     switch (e.type) {
+      case 'wonderStarted':
+        add(e.worked > 0 ? `Moved your progress to ${wonderName(e.wonder)} at ${place(e.area)}: ${e.worked} of ${wonder(e.wonder)?.turns ?? '?'} turns` : `Began building ${wonderName(e.wonder)} at ${place(e.area)}`, e.area, true);
+        break;
+      case 'wonderWorked':
+        add(`${wonderName(e.wonder)}: ${e.worked} of ${wonder(e.wonder)?.turns ?? '?'} turns${e.currency > 0 ? ` (${e.currency} currency for manpower)` : ''}`, null, false);
+        break;
+      case 'wonderStalled':
+        add(`${wonderName(e.wonder)} stalled: ${e.reason}`, null, true);
+        break;
+      case 'wonderOutbuilt':
+        add(`${names.who(e.by)} completed ${wonderName(e.wonder)} first: move your ${plural(e.worked, 'turn')} to another wonder or turn them into culture (Wonders screen, this allocation)`, null, true);
+        break;
+      case 'wonderConverted':
+        add(`${wonderName(e.wonder)}: progress turned into ${plural(e.points, 'culture point')}`, null, true);
+        break;
+      case 'wonderLost':
+        add(`${wonderName(e.wonder)} at ${place(e.area)} lost with its settlement: ${plural(e.worked, 'turn')} of work gone`, e.area, true);
+        break;
       case 'settlementBuilt':
         add(`${tierRules(e.tier).name} ${e.tier === 'village' ? 'founded' : 'built'} at ${place(e.area)}`, e.area, true);
         break;

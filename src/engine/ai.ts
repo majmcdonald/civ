@@ -5,7 +5,9 @@ import { BUREAUCRACY, CAPITAL_BUREAUCRACY, overextension, threshold, totalInstab
 import { canTrade, priceOf } from './market';
 import type { AreaId, GameMap, ResourceId } from './map/types';
 import { looseTokens, tokensAt } from './population';
-import { assigned, isFood, manpower, usable, workable } from './resources';
+import { FOOD } from './content';
+import { assigned, goodsHeld, isFood, manpower, usable, workable } from './resources';
+import { isCompleted, WONDER, wonderRule } from './wonders';
 import { allocateSupport, nextTier, previewConversions, settlementAt, supportSummary, tierRules } from './settlements';
 import type { Command, GameState, PlayerId } from './types';
 import { mapFor } from './world';
@@ -28,11 +30,17 @@ import { mapFor } from './world';
 //    adds overextension again, so the AI looks two turns of overextension ahead. A settlement
 //    within 3 of its collapse threshold by then moves 1 manpower to Bureaucracy (unassigned first,
 //    else from its most recent assignment); one 6 or more below it moves 1 back to work.
-// 4. Study: while High Learning is below a third of the civilization's manpower (rounded down),
+// 4. Wonders (design doc §9, v0.28; interim until the era's AI approaches): with no wonder in
+//    progress, it starts the first wonder it can build that no rival is building, at its largest
+//    settlement, if the engine accepts the order (a turn can be paid). On its build it puts manpower
+//    up to the wonder's need, idle first, then from High Learning; currency covers the rest. Idle
+//    manpower works a good the build is short of before food, and it buys the shortfall when it can
+//    trade. Progress from a race it lost becomes culture points.
+// 5. Study: while High Learning is below a third of the civilization's manpower (rounded down),
 //    idle manpower goes to it, largest settlements first. The study queue stays empty, so learning
 //    splits evenly (design doc §8, v0.17).
-// 5. Put idle manpower to work: on the area's first food the civilization can gather, else the
-//    first good it can (copper, cloth).
+// 6. Put idle manpower to work: on a good its wonder is short of, else the area's first food the
+//    civilization can gather, else the first good it can (copper, cloth, stone).
 //
 // It marks every calamity that can be bought off (design doc §12), so its treasury pays 10 to avert
 // one whenever it can.
@@ -54,6 +62,19 @@ function landNeighbors(map: GameMap, area: AreaId): AreaId[] {
   return map.areas[area]!.neighbors.filter((n) => map.areas[n]!.kind === 'land');
 }
 
+// Goods (not food) the player's wonder needs a turn beyond what it holds.
+function wonderShort(state: GameState, content: Content, player: PlayerId): Map<ResourceId, number> {
+  const short = new Map<ResourceId, number>();
+  const build = state.builds.find((b) => b.player === player && b.outbuilt === undefined);
+  const rule = build && wonderRule(content, build.wonder);
+  for (const g of rule?.goods ?? []) {
+    if (g.resource === FOOD) continue;
+    const gap = g.count - goodsHeld(state, player, g.resource);
+    if (gap > 0) short.set(g.resource, gap);
+  }
+  return short;
+}
+
 function tradeCommands(state: GameState, map: GameMap, content: Content, player: PlayerId): Command[] {
   if (!canTrade(state, player)) return [];
   const cheapest = (goods: ResourceId[]) => [...goods].sort((a, b) => priceOf(state, content, player, a) - priceOf(state, content, player, b))[0];
@@ -64,6 +85,7 @@ function tradeCommands(state: GameState, map: GameMap, content: Content, player:
   const luxury = cheapest(content.resources.filter((r) => r.luxury).map((r) => r.id));
   if (food && shortfall > 0) want.set(food, shortfall);
   if (luxury && unrest > 0) want.set(luxury, unrest);
+  for (const [resource, count] of wonderShort(state, content, player)) want.set(resource, (want.get(resource) ?? 0) + count);
   const orders = state.players.find((p) => p.id === player)!.orders;
   const commands: Command[] = [];
   for (const o of orders) if (!want.has(o.resource)) commands.push({ type: 'setOrder', player, resource: o.resource, side: o.side, count: 0 });
@@ -80,11 +102,12 @@ export function aiCommands(state: GameState, content: Content, player: PlayerId)
   const map = mapFor(state.setup);
   const commands: Command[] = [];
   let current = state;
-  const issue = (command: Command) => {
+  const issue = (command: Command): boolean => {
     const result = applyCommand(current, command, content);
-    if (!result.ok) return;
+    if (!result.ok) return false;
     current = result.state;
     commands.push(command);
+    return true;
   };
 
   const buyable = content.calamities.filter((c) => c.buyOff).map((c) => c.id);
@@ -128,9 +151,9 @@ export function aiCommands(state: GameState, content: Content, player: PlayerId)
     const calm = work.find((w) => w.resource === BUREAUCRACY)?.count ?? 0;
     const rising = Math.max(0, overextension(current, player) - CAPITAL_BUREAUCRACY);
     const gap = threshold(current, map, s) - totalInstability(current, s) - 2 * rising;
-    if (gap <= CALM_WITHIN && calm < manpower(s)) {
+    if (gap <= CALM_WITHIN && calm < manpower(current, s)) {
       const from = [...work].reverse().find((w) => w.resource !== BUREAUCRACY);
-      if (assigned(s) >= manpower(s) && from) issue({ type: 'assignWork', player, area: s.area, resource: from.resource, count: from.count - 1 });
+      if (assigned(s) >= manpower(current, s) && from) issue({ type: 'assignWork', player, area: s.area, resource: from.resource, count: from.count - 1 });
       issue({ type: 'assignWork', player, area: s.area, resource: BUREAUCRACY, count: calm + 1 });
     } else if (gap >= CALM_CLEAR && calm > 0) {
       issue({ type: 'assignWork', player, area: s.area, resource: BUREAUCRACY, count: calm - 1 });
@@ -138,10 +161,30 @@ export function aiCommands(state: GameState, content: Content, player: PlayerId)
   }
 
   const own = () => current.settlements.filter((x) => x.player === player);
-  const target = Math.floor(own().reduce((sum, s) => sum + manpower(s), 0) * STUDY_SHARE);
-  for (const area of [...own()].sort((a, b) => manpower(b) - manpower(a) || a.area - b.area).map((s) => s.area)) {
+  for (const b of current.builds.filter((x) => x.player === player && x.outbuilt !== undefined)) issue({ type: 'redirectWonder', player, wonder: b.wonder });
+  if (!current.builds.some((b) => b.player === player)) {
+    const largest = [...own()].sort((a, b) => manpower(current, b) - manpower(current, a) || a.area - b.area)[0];
+    const open = content.wonders.filter((w) => !isCompleted(current, w.id) && !current.builds.some((b) => b.wonder === w.id && b.player !== player && b.outbuilt === undefined));
+    for (const w of largest ? open : []) {
+      if (issue({ type: 'startWonder', player, wonder: w.id, area: largest!.area })) break;
+    }
+  }
+  const build = current.builds.find((b) => b.player === player && b.outbuilt === undefined);
+  if (build) {
+    const s = settlementAt(current, build.area)!;
+    const on = (resource: string) => (s.work ?? []).find((w) => w.resource === resource)?.count ?? 0;
+    let gap = wonderRule(content, build.wonder)!.manpower - on(WONDER);
+    const idle = Math.min(gap, manpower(current, s) - assigned(s));
+    const studying = Math.min(gap - idle, on(HIGH_LEARNING));
+    if (studying > 0) issue({ type: 'assignWork', player, area: s.area, resource: HIGH_LEARNING, count: on(HIGH_LEARNING) - studying });
+    gap = idle + studying;
+    if (gap > 0) issue({ type: 'assignWork', player, area: s.area, resource: WONDER, count: on(WONDER) + gap });
+  }
+
+  const target = Math.floor(own().reduce((sum, s) => sum + manpower(current, s), 0) * STUDY_SHARE);
+  for (const area of [...own()].sort((a, b) => manpower(current, b) - manpower(current, a) || a.area - b.area).map((s) => s.area)) {
     const s = settlementAt(current, area)!;
-    const idle = manpower(s) - assigned(s);
+    const idle = manpower(current, s) - assigned(s);
     const studying = highLearning(current, player);
     if (idle <= 0 || studying >= target) continue;
     const on = (s.work ?? []).find((w) => w.resource === HIGH_LEARNING)?.count ?? 0;
@@ -150,10 +193,11 @@ export function aiCommands(state: GameState, content: Content, player: PlayerId)
 
   for (const area of own().map((x) => x.area)) {
     const s = settlementAt(current, area)!;
-    const idle = manpower(s) - assigned(s);
+    const idle = manpower(current, s) - assigned(s);
     if (idle <= 0) continue;
     const options = workable(map, content, area).filter((r) => usable(current, content, player, r));
-    const resource = options.find((r) => isFood(content, r)) ?? options[0];
+    const short = wonderShort(current, content, player);
+    const resource = options.find((r) => short.has(r)) ?? options.find((r) => isFood(content, r)) ?? options[0];
     if (!resource) continue;
     const on = (s.work ?? []).find((w) => w.resource === resource)?.count ?? 0;
     issue({ type: 'assignWork', player, area, resource, count: on + idle });

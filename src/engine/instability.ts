@@ -2,7 +2,7 @@ import type { Content } from './content';
 import { emit } from './context';
 import { calm, capitalReach, riverLeg, transportNeighbors } from './effects';
 import type { AreaId, GameMap } from './map/types';
-import { activeWork } from './resources';
+import { activeWork, isDurable } from './resources';
 import { dropTier, tierRules, TIERS } from './settlements';
 import type { Context, GameEvent, GameState, PlayerId, Settlement } from './types';
 
@@ -160,21 +160,36 @@ export function runBureaucracy(ctx: Context): void {
 
 // Luxury goods left after the market calm the people (design doc §6, Luxury goods): each calms 1
 // on the settlement nearest its collapse threshold (lower areas first on ties), at most 1 per
-// settlement; the rest come off the civ-wide meter.
+// settlement. Durable luxuries (copper, cloth; v0.28) calm only settlements with instability and
+// are otherwise kept in the stock; other luxuries left over come off the civ-wide meter.
 function useLuxuries(ctx: Context, content: Content, thresholds: Map<PlayerId, Map<AreaId, number>>): void {
   const { state } = ctx;
+  const luxury = (r: string) => content.resources.some((x) => x.id === r && x.luxury);
   for (const p of state.players) {
-    let left = state.goods.reduce((sum, g) => (g.player === p.id && content.resources.some((r) => r.id === g.resource && r.luxury) ? sum + g.count : sum), 0);
-    if (left === 0) continue;
+    const mine = state.goods.filter((g) => g.player === p.id && luxury(g.resource));
+    let perishable = mine.filter((g) => !isDurable(content, g.resource)).reduce((sum, g) => sum + g.count, 0);
+    let lasting = mine.filter((g) => isDurable(content, g.resource)).reduce((sum, g) => sum + g.count, 0);
+    if (perishable + lasting === 0) continue;
     const margin = (s: Settlement) => thresholds.get(p.id)!.get(s.area)! - totalInstability(state, s);
     const own = state.settlements.filter((s) => s.player === p.id).sort((a, b) => margin(a) - margin(b) || a.area - b.area);
+    let used = 0;
     for (const s of own) {
-      if (left === 0) break;
-      calmAt(ctx, s, 1, 'luxury');
-      left -= 1;
+      if (perishable > 0) {
+        calmAt(ctx, s, 1, 'luxury');
+        perishable -= 1;
+      } else if (lasting > 0 && totalInstability(state, s) > 0) {
+        calmAt(ctx, s, 1, 'luxury');
+        lasting -= 1;
+        used += 1;
+      }
     }
-    if (left > 0) addCiv(ctx, p.id, -Math.min(left, p.instability), 'luxury');
-    state.goods = state.goods.filter((g) => g.player !== p.id || !content.resources.some((r) => r.id === g.resource && r.luxury));
+    if (perishable > 0) addCiv(ctx, p.id, -Math.min(perishable, p.instability), 'luxury');
+    for (const g of mine.filter((x) => isDurable(content, x.resource)).sort((x, y) => (x.area ?? Infinity) - (y.area ?? Infinity) || content.resources.findIndex((r) => r.id === x.resource) - content.resources.findIndex((r) => r.id === y.resource))) {
+      const n = Math.min(used, g.count);
+      g.count -= n;
+      used -= n;
+    }
+    state.goods = state.goods.filter((g) => g.count > 0 && (g.player !== p.id || !luxury(g.resource) || isDurable(content, g.resource)));
   }
 }
 
