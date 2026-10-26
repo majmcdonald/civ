@@ -37,6 +37,7 @@ export const SOURCE_NAMES: Record<InstabilitySource, string> = {
   luxury: 'luxuries',
   noSettlements: 'no settlements left',
   calamity: 'calamity',
+  rapidChange: 'rapid change',
 };
 
 const PHASE_NAMES: Record<Phase, string> = { resources: 'Resources', allocation: 'Allocation', resolution: 'Resolution' };

@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.24  
+**Version:** 0.25  
 **Date:** October 25, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -36,7 +36,7 @@ Where a system has a clear equivalent in the original game, the default is to **
 | Scope | Long arc: Stone Age to the Modern era; multi-session campaigns (save/resume required) |
 | Map | Irregular areas (regions). Either a procedurally generated map or a fixed historical map |
 | Player role | The ruling power: direct control over state decisions; discovery, adoption, and figures are indirect |
-| Diplomacy | None for now. Conflict state is derived from events (see §11) |
+| Diplomacy | None for now. All civilizations start **neutral** (v0.25); War and Peace states come later (§11) |
 
 ### Setup options
 
@@ -300,7 +300,7 @@ Manpower is a settlement's labor. Every unit is spent each turn on exactly one a
 | **Production** | Farming, mining, building | One of the area's resources per unit | — |
 | **Bureaucracy** | Works for the state | Lowers instability, 1 per unit per turn: its own settlement first, then the civ-wide meter (§10) | Leader, Reformer, Diplomat |
 | **High Learning** | Schools, R&D | Adds discovery progress | Scholar, Innovator, Thinker |
-| **Artists** | Arts | Slight stability; larger gain in culture points (victory points) | Artist, Prophet |
+| **Artists** | Arts | Slight stability; larger gain in culture points (victory points). Arrives with culture points and scoring (Phase 4 step 7, v0.25) | Artist, Prophet |
 | **Wonders** | Construction | Progress toward a wonder | — |
 
 - **Specialists** are manpower in Bureaucracy, High Learning, or Artists. Any settlement can assign them. Currency cannot fund specialists.
@@ -331,7 +331,7 @@ Trade is **market listings only**. There is no negotiation, proposal round, or t
 | Reach symmetry | **Mutual:** if either player reaches the other, both include each other |
 | Chaining | **Direct only:** A–B–C does not connect A and C |
 | Pricing | Per player, recalculated each turn from the buy/sell imbalance in that player's market; orders then fill at the new price. Limit orders the new price misses go unfilled |
-| Conflict | Civilizations in a conflict state are **excluded** from each other's markets |
+| Conflict | Deferred (v0.25): exclusion from each other's markets arrives with War and Peace states (§11) |
 | Goods (v0.21) | **Sell** any good you can use (its advance Developed) and hold, including stored grain; selling food in the resources phase leaves it out of that turn's support check. **Buy** any good, with or without its advance: bought goods work as their category says (food supports, luxuries calm), as finished goods, the way copper was traded long before smelting spread |
 | Starting prices (v0.21) | **Food 5** (grain, fish, livestock), **luxury 10** (copper, cloth), the same in every player's market at the start |
 | Price change (v0.21) | Each turn, before orders fill, each good's price moves **10% of its starting price per unit of imbalance** (units ordered bought minus sold in that market), rounded; food ±0.5 per unit, luxury ±1. Example: grain at 5, 4 bought and none sold: grain 7, and the 4 cost 28 |
@@ -552,13 +552,15 @@ Each advance below is final for the Stone Age content (numbers still placeholder
 
 | Raises local | Raises civ-wide | Lowers either |
 |---|---|---|
-| Food shortage | Overextension | Food surplus and stores |
-| Lost support | War | Institutions and wonders |
-| Nearby conflict | Settlement losses anywhere | Luxury goods |
-| Harsh figures (e.g., a tyrannical governor) | Rapid change (fast adoption) | Calming figures |
-| Disasters (pending calamity tuning) | | Manpower in Bureaucracy (and, slightly, Artists) |
+| Lost support (v0.25: covers food shortage) | Overextension | Bureaucracy |
+| Fighting at the settlement | War (deferred: War and Peace states, §11) | Institutions and wonders |
+| Disasters (calamities, §12) | Settlement losses anywhere | Luxury goods |
+| Harsh figures (e.g., a tyrannical governor) | Rapid change (v0.25: many advance steps in one turn) | Calming figures |
+| | | Advances (Ritual's calm); Artists (slightly) |
 
 - **No natural decay.** A meter falls only when a stabilizer is active.
+- **Still to come** (v0.25): Artists arrive with culture points and scoring (Phase 4 step 7); institutions with the first institution advances (Bronze Age; no Stone Age advance builds one); harsh and calming figures with historical figures (Phase 5); war instability with War and Peace states (§11).
+- **Food does not affect instability** (v0.25): a settlement short of food loses support and takes the lost-support +2; there is no separate shortage source and no surplus or stores stabilizer. Food already pays off through support, urban growth (§5), and stores (Pottery).
 
 ### First version (Phase 3)
 
@@ -569,8 +571,9 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 | Overextension | Civ-wide | +1 per turn for each settlement beyond 6 |
 | Settlement losses | Civ-wide | +1 per tier lost to support failure (a drop or dissolve) or capture (the loser loses the whole settlement: village 1, town 2, city 3, metropolis 4). **Collapse does not count**: it is already the result of instability, and counting it would turn a collapse at the edge into a cascade |
 | Lost support | Local, on the settlement that dropped | +2 (none if it dissolved) |
-| Nearby conflict | Local | +1 for each settlement in or adjacent to an area where its civilization's tokens or settlement fought |
+| Fighting at the settlement (v0.25) | Local | **+3** if the settlement itself is attacked (held or not); otherwise **+1** if its civilization lost tokens in a fight in or next to it. Fighting with no friendly losses adds nothing; never both |
 | Bureaucracy | Local first, the rest civ-wide | −1 per unit per turn; the capital has 1 free unit |
+| Rapid change (v0.25) | Civ-wide | +1 per advance step (Known, Developed, Mastered) beyond 2 reached in one turn; a Developed advance with no adoption stage counts once. Added at resolution step 10, so it counts toward next turn's collapse check. Ordinary use rarely finishes three steps at once (about 1 turn in 20 for the minimal AI); a scholar-driven sprint does |
 | Luxury goods | Local first (1 per settlement, nearest collapse first), the rest civ-wide | −1 per unit, used automatically in step 7 (v0.14, §6) |
 | Threshold | Local + civ-wide | Village 8, town 10, city 12, metropolis 14, lowered by distance from the capital (below) |
 | Collapse | — | One tier (§5, Tier drop, with refugees); the local meter is halved, rounded down; at most one drop per turn |
@@ -590,7 +593,7 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 - **Bureaucracy calms locally first.** Each unit removes 1 from its own settlement's meter; what is not needed there comes off the civ-wide meter. Example: a town with 1 unit, local 0 and civ-wide 3 lowers the civ-wide meter to 2. Meters never go below 0.
 - **Timing.** Bureaucracy works in the resources phase, like production, so a change made in allocation counts from next turn. Resolution step 7 adds the turn's sources, then checks collapse; tiers lost to collapse add to the civ-wide meter after the check, counting toward next turn.
 - **No settlements, no state.** A civilization left with no settlements at the end of step 7 has its civ-wide meter reset to 0, so a full collapse becomes a dark age it can rebuild from instead of a permanent lockout (a new village counts the civ-wide meter the turn it is founded). A surviving settlement keeps the meter; it must be brought down with Bureaucracy.
-- **Capture** starts the captured settlement's local meter at 0 for its new owner (the nearby-conflict +1 still applies).
+- **Capture** starts the captured settlement's local meter at 0 for its new owner (the attack's +3 is the old owner's, not the new one's).
 - **Interface.** Selecting a settlement shows "Instability 4 + 3 of 10" (local + civ-wide of threshold), why its threshold is what it is ("4 areas from the capital"), last turn's changes, and a Bureaucracy row beside the area's resources. While overextension outruns the civilization's Bureaucracy, the planning panel warns that unrest is rising and the farthest settlements will collapse first. Settlements within 2 of collapse carry a warning mark on the map. The Civilization overview has an Instability card (civ-wide meter, overextension, Bureaucracy, settlements close to collapse) and an instability column. The turn report names each collapse.
 
 ### Collapse
@@ -651,8 +654,7 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 
 ### Conflict state
 
-- Two civilizations are **in conflict** for a set number of turns after any fighting between them. Technologies may change this.
-- While in conflict: idea spread between them slows, they are excluded from each other's markets, and both take civ-wide war instability.
+- **Deferred** (v0.25). All civilizations start **neutral**: fighting creates no lasting state, no civ-wide war instability, and no market exclusion. **War and Peace states** are introduced later and take over these effects (§7 market exclusion, slower idea spread, war instability). Until then the only instability from fighting is local (§10): +3 to an attacked settlement, +1 where friendly tokens are lost in or next to a settlement.
 
 ## 12. Calamities — Decided
 
@@ -807,6 +809,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 - [ ] What specific transport discoveries do to movement range and goods range. (Dugout Canoes: up to 2 more areas along a river, v0.14.)
 - [ ] Conditions for absorbing independent settlements peacefully.
 - [ ] Barbarian spawn rules.
+- [ ] War and Peace states (v0.25: all civilizations start neutral): how they begin and end, war instability, market exclusion, slower idea spread.
 - [x] Whether token cap rises from adoption are permanent. Resolved v0.16: adoption no longer falls, so Mastered rises (Agriculture's +5) are permanent.
 - [x] Calamity mitigators: confirmed in v0.22 (§12): Pottery (Famine, Drought), Ritual (Superstition), Tallies (Civil disorder), Archery, Palisades, Masonry (Barbarian raid), Masonry (Earthquake). Dropped: Fishing, Agriculture, Herding, Barter (Famine), Chiefdom (Civil war, not in the Stone Age), Copper Working (Civil disorder).
 - [ ] Technology-by-technology design: plausibility conditions, Known and Developed inputs and costs, what each stage does, what drives adoption and how benefit scales, counters, mitigated calamities. Every advance is reviewed one at a time.
@@ -819,7 +822,7 @@ These are choices made knowingly, or risks to watch in playtesting.
 - [ ] Names for rival civilizations' settlements (generated name lists, or unnamed).
 - [ ] What happens to a settlement's name when it dissolves or is refounded.
 - [ ] Support variant: tokens only (current) vs tokens plus one lower-tier settlement in range. Compared in the Phase 0 simulation.
-- [ ] Food: whether food still drives growth and shortage raises instability now that food is a special resource. (Stores buffer support shortfalls: Pottery, v0.14.)
+- [ ] Food: whether food still drives growth now that food is a special resource. (Stores buffer support shortfalls: Pottery, v0.14; eating its own food adds urban growth, v0.18; food has no instability effect, v0.25.)
 
 ### Tuning (playtesting)
 
@@ -852,6 +855,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.25 (October 25, 2026):** Instability sources and stabilizers for the Stone Age (Phase 4 step 6). Artists wait for culture points (step 7), institutions for the Bronze Age, figures for Phase 5. Rapid change (§10): +1 civ-wide per advance step beyond 2 reached in one turn. Food has no instability effect (§10): shortage is covered by lost support; no surplus or stores stabilizer. Conflict state deferred (§11): all civilizations start neutral; War and Peace states come later with war instability and market exclusion. Instability from fighting (§10) is local only: +3 to a settlement that is attacked, otherwise +1 where its civilization lost tokens in or next to it; fighting without friendly losses adds nothing.
 - **0.24 (October 25, 2026):** The trade phase is removed (§3): three phases, Resources, Allocation, Resolution. Market orders are placed in allocation and fill in the resources phase after gathering and tax, so a change takes effect next turn and standing orders fill before the player allocates (§7).
 - **0.23 (October 25, 2026):** Resolution reports (§3): Brief (the current flash), Normal (a paused page of notable results, each line linked to the map), Detailed (every event, routine ones included). The Chronicle lists past turns, each opening its Detailed page.
 - **0.22 (October 25, 2026):** Calamities designed (§12). One roll per civilization a turn: 1% per settlement tier point plus 5% per turn in a row without a calamity, reset when one strikes. One weighted draw over settlement × calamity pairs picks both; the weights are the shown risk (low, medium, high). Softening advances halve the damage once Developed (some again when Mastered), not the chance. Eight Stone Age calamities: Famine (Pottery), Superstition (Ritual; a strike also gives Ritual 1 free learning), Civil disorder (Tallies), Epidemic (spreads through the victim's market; no counter yet), Barbarian raid (Archery, Palisades, Masonry), Flood, Earthquake/volcano (Masonry), Drought (Pottery). Civil war, heresy, piracy, and market crash wait for later systems. Buying off: a standing choice to pay 10 when a marked calamity strikes (Famine with Barter Developed, Superstition, Civil disorder, Barbarian raid); it is averted but still resets the build-up; currency gains this use (§6). The candidate calamity tags of §8 are confirmed or dropped (§17).

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mapFor, settlementAt, type AreaId, type Context, type GameEvent, type GameMap, type Session, type Settlement, type SettlementTier } from '../src/engine';
 import { resolveConflict } from '../src/engine/conflict';
+import { resolveDiscovery } from '../src/engine/discovery';
 import { landDistances, resolveInstability, runBureaucracy, threshold, updateCapitals } from '../src/engine/instability';
 import { endPhaseAll, eventsOfType, expectRejected, newGame, play, standIn, testContent } from './harness';
 
@@ -54,7 +55,7 @@ describe('instability sources', () => {
     expect(settlementAt(ctx.state, home)!.instability).toBe(2);
   });
 
-  it('raises the local meter of settlements in or next to a fight the civilization was in', () => {
+  it('raises the local meter by 1 where the civilization lost tokens in or next to the settlement', () => {
     const { game, map, home } = scene();
     const [n] = land(map, home);
     const far = map.areas.find((a) => a.kind === 'land' && a.id !== home && !map.areas[home]!.neighbors.includes(a.id))!.id;
@@ -64,6 +65,28 @@ describe('instability sources', () => {
     resolveInstability(ctx);
     expect(settlementAt(ctx.state, home)!.instability).toBe(1);
     expect(settlementAt(ctx.state, far)!.instability ?? 0).toBe(0);
+  });
+
+  it('adds nothing for a fight next to it with no friendly losses', () => {
+    const { game, map, home } = scene();
+    const [n] = land(map, home);
+    settle(game, home, 'village');
+    const ctx = context(game, [{ type: 'resolutionStep', step: 'conflict' }, { type: 'conflict', area: n!, losses: [{ player: 'ai1', count: 2 }, { player: 'ai2', count: 1 }] }]);
+    resolveInstability(ctx);
+    expect(settlementAt(ctx.state, home)!.instability ?? 0).toBe(0);
+  });
+
+  it('raises the local meter by 3 when the settlement itself is attacked, held or not, and not also by 1', () => {
+    const { game, map, home } = scene();
+    const [n] = land(map, home);
+    settle(game, home, 'village');
+    const ctx = context(game, [
+      { type: 'resolutionStep', step: 'conflict' },
+      { type: 'settlementAttacked', area: home, defender: 'p1', tier: 'village', attackers: [{ player: 'ai1', count: 5 }], repelled: ['ai1'], losses: [{ player: 'ai1', count: 5 }], capturedBy: null, survivors: 0, spoils: 0 },
+      { type: 'conflict', area: n!, losses: [{ player: 'p1', count: 1 }] },
+    ]);
+    resolveInstability(ctx);
+    expect(settlementAt(ctx.state, home)!.instability).toBe(3);
   });
 });
 
@@ -275,5 +298,17 @@ describe('advances and luxuries (v0.14)', () => {
     expect([local(b!), local(home), local(c!)]).toEqual([4, 0, 0]);
     expect(civ(ctx)).toBe(0);
     expect(ctx.state.goods).toEqual([]);
+  });
+});
+
+describe('rapid change (v0.25)', () => {
+  it('adds 1 civ-wide per advance step beyond 2 reached in one turn', () => {
+    const quick = (id: string) => ({ id, name: id, era: 'stone' as const, domain: 'crafts' as const, known: { cost: 1, inputs: [{ per: 'turn' as const, amount: 1 }] }, developed: { cost: 99, inputs: [] }, effects: [] });
+    const content = testContent({ ...standIn, advances: [...standIn.advances, quick('a'), quick('b'), quick('c'), quick('d')] });
+    const game = newGame({}, content);
+    const ctx: Context = { state: JSON.parse(JSON.stringify(game.state)), content, map: mapFor(game.setup), events: [], refugees: [] };
+    resolveDiscovery(ctx);
+    expect(ctx.state.players[0]!.instability).toBe(2);
+    expect(eventsOfType(ctx.events, 'instabilityChanged')).toContainEqual({ type: 'instabilityChanged', player: 'p1', area: null, amount: 2, source: 'rapidChange' });
   });
 });

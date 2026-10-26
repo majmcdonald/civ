@@ -1,7 +1,7 @@
 import type { Advance, AreaFilter, Condition, DomainId, Effect, Gathering, Input, SettlementTier } from '../content/types';
 import type { Content } from './content';
 import { emit } from './context';
-import { capitalDistance } from './instability';
+import { addCiv, capitalDistance, RAPID_CHANGE_FREE } from './instability';
 import type { AreaId, GameMap } from './map/types';
 import { STARTING_TOKEN_CAP } from './population';
 import { activeWork } from './resources';
@@ -421,6 +421,7 @@ export function grantStartingKnowledge(ctx: Context): void {
 export function resolveDiscovery(ctx: Context): void {
   const { state, map, content } = ctx;
   for (const p of state.players) {
+    let steps = 0;
     const views = discoveryView(state, map, content, p.id);
     const plan = learningPlan(state, map, content, p.id);
     if (plan.pool > 0 && plan.queued === 0 && plan.split > 0) emit(ctx, { type: 'studyQueueEmpty', player: p.id, learning: plan.split });
@@ -431,13 +432,17 @@ export function resolveDiscovery(ctx: Context): void {
       const progress = fill(view.progress + view.rate, view.cost);
       if (view.next === 'mastered') {
         e.adoption = Math.min(100, (progress * 100) / ADOPTION_COST);
-        if (e.adoption >= 100) emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: 'mastered' });
+        if (e.adoption >= 100) {
+          steps += 1;
+          emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: 'mastered' });
+        }
         continue;
       }
       e.progress = Math.min(progress, view.cost);
       if (e.progress < view.cost) continue;
       e.stage = view.next;
       e.progress = 0;
+      steps += 1;
       if (view.next === 'developed') {
         if (!advance.adoption) e.adoption = 100;
         runHooks(ctx, advance);
@@ -445,6 +450,9 @@ export function resolveDiscovery(ctx: Context): void {
       emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: view.next });
       if (e.adoption === 100) emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: 'mastered' });
     }
+    // Rapid change: a burst of new ways unsettles the people. A Developed advance with no adoption
+    // stage, Mastered at the same moment, counts once.
+    addCiv(ctx, p.id, Math.max(0, steps - RAPID_CHANGE_FREE), 'rapidChange');
     p.study = p.study.filter((a) => stepCost(state, p.id, content.advances.find((x) => x.id === a)!, stageOf(state, p.id, a)) !== null);
     refreshEffects(state, content, p);
   }

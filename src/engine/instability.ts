@@ -14,7 +14,13 @@ import type { Context, GameEvent, GameState, PlayerId, Settlement } from './type
 // Settlements a civilization holds before overextension raises its civ-wide meter.
 export const OVEREXTENSION_FREE = 6;
 export const LOST_SUPPORT = 2;
+// Local instability from fighting (design doc §10, v0.25): friendly tokens lost in or next to the
+// settlement, or the settlement itself attacked (the larger, not both).
 export const NEARBY_CONFLICT = 1;
+export const ATTACKED = 3;
+// Advance steps (Known, Developed, Mastered) a civilization reaches in one turn without unrest;
+// each one beyond adds 1 civ-wide (design doc §10, Rapid change, v0.25).
+export const RAPID_CHANGE_FREE = 2;
 // The assignment that lowers instability: 1 per unit per turn (design doc §6, Manpower).
 export const BUREAUCRACY = 'bureaucracy';
 
@@ -27,7 +33,7 @@ const DISTANCE_FREE = 2;
 const DISTANCE_STEP = 2;
 const DISTANCE_MAX_PENALTY = 4;
 
-export type InstabilitySource = 'overextension' | 'losses' | 'lostSupport' | 'conflict' | 'bureaucracy' | 'calm' | 'luxury' | 'noSettlements' | 'calamity';
+export type InstabilitySource = 'overextension' | 'losses' | 'lostSupport' | 'conflict' | 'bureaucracy' | 'calm' | 'luxury' | 'noSettlements' | 'calamity' | 'rapidChange';
 
 export function capitalOf(state: GameState, player: PlayerId): AreaId | null {
   return state.players.find((p) => p.id === player)?.capital ?? null;
@@ -117,7 +123,7 @@ export function addLocal(ctx: Context, settlement: Settlement, amount: number, s
   emit(ctx, { type: 'instabilityChanged', player: settlement.player, area: settlement.area, amount, source });
 }
 
-function addCiv(ctx: Context, player: PlayerId, amount: number, source: InstabilitySource): void {
+export function addCiv(ctx: Context, player: PlayerId, amount: number, source: InstabilitySource): void {
   if (amount === 0) return;
   const p = ctx.state.players.find((x) => x.id === player)!;
   p.instability += amount;
@@ -183,13 +189,9 @@ function eventsBySteps(ctx: Context): { step: string; event: GameEvent }[] {
   return out;
 }
 
-// Players whose tokens or settlement fought, by area.
-function fights(events: GameEvent[]): { area: AreaId; players: PlayerId[] }[] {
-  return events.flatMap((e) => {
-    if (e.type === 'conflict') return [{ area: e.area, players: e.losses.map((l) => l.player) }];
-    if (e.type === 'settlementAttacked') return [{ area: e.area, players: [e.defender, ...e.attackers.map((a) => a.player)] }];
-    return [];
-  });
+// Players who lost tokens in a fight, by area.
+function losses(events: GameEvent[]): { area: AreaId; players: PlayerId[] }[] {
+  return events.flatMap((e) => (e.type === 'conflict' || e.type === 'settlementAttacked' ? [{ area: e.area, players: e.losses.filter((l) => l.count > 0).map((l) => l.player) }] : []));
 }
 
 // Resolution step 7: this turn's sources are added, then every settlement at or over its
@@ -218,10 +220,12 @@ export function resolveInstability(ctx: Context): void {
     const s = state.settlements.find((x) => x.area === d.area && x.player === d.player);
     if (s) addLocal(ctx, s, LOST_SUPPORT, 'lostSupport');
   }
-  const fought = fights(events.map((e) => e.event));
+  const lostTokens = losses(events.map((e) => e.event));
+  const attacked = events.flatMap(({ event: e }) => (e.type === 'settlementAttacked' ? [`${e.area}:${e.defender}`] : []));
   for (const s of state.settlements) {
     const near = (area: AreaId) => area === s.area || map.areas[s.area]!.neighbors.includes(area);
-    if (fought.some((f) => f.players.includes(s.player) && near(f.area))) addLocal(ctx, s, NEARBY_CONFLICT, 'conflict');
+    if (attacked.includes(`${s.area}:${s.player}`)) addLocal(ctx, s, ATTACKED, 'conflict');
+    else if (lostTokens.some((f) => f.players.includes(s.player) && near(f.area))) addLocal(ctx, s, NEARBY_CONFLICT, 'conflict');
   }
 
   // Thresholds are fixed from the capitals at the start of the check.

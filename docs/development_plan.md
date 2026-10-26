@@ -1,6 +1,6 @@
 # Development Plan
 
-**Version:** 0.26  
+**Version:** 0.27  
 **Date:** October 25, 2026  
 **Status:** Working draft
 
@@ -113,6 +113,7 @@ Other costs on the 15-civilization spacious board: map generation 0.3 s, first r
 
 ## Change log
 
+- **0.27 (October 25, 2026):** Phase 4 step 6, instability (design doc v0.25), built. Fighting: an attacked settlement takes +3 local (`ATTACKED`), otherwise +1 (`NEARBY_CONFLICT`) where its civilization lost tokens in or next to it; fights without friendly losses add nothing. Rapid change: `resolveDiscovery` adds +1 civ-wide per advance step beyond `RAPID_CHANGE_FREE` (2) in a turn (`rapidChange` source). No conflict state (civilizations stay neutral until War and Peace states), no food instability; Artists move to step 7, institutions to the Bronze Age, figures to Phase 5.
 - **0.26 (October 25, 2026):** The trade phase is removed (design doc v0.24): `Phase` is resources, allocation, resolution; `PLAYER_PHASES` is allocation only. `resolveMarket` runs in the resources phase after gathering and tax; `setOrder` is accepted in allocation; the minimal AI sets its buy orders in allocation. The game screen no longer skips or stops at a trade phase. Save schema 15.
 - **0.25 (October 25, 2026):** Resolution reports (design doc v0.23) in `src/ui/screens/TurnReport.tsx`: `buildReport` turns stamped events into lines (text, place, notable); `ReportPage` lists them grouped by turn and phase, each line with a place jumping to it on the map; `Chronicle` lists past turns from the session's game log. The game menu chooses Brief, Normal, or Detailed (kept in `localStorage`). Also on the calamity work: the Knowledge screen lists each advance's calamity counters, and the Civilization screen's risk tooltips name them, in force or not yet reached.
 - **0.24 (October 25, 2026):** Phase 4 step 5, calamities (design doc v0.22), built in `src/engine/calamities.ts` at resolution step 5. Content gains `calamities` (`Calamity`: softening advances by stage and minimum tier, shelter, buy-off cost and requirement, granted learning, spread); weights and effects are engine rules keyed by id (`CALAMITY_RULES`), checked when content loads. `PlayerState` gains `quiet` (the build-up) and `buyOff` (`setBuyOff` command, allocation phase); `Settlement` gains `fed`, `struck`, `idle` (manpower idle next turn; `activeWork` applies it to gathering, Bureaucracy, and High Learning), and `drought`; `GameState.dry` lowers area limits (`looseLimit`). Discovery: the `struck` input counts, and `grantLearning` gives Superstition's free learning to Ritual. The minimal AI marks every calamity it can buy off. Civilization screen: a Calamities card (chance and its parts, buy-off marks, settlements at medium or high risk) and a Risk column; turn reports name each calamity. Batch runs report calamities suffered and bought off. Save schema 14.
