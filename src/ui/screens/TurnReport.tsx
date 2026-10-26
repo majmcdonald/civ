@@ -62,6 +62,8 @@ export interface ReportNames {
   place: (area: AreaId) => string;
   // The player's view of a fight, or null if not involved.
   conflict: (e: ConflictEvent) => string | null;
+  // A civilization's name.
+  who: (player: string) => string;
 }
 
 function plural(n: number, word: string): string {
@@ -89,6 +91,21 @@ export function buildReport(events: readonly ReportEvent[], names: ReportNames):
     if (e.type === 'conflict' || e.type === 'settlementAttacked') {
       const text = names.conflict(e);
       if (text) add(text, e.area, true);
+      continue;
+    }
+    // Eras and the endgame concern everyone (design doc §14, §15).
+    const era = (id: string) => content.eras.find((x) => x.id === id)?.name ?? id;
+    if (e.type === 'eraEntered') {
+      add(e.player === me ? `Your people enter the ${era(e.era)}` : `${names.who(e.player)} enters the ${era(e.era)}`, null, true);
+      continue;
+    }
+    if (e.type === 'endgameBegan') {
+      add(`Endgame: ${e.by.map((p) => (p === me ? 'you' : names.who(p))).join(', ')} completed the final era; the game ends after turn ${e.ends}`, null, true);
+      continue;
+    }
+    if (e.type === 'gameEnded') {
+      const top = e.scores[0]?.total ?? 0;
+      add(`Game over: ${e.winners.map((p) => (p === me ? 'you' : names.who(p))).join(' and ')} ${e.winners.length > 1 ? 'share' : 'win with'} the highest score, ${top} points`, null, true);
       continue;
     }
     if (!('player' in e) || e.player !== me) continue;
@@ -144,6 +161,9 @@ export function buildReport(events: readonly ReportEvent[], names: ReportNames):
         break;
       case 'goodsProduced':
         add(`Gathered ${e.count} ${resource(e.resource)} at ${place(e.area)}`, e.area, false);
+        break;
+      case 'cultureGained':
+        add(`Artists: +${plural(e.points, 'culture point')}`, null, false);
         break;
       case 'taxCollected':
         add(`Tax: +${e.amount} currency`, null, false);

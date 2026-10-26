@@ -13,10 +13,25 @@ export type EraId =
   | 'industrial'
   | 'modern';
 
+// What an era gate asks for (design doc §14): settlement points (village 1 … metropolis 4) and
+// knowledge points, checked only on entry.
+export interface Gate {
+  settlement: number;
+  knowledge: number;
+}
+
 export interface Era {
   id: EraId;
   name: string;
   order: number;
+  // Entry requirements; an era without a gate cannot be entered yet.
+  gate?: Gate;
+  // The last era's closing gate, which starts the endgame countdown (design doc §15).
+  closing?: Gate;
+  // Knowledge points per advance of this era once Developed, and once Mastered (in all; an advance
+  // with no adoption stage scores `developed`), and culture points per 5 Artists progress for a
+  // civilization in this era (design doc §6, §14).
+  points?: { developed: number; mastered: number; culture: number };
 }
 
 export type SettlementTier = 'village' | 'town' | 'city' | 'metropolis';

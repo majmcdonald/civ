@@ -5,8 +5,11 @@ import {
   calamityView,
   marketView,
   assigned,
+  ARTISTS,
   BUREAUCRACY,
   bureaucracyAt,
+  eraView,
+  scores,
   discoveryView,
   HIGH_LEARNING,
   learningPlan,
@@ -47,6 +50,7 @@ import {
   type ConflictEvent,
   type Content,
   type ConversionPreview,
+  type EraId,
   type GameState,
   type GameEvent,
   type MapSetup,
@@ -62,7 +66,7 @@ import { CivilizationSheet, type WorkOption } from './CivilizationSheet';
 import { KnowledgeSheet } from './KnowledgeSheet';
 import { MarketSheet } from './MarketSheet';
 import { buildReport, Chronicle, loadReportMode, REPORT_MODE_NAMES, REPORT_MODES, ReportPage, saveReportMode, SOURCE_NAMES, type ReportEvent, type ReportLine, type ReportMode } from './TurnReport';
-import { RivalsSheet } from './RivalsSheet';
+import { countdownText, FinalStandings, RivalsSheet, scoreText } from './RivalsSheet';
 import { CITY_NAMES } from '../cityNames';
 import { AUTOSAVE_ID, downloadLog, downloadSave, writeSave } from '../saves';
 import './GameScreen.css';
@@ -101,9 +105,11 @@ export interface NewGameOptions {
   map: MapSetup;
   // Each civilization draws 2 first-ring advances (design doc §2, Setup options).
   advancedStart: boolean;
+  // Completing it starts the endgame countdown (design doc §15). Stone until later eras have gates.
+  finalEra: EraId;
 }
 
-export const DEFAULT_GAME: NewGameOptions = { name: '', seed: 1, opponents: 4, map: { type: 'inlandSea', room: 'standard' }, advancedStart: false };
+export const DEFAULT_GAME: NewGameOptions = { name: '', seed: 1, opponents: 4, map: { type: 'inlandSea', room: 'standard' }, advancedStart: false, finalEra: 'stone' };
 
 export function gameContent(): Content {
   const loaded = loadContent(contentBundle, hooks);
@@ -118,7 +124,7 @@ export function newSession(options: NewGameOptions): Session {
   // Towns are open from the start until the advance that unlocks them exists (design doc §5).
   const name = options.name.trim() || 'Untitled game';
   return startSession(
-    { name, seed: options.seed, players, finalEra: 'modern', map: options.map, ...(options.advancedStart ? { advancedStart: true } : {}) },
+    { name, seed: options.seed, players, finalEra: options.finalEra, map: options.map, ...(options.advancedStart ? { advancedStart: true } : {}) },
     gameContent(),
   );
 }
@@ -329,7 +335,7 @@ function WorkRow({ area, work, onWork }: { area: AreaId; work: WorkOption; onWor
         Manpower: {work.total - work.free} of {work.total} working
       </strong>
       {work.rows.map((r) => (
-        <span key={r.resource} className="game-plan-work-row" title={r.resource === BUREAUCRACY ? 'Each unit lowers this settlement’s instability by 1 a turn, then the civ-wide meter' : r.resource === HIGH_LEARNING ? 'Each unit adds 1 learning a turn, sent down the study queue; it speeds advances up (see Knowledge)' : r.usable ? '1 per manpower, gathered at the start of next turn' : 'Your civilization cannot gather this yet'}>
+        <span key={r.resource} className="game-plan-work-row" title={r.resource === BUREAUCRACY ? 'Each unit lowers this settlement’s instability by 1 a turn, then the civ-wide meter' : r.resource === HIGH_LEARNING ? 'Each unit adds 1 learning a turn, sent down the study queue; it speeds advances up (see Knowledge)' : r.resource === ARTISTS ? 'Each unit adds 1 culture progress a turn; every 5 is a culture award (1 point in the Stone Age), which counts toward your score' : r.usable ? '1 per manpower, gathered at the start of next turn' : 'Your civilization cannot gather this yet'}>
           <span>{r.resource === HIGH_LEARNING ? 'High Learning' : capitalize(r.resource)}</span>
           <button type="button" aria-label={`Less ${r.resource}`} disabled={r.count === 0} onClick={() => onWork(area, r.resource, r.count - 1)}>
             −
@@ -404,6 +410,8 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   const [toName, setToName] = useState<AreaId[]>([]);
   // The settlement to highlight in the Civilization screen, when opened from the map.
   const [listed, setListed] = useState<AreaId | null>(null);
+  // The final standings, once the game is over, until dismissed.
+  const [finalClosed, setFinalClosed] = useState(false);
 
   // Open on the player's starting area.
   useEffect(() => {
@@ -454,7 +462,14 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     [state, session],
   );
 
-  const era = [...session.content.eras].sort((a, b) => a.order - b.order)[0]!;
+  const standing = eraView(state, session.content, state.players[HUMAN]!.id);
+  const era = standing.era;
+  const playerName = (id: string) => state.players.find((p) => p.id === id)?.name ?? id;
+  const ended = (session.log.filter((l) => l.kind === 'event').map((l) => l.data as GameEvent).find((e) => e.type === 'gameEnded') as Extract<GameEvent, { type: 'gameEnded' }> | undefined) ?? null;
+  const finalScores = ended?.scores ?? scores(state, session.content);
+  const finalEra = session.content.eras.find((e) => e.id === state.setup.finalEra)!;
+  const afterFinal = [...session.content.eras].sort((a, b) => a.order - b.order).find((e) => e.order === finalEra.order + 1);
+  const finalGate = afterFinal ? (afterFinal.gate ? `The ${afterFinal.name} gate: ${afterFinal.gate.settlement} settlement and ${afterFinal.gate.knowledge} knowledge points` : `The ${afterFinal.name} gate (not set yet)`) : finalEra.closing ? `Closing gate: ${finalEra.closing.settlement} settlement and ${finalEra.closing.knowledge} knowledge points` : 'Closing gate (not set yet)';
   const tokens = pieces.stacks.filter((s) => s.civ === HUMAN).reduce((sum, s) => sum + s.count, 0);
   const mine = pieces.settlements.filter((s) => s.civ === HUMAN);
   const towns = mine.filter((s) => s.tier === 'town').length;
@@ -547,7 +562,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     const involved = e.type === 'conflict' ? e.losses.some((l) => l.player === me) : e.defender === me || e.attackers.some((a) => a.player === me);
     return involved ? conflictLine(e, me, who, areaName(e.area)) : null;
   };
-  const reportNames = { me, content: session.content, place: areaName, conflict: describeConflict };
+  const reportNames = { me, content: session.content, place: areaName, conflict: describeConflict, who };
   const jumpTo = (area: AreaId) => {
     setReportPage(null);
     showOnMap(area);
@@ -582,7 +597,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
     const rows = workable(map, session.content, area)
       .filter((resource) => revealed(state, session.content, me, resource))
       .map((resource) => ({ resource, count: count(resource), usable: usable(state, session.content, me, resource) }));
-    rows.push({ resource: BUREAUCRACY, count: count(BUREAUCRACY), usable: true }, { resource: HIGH_LEARNING, count: count(HIGH_LEARNING), usable: true });
+    rows.push({ resource: BUREAUCRACY, count: count(BUREAUCRACY), usable: true }, { resource: HIGH_LEARNING, count: count(HIGH_LEARNING), usable: true }, { resource: ARTISTS, count: count(ARTISTS), usable: true });
     return { total: manpower(here), free: manpower(here) - assigned(here), rows };
   };
   const instabilityOption = (area: AreaId): InstabilityOption | null => {
@@ -708,6 +723,16 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
               {income > 0 && ` (+${income})`}
             </dd>
           </div>
+          <div title={`${scoreText(standing.score)} (design doc §15)`}>
+            <dt>Score</dt>
+            <dd>{standing.score.total}</dd>
+          </div>
+          {(state.endgame || state.over) && (
+            <div className="warn" title={`Endgame countdown: ${countdownText(state.endgame, state.over, state.turn, playerName)}`}>
+              <dt>Endgame</dt>
+              <dd>{state.over ? 'Game over' : `${state.endgame!.ends - state.turn + 1} turns left`}</dd>
+            </div>
+          )}
           <button type="button" className="game-menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
             Menu
           </button>
@@ -825,9 +850,15 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   Undo all moves and settlements
                 </button>
               )}
-              <button type="button" className="game-end-phase" onClick={endPhase}>
-                End {PHASE_NAMES[state.phase]} phase
-              </button>
+              {state.over ? (
+                <button type="button" className="game-end-phase" onClick={() => setFinalClosed(false)}>
+                  Game over: final standings
+                </button>
+              ) : (
+                <button type="button" className="game-end-phase" onClick={endPhase}>
+                  End {PHASE_NAMES[state.phase]} phase
+                </button>
+              )}
             </div>
           </>
         ) : (
@@ -867,8 +898,12 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   pieces={pieces}
                   civs={state.players.map((p, i) => ({ name: p.name, color: CIV_COLORS[i]! }))}
                   human={HUMAN}
-                  eras={session.content.eras}
-                  finalEra={state.setup.finalEra}
+                  views={state.players.map((p) => eraView(state, session.content, p.id))}
+                  ids={state.players.map((p) => p.id)}
+                  finalEra={finalEra.name}
+                  finalGate={finalGate}
+                  endgame={state.endgame}
+                  over={state.over}
                   turn={state.turn}
                 />
               ) : screen === 'knowledge' ? (
@@ -914,6 +949,21 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
           <div className="game-sheet-backdrop report-backdrop" onClick={() => setReportPage(null)}>
             <article className="game-sheet filled" onClick={(e) => e.stopPropagation()}>
               <ReportPage title={reportPage.title} lines={reportPage.lines} detailed={reportPage.detailed} onJump={jumpTo} onClose={() => setReportPage(null)} closeLabel={screen === 'chronicle' ? 'Back to the Chronicle' : 'Continue'} />
+            </article>
+          </div>
+        )}
+        {state.over && !finalClosed && !reportPage && (
+          <div className="game-sheet-backdrop report-backdrop" onClick={() => setFinalClosed(true)}>
+            <article className="game-sheet filled" onClick={(e) => e.stopPropagation()}>
+              <FinalStandings
+                civs={state.players.map((p, i) => ({ name: p.name, color: CIV_COLORS[i]! }))}
+                ids={state.players.map((p) => p.id)}
+                scores={finalScores}
+                winners={ended?.winners ?? finalScores.filter((x) => x.total === finalScores[0]?.total).map((x) => x.player)}
+                human={state.players[HUMAN]!.id}
+                onClose={() => setFinalClosed(true)}
+                onExit={onExit}
+              />
             </article>
           </div>
         )}

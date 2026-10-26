@@ -98,10 +98,33 @@ export interface PlayerState {
   study: string[];
   // Conflicts it took part in during `turn`'s resolution (design doc §8, Archery); absent means none.
   fought?: { turn: number; count: number };
+  // The era it has entered; kept even if it falls below the gate (design doc §14).
+  era: EraId;
+  // Culture points earned, and Artists progress toward the next (design doc §6).
+  culture: number;
+  cultureProgress: number;
 }
 
-// Manpower on one resource of the settlement's area, or on Bureaucracy ('bureaucracy') (design doc
-// §6, Manpower). Standing orders, most recently changed last; manpower not listed is unassigned.
+// The endgame countdown (design doc §15): it began in `began`, when `by` completed the final era,
+// and the game ends with resolution of turn `ends`.
+export interface Endgame {
+  began: number;
+  ends: number;
+  by: PlayerId[];
+}
+
+// One civilization's points (design doc §15). Wonders arrive with the wonder system.
+export interface Score {
+  player: PlayerId;
+  knowledge: number;
+  settlement: number;
+  wonders: number;
+  culture: number;
+  total: number;
+}
+
+// Manpower on one resource of the settlement's area, or on a specialist assignment ('bureaucracy',
+// 'highLearning', 'artists') (design doc §6, Manpower). Standing orders, most recently changed last; manpower not listed is unassigned.
 export interface Work {
   resource: ResourceId;
   count: number;
@@ -181,6 +204,9 @@ export interface GameState {
   goods: Good[];
   // Areas whose limit is lowered by 1 through `until` (Drought, design doc §12).
   dry: { area: AreaId; until: number }[];
+  endgame: Endgame | null;
+  // The countdown has run out; no further commands are accepted.
+  over: boolean;
 }
 
 export type Command =
@@ -242,6 +268,11 @@ export type GameEvent =
   // Learning the study queue could not use, split evenly among advances waiting for it.
   | { type: 'studyQueueEmpty'; player: PlayerId; learning: number }
   | { type: 'urbanGrowth'; player: PlayerId; from: AreaId; to: AreaId; count: number }
+  | { type: 'cultureGained'; player: PlayerId; points: number }
+  | { type: 'eraEntered'; player: PlayerId; era: EraId }
+  | { type: 'endgameBegan'; by: PlayerId[]; ends: number }
+  // Final scores, highest first; every civilization tied for the top is a winner.
+  | { type: 'gameEnded'; scores: Score[]; winners: PlayerId[] }
   | { type: 'conflict'; area: AreaId; losses: TokenCount[] }
   | {
       type: 'settlementAttacked';

@@ -137,6 +137,11 @@
   white-space: nowrap;
 }
 
+.game-stats > div.warn dd {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .game-menu {
   background: none;
   border: 1px solid var(--parchment-edge);
@@ -617,114 +622,30 @@
   flex: none;
 }
 
-.rivals-track-wrap {
-  margin-bottom: 1.6rem;
-  overflow-x: auto;
-}
-
-.rivals-track {
-  display: grid;
-  row-gap: 0.2rem;
-  align-items: stretch;
-}
-
-.rivals-era {
-  padding: 0 0 0.25rem 0.3rem;
-  border-left: 2px solid var(--ink-soft);
-  font-family: var(--font-display);
-  font-size: 0.68rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rivals-name {
-  display: flex;
-  align-items: center;
-  padding-right: 0.6rem;
-  font-size: 0.95rem;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.rivals-row.you > .rivals-name {
-  font-weight: 700;
-}
-
-.rivals-space {
-  position: relative;
-  height: 1.5rem;
-  margin-right: 1px;
-  background: rgba(255, 250, 236, 0.55);
-  border: 1px solid rgba(59, 42, 26, 0.18);
-}
-
-.rivals-space.gate {
-  border-left: 2px solid var(--ink-soft);
-  background: rgba(201, 176, 133, 0.45);
-}
-
-.rivals-space.final {
-  background: rgba(138, 47, 31, 0.18);
-  border-color: var(--accent);
-}
-
-.rivals-row.you > .rivals-space {
-  border-top-color: var(--ink-soft);
-  border-bottom-color: var(--ink-soft);
-}
-
-.rivals-marker {
-  position: absolute;
-  inset: 50% auto auto 50%;
-  width: 0.8rem;
-  height: 0.8rem;
-  border: 1px solid var(--ink);
-  box-shadow: 0 1px 3px rgba(10, 6, 2, 0.4);
-  transform: translate(-50%, -50%) rotate(45deg);
-}
-
-.rivals-legend {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0.6rem 0 0;
+.rivals-gate {
   font-size: 0.85rem;
-  color: var(--ink-soft);
-}
-
-.rivals-key {
-  display: inline-block;
-  width: 0.9rem;
-  height: 0.9rem;
-  border: 1px solid rgba(59, 42, 26, 0.18);
-}
-
-.rivals-key.gate {
-  border-left: 2px solid var(--ink-soft);
-  background: rgba(201, 176, 133, 0.45);
-}
-
-.rivals-key.final {
-  margin-left: 0.8rem;
-  background: rgba(138, 47, 31, 0.18);
-  border-color: var(--accent);
+  white-space: nowrap;
 }
 
 .rivals-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 17rem;
+  display: flex;
+  flex-direction: column;
   gap: 1.4rem;
-  align-items: start;
 }
 
 .rivals-side {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   gap: 1rem;
+  align-items: start;
+}
+
+.rivals-side .civ-card:last-child {
+  grid-column: span 2;
+}
+
+.rivals-era {
+  white-space: nowrap;
 }
 
 .rivals-table td:nth-child(2),
@@ -1414,6 +1335,7 @@
 }
 
 .report-close,
+.final-actions button,
 .chronicle-turns button {
   font: inherit;
   background: rgba(255, 250, 236, 0.6);
@@ -1427,7 +1349,18 @@
   padding: 0.3rem 1.2rem;
 }
 
+.final-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.final-actions button {
+  padding: 0.3rem 1.2rem;
+}
+
 .report-close:hover,
+.final-actions button:hover,
 .chronicle-turns button:hover {
   color: var(--accent);
   border-color: var(--accent);

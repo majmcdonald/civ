@@ -2,7 +2,7 @@ import { eras } from './eras';
 import type { ContentBundle } from './types';
 
 // The Stone Age advances (design doc §8, Stone Age advances and Reviewed advances). Costs and
-// amounts are placeholders until the tuning pass (development plan §3, Phase 4 step 9).
+// amounts are placeholders until the balance pass (development plan §3, Phase 4 step 12).
 export const content: ContentBundle = {
   eras,
   advances: [

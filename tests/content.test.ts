@@ -5,7 +5,7 @@ import { loadContent } from '../src/engine';
 
 const base: ContentBundle = {
   eras: [
-    { id: 'stone', name: 'Stone Age', order: 0 },
+    { id: 'stone', name: 'Stone Age', order: 0, points: { developed: 1, mastered: 3, culture: 1 } },
     { id: 'bronze', name: 'Bronze Age', order: 1 },
   ],
   advances: [],

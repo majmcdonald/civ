@@ -10,7 +10,7 @@ import { advanceTurns, endPhaseAll, eventsOfType, expectRejected, newGame, play,
 // Test-only advances; the game's own are designed one at a time (Phase 4 step 2).
 const bundle: ContentBundle = {
   eras: [
-    { id: 'stone', name: 'Stone Age', order: 0 },
+    { id: 'stone', name: 'Stone Age', order: 0, points: { developed: 1, mastered: 3, culture: 1 } },
     { id: 'iron', name: 'Iron Age', order: 2 },
   ],
   advances: [

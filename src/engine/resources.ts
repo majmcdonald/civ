@@ -2,6 +2,7 @@ import type { Content } from './content';
 import { emit } from './context';
 import { HIGH_LEARNING, reached } from './discovery';
 import { gatherBonus } from './effects';
+import { ARTISTS } from './eras';
 import { BUREAUCRACY } from './instability';
 import type { AreaId, GameMap, ResourceId } from './map/types';
 import { settlementAt, tierRules } from './settlements';
@@ -123,7 +124,7 @@ export function validateWork(ctx: Pick<Context, 'state' | 'map' | 'content'>, co
   const here = settlementAt(state, command.area);
   if (!here || here.player !== command.player) return 'You have no settlement there';
   if (!Number.isInteger(command.count) || command.count < 0) return 'Manpower must be a whole number, 0 or more';
-  if (command.resource !== BUREAUCRACY && command.resource !== HIGH_LEARNING) {
+  if (command.resource !== BUREAUCRACY && command.resource !== HIGH_LEARNING && command.resource !== ARTISTS) {
     if (!workable(map, content, command.area).includes(command.resource)) return 'That resource is not in this area';
     if (!usable(state, content, command.player, command.resource)) return 'Your civilization cannot gather that resource yet';
   }

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { content } from '../../content';
-import { LAND_AREAS_PER_CIVILIZATION, MAP_TYPES, MAX_CIVILIZATIONS, ROOM_FACTOR, ROOM_TO_EXPAND, openSave, type MapType, type RoomToExpand, type Session } from '../../engine';
+import { LAND_AREAS_PER_CIVILIZATION, MAP_TYPES, MAX_CIVILIZATIONS, ROOM_FACTOR, ROOM_TO_EXPAND, openSave, type EraId, type MapType, type RoomToExpand, type Session } from '../../engine';
 import { AtlasBackground } from '../art/AtlasBackground';
 import { CompassRose } from '../art/CompassRose';
 import { deleteSave, downloadSave, listSaves, nameFromFile, readSave, writeSave, type SaveSlot } from '../saves';
@@ -10,6 +10,7 @@ import './TitleScreen.css';
 
 const MENU = ['New Game', 'Continue', 'Load Game', 'Rules Reference', 'Settings'] as const;
 
+const ERAS = [...content.eras].sort((a, b) => a.order - b.order);
 const OPPONENT_COUNTS = Array.from({ length: MAX_CIVILIZATIONS - 1 }, (_, i) => i + 1);
 
 // The seed is the player's choice, not engine randomness: the engine only sees the number.
@@ -110,7 +111,7 @@ interface NewGameSetupProps {
 }
 
 // Game setup (design doc §2): opponents, map type, and room to expand, which with the number of
-// civilizations sets the map's size.
+// civilizations sets the map's size, and the final era.
 function NewGameSetup({ options, onChange, onStart, onBack }: NewGameSetupProps) {
   const civilizations = options.opponents + 1;
   const land = (room: RoomToExpand) => Math.round(LAND_AREAS_PER_CIVILIZATION * ROOM_FACTOR[room] * civilizations);
@@ -156,6 +157,21 @@ function NewGameSetup({ options, onChange, onStart, onBack }: NewGameSetupProps)
               {ROOM_NAMES[r]} — {LAND_AREAS_PER_CIVILIZATION * ROOM_FACTOR[r]} land areas each
             </option>
           ))}
+        </select>
+      </label>
+      <label title="The game ends 5 turns after a civilization completes this era by meeting the next era's gate; the highest score wins (design doc §15)">
+        <span>Final era</span>
+        <select value={options.finalEra} onChange={(e) => onChange({ ...options, finalEra: e.target.value as EraId })}>
+          {ERAS.map((era, i) => {
+            const next = ERAS[i + 1];
+            const open = next ? Boolean(next.gate) : Boolean(era.closing);
+            return (
+              <option key={era.id} value={era.id}>
+                {era.name}
+                {open ? '' : ' (cannot end yet)'}
+              </option>
+            );
+          })}
         </select>
       </label>
       <label>

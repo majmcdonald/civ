@@ -1,7 +1,7 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.25  
-**Date:** October 25, 2026  
+**Version:** 0.27  
+**Date:** October 26, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
 > This is a living design document. Sections marked **Decided** are current design commitments (still subject to playtesting). Items under **Open** and **Tuning** are unresolved. Ideas documented here do not become rules until they are moved into a Decided section.
@@ -46,8 +46,7 @@ Where a system has a clear equivalent in the original game, the default is to **
 | Map type (procedural) | **Inland sea** (default; like the original: one mainland around a central sea, a few islands), **continents** (landmasses separated by ocean; some civilizations isolated until ships), **single landmass** (little sea). Seas are divided into sea areas in every type |
 | Civilizations | 2–15; default 5 (the player plus four AI). The original allowed 2–7. A procedural map scales with the count |
 | Advanced start | Off (default) or on. On: each civilization draws **2 advances** of its own from the first ring (advances that build only on the starting baseline, §8), granted Developed and Mastered like the baseline. Draws come from the game seed, so civilizations differ from turn 1 and a game still replays exactly |
-| AST track length | Same for everyone / derived from starting conditions / authored per civilization (historical maps only) |
-| Final era | Any era; e.g., end of the Iron Age for a single evening, end of the Modern era for a full campaign |
+| Final era | Any era; e.g., end of the Iron Age for a single evening, end of the Modern era for a full campaign. Until later eras have gates, only a Stone Age game can end (v0.26) |
 | Room to expand | Land per civilization: **very crowded** (a quarter of standard, 16 land areas; v0.19), **crowded** (half of standard, 32 land areas), **standard** (default, 64), **spacious** (2×, 128). Standard targets about 30–40 turns of expansion before a civilization's land meets a neighbor's (roughly the Stone Age); crowded makes neighbors meet early, spacious keeps the early game peaceful longer. Very crowded is for fighting from the start: a civilization's land holds fewer tokens than the starting cap, so tokens press into neighbors within about 15 turns, and starts may be 3 moves apart instead of 4 so that 2–15 civilizations fit |
 
 ## 3. Turn structure — Decided
@@ -78,7 +77,7 @@ Three phases (v0.24; the separate trade phase of v0.2 is folded into Resources a
 | 10 | Discovery: accumulators, Known, Developed, adoption | Uses the turn's final conditions |
 | 11 | Historical figures emerge | Conditions include this turn's discoveries |
 | 12 | Wonders complete | After calamities |
-| 13 | AST movement and endgame check | Uses final state |
+| 13 | Era gates and endgame check | Uses final state |
 
 ### Resolution reports (v0.23)
 
@@ -244,13 +243,14 @@ Each tier keeps the abilities of the tiers below it. Higher tiers justify their 
 
 | Tier | Base manpower | Abilities |
 |---|---|---|
-| Village | 1 | Produce resources; host specialists; market endpoint |
+| Village | 1 | Produce resources; host specialists; market endpoint; build named wonders (v0.27) |
 | Town | 2 | Generic institutions auto-build here |
-| City | 3 | Build named wonders; counts toward AST settlement points |
+| City | 3 | None yet beyond the lower tiers' (v0.27: named wonders moved to villages); set when cities are unlocked |
 | Metropolis | 4 | Build great wonders; extends market range; raises the civilization's administrative capacity (reduces overextension) |
 
 - Base manpower is raised by advance bonuses (§6).
 - Tax per settlement climbs with tier: village 0, town 2, city 3, metropolis 4 (v0.20, §6).
+- Every tier earns settlement points toward era gates and score: village 1, town 2, city 3, metropolis 4 (v0.26, §14).
 - **Historical figures can emerge in any settlement**, with odds that scale with tier.
 
 ## 6. Resources, labor, and currency — Decided
@@ -300,7 +300,7 @@ Manpower is a settlement's labor. Every unit is spent each turn on exactly one a
 | **Production** | Farming, mining, building | One of the area's resources per unit | — |
 | **Bureaucracy** | Works for the state | Lowers instability, 1 per unit per turn: its own settlement first, then the civ-wide meter (§10) | Leader, Reformer, Diplomat |
 | **High Learning** | Schools, R&D | Adds discovery progress | Scholar, Innovator, Thinker |
-| **Artists** | Arts | Slight stability; larger gain in culture points (victory points). Arrives with culture points and scoring (Phase 4 step 7, v0.25) | Artist, Prophet |
+| **Artists** | Arts | Culture points (victory points): each unit adds 1 culture progress a turn, and every **5 progress is 1 culture point** in the Stone Age (v0.26). Later eras pay more per unit in step with their knowledge points (example: Bronze about 3 points per 5 progress), by the civilization's current era. No stability for now (v0.26); designed with institutions in the Bronze Age | Artist, Prophet |
 | **Wonders** | Construction | Progress toward a wonder | — |
 
 - **Specialists** are manpower in Bureaucracy, High Learning, or Artists. Any settlement can assign them. Currency cannot fund specialists.
@@ -539,7 +539,8 @@ Each advance below is final for the Stone Age content (numbers still placeholder
 - **Generic institutions** (temples, archives, workshops) **auto-build** in every eligible settlement (towns and higher) once the enabling advance is **Known**. The player does not build them.
 - **Ordinary construction** (roads, irrigation, granaries) is also automatic. There are no player-built projects.
 - **Named wonders** (e.g., Angkor Wat when temples are unlocked) are the player's direct construction choice, buildable once the enabling advance is **Developed**.
-- Named wonders require a **city**; great wonders require a **metropolis**.
+- Named wonders require a **village** (v0.27; a city until then), so each era's wonders, the Stone Age's monuments included, can be built as soon as the era's settlements exist. Great wonders require a **metropolis**.
+- **Wonders are designed with each era** (v0.27), as part of that era's systems, so the era's AI approaches and balance pass include them.
 - Wonders cost **manpower, resources, and currency** (v0.20; currency was excluded until then). Manpower can come from settlements within range. Amounts are set with the wonders (Phase 5).
 - Institutions and wonders **reduce instability**. Wonders score victory points.
 
@@ -559,7 +560,7 @@ Each advance below is final for the Stone Age content (numbers still placeholder
 | | | Advances (Ritual's calm); Artists (slightly) |
 
 - **No natural decay.** A meter falls only when a stabilizer is active.
-- **Still to come** (v0.25): Artists arrive with culture points and scoring (Phase 4 step 7); institutions with the first institution advances (Bronze Age; no Stone Age advance builds one); harsh and calming figures with historical figures (Phase 5); war instability with War and Peace states (§11).
+- **Still to come** (v0.25): Artists arrive with culture points (Phase 4 step 7) but give no stability until the Bronze Age (v0.26); institutions with the first institution advances (Bronze Age; no Stone Age advance builds one); harsh and calming figures with historical figures (Phase 5); war instability with War and Peace states (§11).
 - **Food does not affect instability** (v0.25): a settlement short of food loses support and takes the lost-support +2; there is no separate shortage source and no surplus or stores stabilizer. Food already pays off through support, urban growth (§5), and stores (Pottery).
 
 ### First version (Phase 3)
@@ -719,6 +720,7 @@ Halving counts each unit separately and rounds down: a raid on a village with Ar
 
 | Element | Decision |
 |---|---|
+| First era | **Bronze Age** (v0.27): figures are named individuals, and recorded names begin with writing. The Stone Age has none; its leadership is anonymous (Chiefdom) |
 | Form | **Named, short-lived:** a name and flavor text; acts once; recorded in the civilization's history |
 | Effects | An immediate effect, a **lasting mark** (timed modifier on a settlement or domain), or both |
 | Governors | A governor is a figure whose lasting mark sits on a settlement |
@@ -747,30 +749,33 @@ Each category has **era-gated variants** chosen by conditions (e.g., psychologis
 | Artist | Artist | Wonders, stability, victory points |
 | Merchant | Entrepreneur, banker | Market prices, currency income |
 
-**Culture figures** (Artist, Prophet, Thinker) score victory points.
+**Culture figures** (Artist, Prophet, Thinker) generate culture points (v0.26), which score; the figures themselves are not scored.
 
 ## 14. AST and civilizational progression — Decided
 
-Follows the original Archaeological Succession Table, extended to the Modern era.
+Follows the original Archaeological Succession Table's eras and gates, extended to the Modern era. v0.26 removes the original's turn-by-turn track: a civilization moves to the next era as soon as it meets that era's gate, so advancing depends only on growth.
 
 | Element | Decision |
 |---|---|
 | Eras | Stone → Bronze → Iron → Classical → Medieval → Renaissance → Industrial → Modern |
-| Track | One row of spaces per civilization. The marker moves **1 space per turn**. The first space of each era is a **gate** |
-| Gate requirements | A number of **Developed** advances plus a number of **settlement points** |
-| Settlement points | Cities and metropolises only (starting values: city 1, metropolis 3) |
-| Sprinting | While a civilization meets the requirements of an era **2 or more eras ahead** of its marker, it moves 2 spaces per turn |
-| Regression | A civilization that no longer meets its current era's requirements drops to that era's **gate** and waits until it qualifies. It does not lose the era |
-| Track length | Setup option (§2) |
+| Gate | Each era after the Stone Age opens with a **gate**: a number of **settlement points** plus a number of **knowledge points**. A civilization that meets the next era's gate in resolution step 13 enters that era |
+| Settlement points | Every settlement: **village 1, town 2, city 3, metropolis 4** (the same scale as calamity exposure, §12) |
+| Knowledge points | Per advance: **Developed 1, Mastered 3** (3 in all, not added to the 1). An advance with no adoption stage scores 1 even though it is Mastered when Developed, so 3 rewards adoption work. The starting baseline advances score nothing. Later eras' advances score more (example: a Bronze Age advance might score Developed 3, Mastered 5; set when the era is designed). Knowledge points are also victory points (§15) |
+| Bronze gate | **5 settlement points and 12 knowledge points** (starting values). The Stone Age has 15 scoring advances: 10 with adoption (up to 3 each) and 5 without (1 each), 35 points at most |
+| No turn clock | No track and no movement per turn; sprinting is gone. Pace comes from growth itself: study and adoption time, the token cap, and calamities |
+| No regression | An era, once entered, is kept: the gate is checked only on entry, as in the original. A civilization that falls below its current era's gate suffers nothing further; the decline shows in its score through lost settlement points |
+
+Note (batch measurement, v0.26, before tuning): with the starting values, AI civilizations reach 5 settlement points around turn 18 (16–23) and 12 knowledge points around turn 31 (24–41), so knowledge decides the Bronze gate.
 
 ## 15. Victory — Decided
 
 | Element | Decision |
 |---|---|
 | Final era | Setup option |
-| Trigger | When any civilization reaches the final AST space, an **endgame countdown** begins |
+| Trigger | When any civilization completes the final era, an **endgame countdown** begins. A civilization completes the final era when it meets the **next era's gate** (v0.26); the Modern era, with no next era, has one **closing gate** in the same form. Example: final era Stone; the first civilization to meet the Bronze gate starts the countdown |
+| Countdown | **5 turns** (starting value, v0.26): the game ends at the end of the fifth turn after the one in which the countdown began. Every civilization keeps playing and adding points; finishing first keeps its era lead |
 | Winner | Highest points when the countdown ends |
-| Scoring | AST position, Developed advances, settlement points, wonders, culture figures, culture points |
+| Scoring | **Knowledge points + settlement points + wonders + culture points** (v0.26). Era reached scores nothing, since the gates already measure knowledge and settlement points; culture figures score through the culture points they generate. The scale lives in the point values: settlement points climb with tier, and knowledge points with era (§14) |
 
 ## 16. Deliberate trade-offs and known tensions
 
@@ -792,12 +797,13 @@ These are choices made knowingly, or risks to watch in playtesting.
 | Narrow currency | Currency buys on the market, builds wonders (v0.20), and buys off some calamities (v0.22). It does not buy calm or learning directly, so it never replaces governance or scholarship; buying off a Civil disorder or Superstition strike comes close to buying calm, but only against a strike, at a flat 10 |
 | Unlimited game counterparty | A currency-rich civilization can buy its way out of any shortage. Price-change rate is the main brake (v0.21: 10% of the starting price per unit, capped at triple, no quantity limit) |
 | No price recovery | Prices move only with imbalance (v0.21), so one heavy buyer can keep a market expensive for its neighbours for many turns. Chosen so prices carry memory; watch in tuning |
-| Mild AST regression | Regression costs position within an era, never the era itself |
-| Derived track lengths | Poor starts are already penalized by requirements; shorter rows for good starts penalize them twice. Offered as a setup option only |
+| No era clock | Without the original's turn-by-turn track (v0.26), game length depends on growth rather than a fixed pace, and the endgame countdown is the only clock. A civilization that grows fast can race through eras; calamities and the token cap are the brakes |
+| No regression | An era is a high-water mark (v0.26): a civilization that collapses after entering an era keeps it and is penalized only through lost points and the collapses themselves |
 | Deterministic combat | Uncertainty comes from figures and calamities instead |
 | Deterministic discovery | Advances arrive exactly when progress reaches their cost (v0.13). Fully plannable; surprise comes only from historical figures, which spike or redirect progress, and calamities |
 | No diplomacy | Diplomats act only on market reach and knowledge spread |
-| Weak AI during tuning | The AI stays minimal until development Phase 7, so balance numbers set earlier are tuned against a weak opponent and need a retuning pass |
+| Weak AI during tuning | Resolved in part (v0.27): before each era's balance pass, several AI approaches (fixed priority patterns favouring different strategies) are built, so numbers are measured against more than one way of playing. Real strategy and difficulty levels still wait for development Phase 7 |
+| Empty city tier | With named wonders at villages (v0.27), cities have no exclusive ability yet. To be filled when advances unlock cities |
 | Long-arc content | The emergent discovery model needs a large authored set of advances, each with conditions, counters, and adoption effects |
 
 ## 17. Open questions
@@ -838,8 +844,9 @@ No balance changes until the Stone Age is complete (development plan §4, Tuning
 - [ ] Instability thresholds, source and stabilizer magnitudes, partial-reset amount (first-version values in §10)
 - [ ] Calamity exposure rate and condition weights (first values v0.22: 1% per tier point, +5% per quiet turn; weights and effects in §12)
 - [ ] Figure emergence odds
-- [ ] AST track lengths, gate requirements, settlement point values
-- [ ] Endgame countdown length and scoring weights
+- [ ] Era gate requirements and point values (first values v0.26: settlement points village 1, town 2, city 3, metropolis 4; knowledge points Developed 1, Mastered 3; Bronze gate 5 settlement + 12 knowledge)
+- [ ] Endgame countdown length (first value v0.26: 5 turns) and scoring weights
+- [ ] Artists' culture rate (first value v0.26: 1 culture point per 5 unit-turns in the Stone Age; about twice what High Learning on Mastering earns in score, three times Developing, but with no advance effects) and per-era scaling
 - [ ] Discovery outliers under v0.17 (2 progress / 10 adoption per learning, doubled Developed costs and adoption): low-usage advances (Masonry +1 a turn from one hill settlement, Tallies) take 20+ turns to develop without High Learning, which makes it near-mandatory there; high-usage advances (Ritual, Chiefdom) scale with civilization size, so learning barely moves them; advances whose adoption drivers have nothing to count yet (Barter before the market, Archery without fights) can be mastered only through learning, so Barter could master before the market exists
 
 ## 18. Recommended next steps
@@ -855,6 +862,8 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.27 (October 26, 2026):** Wonders (§9): named wonders require a village instead of a city; great wonders still require a metropolis. Wonders are designed with each era, before its AI approaches and balance pass. Cities lose their only exclusive ability (§5, §16). §16: the weak-AI tension is resolved in part by AI approaches before balance. Historical figures (§13) begin in the Bronze Age; the Stone Age has none.
+- **0.26 (October 26, 2026):** Era progression reworked (§14). The turn-by-turn AST track, sprinting, and the track length setup option are removed: a civilization enters the next era as soon as it meets the gate. Gates count settlement points (now every tier: village 1, town 2, city 3, metropolis 4) and knowledge points (Developed 1, Mastered 3; advances with no adoption stage 1; baseline advances 0). Bronze gate: 5 settlement + 12 knowledge. Scoring (§15): knowledge points + settlement points + wonders + culture points; era reached and culture figures are no longer scored (figures generate culture points). Knowledge points climb with era (for example Bronze Developed 3, Mastered 5). Artists (§6): 1 culture progress per unit a turn, 5 progress per culture point in the Stone Age, more per unit in later eras in step with knowledge points. Artists give no stability until the Bronze Age. No regression: an era once entered is kept, and the gate is checked only on entry. Endgame trigger (§15): meeting the gate of the era after the final era; the Modern era has a closing gate in the same form. Endgame countdown: 5 turns.
 - **0.25 (October 25, 2026):** Instability sources and stabilizers for the Stone Age (Phase 4 step 6). Artists wait for culture points (step 7), institutions for the Bronze Age, figures for Phase 5. Rapid change (§10): +1 civ-wide per advance step beyond 2 reached in one turn. Food has no instability effect (§10): shortage is covered by lost support; no surplus or stores stabilizer. Conflict state deferred (§11): all civilizations start neutral; War and Peace states come later with war instability and market exclusion. Instability from fighting (§10) is local only: +3 to a settlement that is attacked, otherwise +1 where its civilization lost tokens in or next to it; fighting without friendly losses adds nothing.
 - **0.24 (October 25, 2026):** The trade phase is removed (§3): three phases, Resources, Allocation, Resolution. Market orders are placed in allocation and fill in the resources phase after gathering and tax, so a change takes effect next turn and standing orders fill before the player allocates (§7).
 - **0.23 (October 25, 2026):** Resolution reports (§3): Brief (the current flash), Normal (a paused page of notable results, each line linked to the map), Detailed (every event, routine ones included). The Chronicle lists past turns, each opening its Detailed page.

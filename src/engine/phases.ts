@@ -2,6 +2,7 @@ import { resolveCalamities } from './calamities';
 import { resolveConflict } from './conflict';
 import { emit } from './context';
 import { resolveDiscovery } from './discovery';
+import { resolveEras, runArtists } from './eras';
 import { resolveInstability, runBureaucracy, updateCapitals } from './instability';
 import { resolveGrowth, resolveMovement, resolveSurplus } from './population';
 import { resolveMarket } from './market';
@@ -48,16 +49,17 @@ const resolutionSteps: Record<ResolutionStepId, (ctx: Context) => void> = {
   discovery: resolveDiscovery,
   figures: () => {},
   wonders: () => {},
-  ast: () => {},
+  ast: resolveEras,
 };
 
-// Resources phase: goods are gathered, tax is collected, standing market orders fill, and
-// Bureaucracy calms (design doc §6, §7, §10).
+// Resources phase: goods are gathered, tax is collected, standing market orders fill, Bureaucracy
+// calms, and Artists add culture (design doc §6, §7, §10).
 export function runResourcesPhase(ctx: Context): void {
   runResources(ctx);
   collectTax(ctx);
   resolveMarket(ctx);
   runBureaucracy(ctx);
+  runArtists(ctx);
 }
 
 export function runResolution(ctx: Context): void {

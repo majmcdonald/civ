@@ -23,13 +23,23 @@ export function loadContent(bundle: ContentBundle, hooks: HookRegistry = default
     if (eraOrders.has(era.order)) errors.push(`Duplicate era order ${era.order} ("${era.id}")`);
     eraIds.add(era.id);
     eraOrders.add(era.order);
+    for (const [name, gate] of [['gate', era.gate], ['closing gate', era.closing]] as const) {
+      if (gate && ![gate.settlement, gate.knowledge].every((n) => Number.isInteger(n) && n >= 0)) errors.push(`Era "${era.id}": ${name} values must be whole numbers, 0 or more`);
+    }
+    if (era.points && ![era.points.developed, era.points.mastered, era.points.culture].every((n) => Number.isInteger(n) && n > 0)) errors.push(`Era "${era.id}": points must be positive integers`);
+    if (era.gate && !era.points) errors.push(`Era "${era.id}" has a gate but no points`);
   }
+  const last = [...bundle.eras].sort((a, b) => b.order - a.order)[0];
+  for (const era of bundle.eras) if (era.closing && era !== last) errors.push(`Era "${era.id}": only the last era has a closing gate`);
+  const order = [...bundle.eras].sort((a, b) => a.order - b.order);
+  if (order[0] && !order[0].points) errors.push(`Era "${order[0].id}": the first era needs points`);
 
   const advanceIds = new Set<string>();
   for (const advance of bundle.advances) {
     if (advanceIds.has(advance.id)) errors.push(`Duplicate advance id "${advance.id}"`);
     advanceIds.add(advance.id);
     if (!eraIds.has(advance.era)) errors.push(`Advance "${advance.id}" references unknown era "${advance.era}"`);
+    else if (!advance.baseline && !bundle.eras.find((e) => e.id === advance.era)!.points) errors.push(`Advance "${advance.id}": era "${advance.era}" has no knowledge points`);
   }
 
   const resourceIds = new Set<string>();

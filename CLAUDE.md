@@ -11,8 +11,8 @@ Read both before design or build work. When a decision is made in conversation, 
 
 ## Current status
 
-- Design: core systems decided (v0.25); Stone Age advances reviewed; numbers untuned.
-- Build: Phases 0–3 done (Phase 3 core loop: tokens, movement and growth, settlements, conflict, food and manpower, instability, minimal AI, save/load, batch runs, game log). **Phase 4 (Stone Age systems) in progress** on branch `phase-4`: 10 steps (development plan §3), ending in the tuning pass and a full review of advances and screens. Steps 1 (discovery core) and 2 (Stone Age advances, design doc v0.14) done, plus the v0.16–v0.17 discovery rework (study queue; learning speeds advances, Developed costs and adoption doubled); step 3 (currency: tax from towns, a treasury that keeps, spoils; design doc v0.20) done; step 4 (market, design doc v0.21) built, Market screen awaiting review; step 5 (calamities, design doc v0.22) and step 6 (instability, v0.25) built; step 7 (AST and endgame) next.
+- Design: core systems decided (v0.27); Stone Age advances reviewed; numbers untuned.
+- Build: Phases 0–3 done (Phase 3 core loop: tokens, movement and growth, settlements, conflict, food and manpower, instability, minimal AI, save/load, batch runs, game log). **Phase 4 (Stone Age systems) in progress** on branch `phase-4`: 12 steps (development plan §3), ending with the era's wonders, panels, a full review, AI approaches, and the balance pass. Steps 1 (discovery core) and 2 (Stone Age advances, design doc v0.14) done, plus the v0.16–v0.17 discovery rework (study queue; learning speeds advances, Developed costs and adoption doubled); step 3 (currency: tax from towns, a treasury that keeps, spoils; design doc v0.20) done; step 4 (market, design doc v0.21) built, Market screen awaiting review; step 5 (calamities, design doc v0.22) and step 6 (instability, v0.25) built; step 7 (eras, scoring, endgame countdown, Artists; design doc v0.26) built; then (8) wonders, (9) information panels and rules reference, (10) full review, (11) AI approaches, (12) balance. No historical figures in the Stone Age (they start in the Bronze Age, before its panels).
 - **No balance changes until the Stone Age is complete**; every number is a placeholder until then. Batch runs (`npm run batch`) measure the real engine and only report. The Phase 0 economy simulation (`sim/phase0/sim.ts`) predates the engine and is no longer re-run.
 
 ## Stack and architecture
@@ -42,7 +42,7 @@ Read both before design or build work. When a decision is made in conversation, 
 - Write rules tests alongside each engine system.
 - Every player-facing number should be explainable: systems expose the sources behind their values for tooltip breakdowns.
 - Art is vector/SVG and code-drawn; audio is procedural (Web Audio).
-- The AI stays minimal until Phase 7; do not invest in AI strategy before then.
+- The AI stays minimal until Phase 7, except for each era's AI approaches (fixed priority patterns favouring different strategies, built before that era's balance pass; development plan §3); do not invest in AI strategy before then.
 - Performance work is deferred to Phase 8 unless something blocks development.
 - Version 1 is single-player. Preserve determinism and the command layer so multiplayer stays possible later.
 

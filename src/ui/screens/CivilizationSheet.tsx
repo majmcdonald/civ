@@ -34,17 +34,19 @@ export interface WorkOption {
   rows: { resource: string; count: number; usable: boolean }[];
 }
 
-const JOB_NAMES: Record<string, string> = { bureaucracy: 'Bureaucracy', highLearning: 'High Learning' };
+const JOB_NAMES: Record<string, string> = { bureaucracy: 'Bureaucracy', highLearning: 'High Learning', artists: 'Artists' };
+const SPECIALISTS = ['bureaucracy', 'highLearning', 'artists'];
 
 function jobTitle(resource: string, usable: boolean): string {
   if (resource === 'bureaucracy') return 'Each unit lowers this settlement’s instability by 1 a turn, then the civ-wide meter';
   if (resource === 'highLearning') return 'Each unit adds 1 learning a turn, sent down the study queue; it speeds advances up (see Knowledge)';
+  if (resource === 'artists') return 'Each unit adds 1 culture progress a turn; every 5 is a culture award (1 point in the Stone Age), which counts toward your score';
   return usable ? '1 per manpower, gathered at the start of next turn' : 'Your civilization cannot gather this yet';
 }
 
 // A settlement's jobs as chips; dark ones have manpower on them. In allocation each has − and +.
 function WorkChips({ area, option, canAssign, onWork }: { area: AreaId; option: WorkOption; canAssign: boolean; onWork: (area: AreaId, resource: string, count: number) => void }) {
-  const rows = canAssign ? option.rows : option.rows.filter((r) => r.count > 0 || (r.resource !== 'bureaucracy' && r.resource !== 'highLearning'));
+  const rows = canAssign ? option.rows : option.rows.filter((r) => r.count > 0 || !SPECIALISTS.includes(r.resource));
   return (
     <span className="civ-resources">
       {rows.length === 0 && '—'}
@@ -104,9 +106,10 @@ function summarize(map: GameMap, pieces: MapPieces, civ: number, cap: number) {
   const unitsOn = (job: (resource: string) => boolean) => rows.reduce((sum, r) => sum + r.work.reduce((n, w) => (job(w.resource) ? n + w.count : n), 0), 0);
   const bureaucracy = unitsOn((r) => r === 'bureaucracy');
   const learning = unitsOn((r) => r === 'highLearning');
-  const working = unitsOn((r) => r !== 'bureaucracy' && r !== 'highLearning');
+  const artists = unitsOn((r) => r === 'artists');
+  const working = unitsOn((r) => !SPECIALISTS.includes(r));
   const urban = rows.reduce((sum, r) => sum + TIER[r.tier].growth, 0);
-  return { loose, growth, rows, settled, manpower, working, bureaucracy, learning, urban };
+  return { loose, growth, rows, settled, manpower, working, bureaucracy, learning, artists, urban };
 }
 
 function Meter({ value, max, tone = 'ink' }: { value: number; max: number; tone?: 'ink' | 'warn' }) {
@@ -176,7 +179,7 @@ interface CivilizationSheetProps {
   planned: boolean;
   // The civ-wide instability meter and overextension (engine, design doc §10).
   instability: { civ: number; overextension: number; free: number; capital: AreaId | null };
-  // A settlement's manpower jobs (design doc §6): its revealed goods, Bureaucracy, and High Learning.
+  // A settlement's manpower jobs (design doc §6): its revealed goods, Bureaucracy, High Learning, and Artists.
   work: (area: AreaId) => WorkOption | null;
   // Manpower is assigned in the allocation phase.
   canAssign: boolean;
@@ -194,7 +197,7 @@ interface CivilizationSheetProps {
 export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, cap, names, support, planned, instability, work, canAssign, onWork, focus = null, onRename, onShow, calamities, treasury, onBuyOff }: CivilizationSheetProps) {
   const focused = useRef<HTMLTableRowElement>(null);
   useEffect(() => focused.current?.scrollIntoView({ block: 'center' }), [focus]);
-  const { loose, growth, rows, settled, manpower, working, bureaucracy, learning, urban } = summarize(map, pieces, civ, cap);
+  const { loose, growth, rows, settled, manpower, working, bureaucracy, learning, artists, urban } = summarize(map, pieces, civ, cap);
   const gap = (r: SettlementRow) => r.threshold - r.instability - instability.civ;
   // The capital's free Bureaucracy unit counts with the assigned ones.
   const calming = bureaucracy + (instability.capital === null ? 0 : 1);
@@ -298,7 +301,7 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
           <div className="civ-big" title="Village 1, town 2, plus advance bonuses (§6)">{manpower}</div>
           <ul className="civ-assign">
             {[...ASSIGNMENTS, 'Unassigned'].map((a, i) => {
-              const units = i === 0 ? working : a === 'Bureaucracy' ? bureaucracy : a === 'High Learning' ? learning : a === 'Unassigned' ? manpower - working - bureaucracy - learning : 0;
+              const units = i === 0 ? working : a === 'Bureaucracy' ? bureaucracy : a === 'High Learning' ? learning : a === 'Artists' ? artists : a === 'Unassigned' ? manpower - working - bureaucracy - learning - artists : 0;
               return (
                 <li key={a}>
                   <span>{a}</span>
@@ -387,7 +390,7 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
           <thead>
             <tr>
               <th>Settlement</th>
-              <th title="Jobs for the settlement's manpower: the goods in its area, Bureaucracy, and High Learning; dark ones have manpower on them (§6). Assigned in the Allocation phase; changes take effect next turn">Work</th>
+              <th title="Jobs for the settlement's manpower: the goods in its area, Bureaucracy, High Learning, and Artists; dark ones have manpower on them (§6). Assigned in the Allocation phase; changes take effect next turn">Work</th>
               <th title="Loose tokens in adjacent unsettled areas, plus food standing in for missing tokens, at the end of this turn, against the tier's need (§5, §6)">Support</th>
               <th title="Manpower assigned to jobs, of the settlement's total; idle manpower produces nothing (§6)">Manpower</th>
               <th title="Tokens added to adjacent areas each turn (§5)">Urban growth</th>

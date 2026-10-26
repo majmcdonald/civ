@@ -1,6 +1,7 @@
 import type { Content } from './content';
 import { clone, emit } from './context';
 import { grantStartingKnowledge, setStudy, validateStudy } from './discovery';
+import { erasInOrder } from './eras';
 import { setOrder, validateOrder } from './market';
 import { setBuyOff, validateBuyOff } from './calamities';
 import { runResolution, runResourcesPhase } from './phases';
@@ -20,7 +21,7 @@ import {
   type Phase,
 } from './types';
 
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 
 interface CommandHandler<C extends Command> {
   validate(ctx: Pick<Context, 'state' | 'map' | 'content'>, command: C): string | null;
@@ -34,6 +35,7 @@ const handlers: CommandHandlers = {
     validate({ state }, command) {
       const player = state.players.find((p) => p.id === command.player);
       if (!player) return `Unknown player "${command.player}"`;
+      if (state.over) return 'The game is over';
       if (!PLAYER_PHASES.includes(state.phase)) return `Phase "${state.phase}" takes no player input`;
       if (player.endedPhase) return `Player "${command.player}" already ended phase "${state.phase}"`;
       return null;
@@ -123,13 +125,14 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
   if (problem) return { ok: false, reason: problem };
 
   const map = mapFor(setup);
+  const firstEra = erasInOrder(content)[0]!.id;
   const state: GameState = {
     schemaVersion: SCHEMA_VERSION,
     setup: clone(setup),
     rng: createRng(setup.seed),
     turn: 1,
     phase: 'resources',
-    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, treasury: 0, prices: {}, orders: [], quiet: 0, buyOff: [], capital: null, tiers: [...(setup.unlockedTiers ?? [])], effects: [], advances: [], study: [] })),
+    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, treasury: 0, prices: {}, orders: [], quiet: 0, buyOff: [], capital: null, tiers: [...(setup.unlockedTiers ?? [])], effects: [], advances: [], study: [], era: firstEra, culture: 0, cultureProgress: 0 })),
     // Each civilization starts with one token in its starting area (design doc §4).
     stacks: setup.players
       .map((p, i) => ({ area: map.starts[i]!, player: p.id, count: 1 }))
@@ -139,6 +142,8 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
     conversions: [],
     goods: [],
     dry: [],
+    endgame: null,
+    over: false,
   };
   const ctx: Context = { state, content, map, events: [], refugees: [] };
   emit(ctx, { type: 'gameStarted', seed: setup.seed, players: setup.players.map((p) => p.id) });
@@ -184,6 +189,8 @@ function runUntilPlayerInput(ctx: Context): void {
   while (!PLAYER_PHASES.includes(ctx.state.phase)) {
     if (ctx.state.phase === 'resources') runResourcesPhase(ctx);
     else runResolution(ctx);
+    // The game ends with the resolution of the countdown's last turn (design doc §15).
+    if (ctx.state.over) return;
     advancePhase(ctx);
   }
 }
