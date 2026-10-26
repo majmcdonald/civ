@@ -2,6 +2,7 @@ import type { Content } from './content';
 import { emit } from './context';
 import { calm, capitalReach, riverLeg, transportNeighbors } from './effects';
 import type { AreaId, GameMap } from './map/types';
+import { activeWork } from './resources';
 import { dropTier, tierRules, TIERS } from './settlements';
 import type { Context, GameEvent, GameState, PlayerId, Settlement } from './types';
 
@@ -26,7 +27,7 @@ const DISTANCE_FREE = 2;
 const DISTANCE_STEP = 2;
 const DISTANCE_MAX_PENALTY = 4;
 
-export type InstabilitySource = 'overextension' | 'losses' | 'lostSupport' | 'conflict' | 'bureaucracy' | 'calm' | 'luxury' | 'noSettlements';
+export type InstabilitySource = 'overextension' | 'losses' | 'lostSupport' | 'conflict' | 'bureaucracy' | 'calm' | 'luxury' | 'noSettlements' | 'calamity';
 
 export function capitalOf(state: GameState, player: PlayerId): AreaId | null {
   return state.players.find((p) => p.id === player)?.capital ?? null;
@@ -110,7 +111,7 @@ export function overextension(state: GameState, player: PlayerId): number {
   return Math.max(0, state.settlements.filter((s) => s.player === player).length - OVEREXTENSION_FREE);
 }
 
-function addLocal(ctx: Context, settlement: Settlement, amount: number, source: InstabilitySource): void {
+export function addLocal(ctx: Context, settlement: Settlement, amount: number, source: InstabilitySource): void {
   if (amount === 0) return;
   settlement.instability = localInstability(settlement) + amount;
   emit(ctx, { type: 'instabilityChanged', player: settlement.player, area: settlement.area, amount, source });
@@ -125,7 +126,7 @@ function addCiv(ctx: Context, player: PlayerId, amount: number, source: Instabil
 
 // Bureaucracy working in a settlement: its assigned units, plus the capital's free one.
 export function bureaucracyAt(state: GameState, settlement: Settlement): number {
-  const assigned = (settlement.work ?? []).find((w) => w.resource === BUREAUCRACY)?.count ?? 0;
+  const assigned = activeWork(state, settlement).find((w) => w.resource === BUREAUCRACY)?.count ?? 0;
   return assigned + (capitalOf(state, settlement.player) === settlement.area ? CAPITAL_BUREAUCRACY : 0);
 }
 

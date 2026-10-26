@@ -29,6 +29,7 @@ export const standIn: ContentBundle = {
     { id: 'grain', name: 'Grain', food: true, price: 5, requires: 'agriculture' },
     { id: 'fish', name: 'Fish', food: true, price: 5, requires: 'fishing' },
   ],
+  calamities: [],
 };
 
 export function testContent(bundle: ContentBundle = standIn, hooks?: HookRegistry): Content {

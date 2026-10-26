@@ -43,4 +43,5 @@ export {
 } from './settlements';
 export { previewConflicts, type ConflictEvent } from './conflict';
 export { aiCommands } from './ai';
+export { calamityChance, calamityView, CHANCE_PER_QUIET, CHANCE_PER_TIER, riskLevel, type CalamityView, type Counter, type SettlementRisk } from './calamities';
 export { BASE_REACH, canTrade, marketOf, marketView, ORDER_MAX, PRICE_CEILING, PRICE_FLOOR, PRICE_STEP, priceOf, type GoodView, type MarketView } from './market';

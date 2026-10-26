@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.22  
+**Version:** 0.23  
 **Date:** October 25, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -78,6 +78,18 @@ Four phases. All players act simultaneously within each phase.
 | 11 | Historical figures emerge | Conditions include this turn's discoveries |
 | 12 | Wonders complete | After calamities |
 | 13 | AST movement and endgame check | Uses final state |
+
+### Resolution reports (v0.23)
+
+After resolution the player sees what happened, in one of three modes chosen in the game menu (remembered by the browser; Normal by default):
+
+| Mode | Shows |
+|---|---|
+| **Brief** | The notable results flash over the map and fade after a few seconds |
+| **Normal** | The game pauses on a report page listing the notable results (settlements built, lost, or collapsed; fights; calamities; advances reached; trades; food standing in for support). A turn with nothing notable shows no page |
+| **Detailed** | The same page, listing every event: also goods gathered, tax, price changes, each instability change, moves, and growth |
+
+Each line about a place jumps to it on the map when clicked. The **Chronicle** lists every turn since the game started or was loaded, newest first, with its notable results; clicking a turn opens its Detailed page. Reports cover the player's own civilization and events that involve it.
 
 ## 4. Map, population, and movement — Decided
 
@@ -674,6 +686,8 @@ Eight calamities exist in the Stone Age. Civil war, heresy, piracy, and market c
 | **Earthquake/volcano** | Its own area volcanic 3; +1 per adjacent volcanic area | Tier drop (with refugees) | Masonry Developed: a town or larger does not drop, and loses 3 tokens from its support areas instead |
 | **Drought** | Its own area desert 2; +1 per adjacent desert area | It gathers no food for 2 turns, and each of its support areas has its limit lowered by 1 for 2 turns (tokens over the limit are removed as surplus) | Pottery Developed halves the food part (1 turn) |
 
+Details set in the build (v0.22): a village struck by a spreading epidemic loses 2 tokens; Flood and the support losses take only the victim's own tokens; Drought's lowered limits last this turn and next; a bought-off calamity does not count as striking the settlement (Ritual's Superstition input counts only real strikes).
+
 Halving counts each unit separately and rounds down: a raid on a village with Archery and Palisades costs 3 → 1 → 0 tokens. "Manpower idle" halved idles half the settlement's manpower, rounded down, so a village with the counter keeps working.
 
 ### Full list (all eras, v0.2; Stone Age rules above)
@@ -837,6 +851,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.23 (October 25, 2026):** Resolution reports (§3): Brief (the current flash), Normal (a paused page of notable results, each line linked to the map), Detailed (every event, routine ones included). The Chronicle lists past turns, each opening its Detailed page.
 - **0.22 (October 25, 2026):** Calamities designed (§12). One roll per civilization a turn: 1% per settlement tier point plus 5% per turn in a row without a calamity, reset when one strikes. One weighted draw over settlement × calamity pairs picks both; the weights are the shown risk (low, medium, high). Softening advances halve the damage once Developed (some again when Mastered), not the chance. Eight Stone Age calamities: Famine (Pottery), Superstition (Ritual; a strike also gives Ritual 1 free learning), Civil disorder (Tallies), Epidemic (spreads through the victim's market; no counter yet), Barbarian raid (Archery, Palisades, Masonry), Flood, Earthquake/volcano (Masonry), Drought (Pottery). Civil war, heresy, piracy, and market crash wait for later systems. Buying off: a standing choice to pay 10 when a marked calamity strikes (Famine with Barter Developed, Superstition, Civil disorder, Barbarian raid); it is averted but still resets the build-up; currency gains this use (§6). The candidate calamity tags of §8 are confirmed or dropped (§17).
 - **0.21 (October 25, 2026):** Market details (§7). Sell any good you can use and hold; buy any good, which works as its category says without its advance. Starting prices food 5, luxury 10. Prices move 10% of the starting price per unit of imbalance, rounded, within half to triple the start; no quantity limit and no recovery on quiet turns. Bought goods go to a civ-wide pool (food covers any settlement's shortfall after local food). Base market reach 2 steps settlement to settlement (3 with Barter Mastered). Orders stand until changed. The minimal AI buys food for shortfalls and luxuries for settlements near collapse, and does not sell.
 - **0.20 (October 25, 2026):** Currency designed (§6). Towns and larger pay a fixed tax each turn in the resources phase: village 0, town 2, city 3, metropolis 4; villages pay nothing, so tax starts with the first town (Chiefdom), as only cities paid tax in the original. Tax is free in the Stone Age; a later advance (Coinage) adds a tax rate lever. The treasury keeps from turn to turn with no cap, lost only to spoils and currency calamities. Currency is used only to buy on the market and, new, to build wonders (§9: wonders cost manpower, resources, and currency). Currency no longer buys calm: stabilization is removed from allocation (§3) and §10's stabilizers; it does not buy learning or advances. Spoils (§11): a capture takes 10% of the defender's treasury per tier of the settlement lost (village 10% to metropolis 40%).

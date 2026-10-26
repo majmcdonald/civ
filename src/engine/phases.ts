@@ -1,3 +1,4 @@
+import { resolveCalamities } from './calamities';
 import { resolveConflict } from './conflict';
 import { emit } from './context';
 import { resolveDiscovery } from './discovery';
@@ -35,7 +36,7 @@ const resolutionSteps: Record<ResolutionStepId, (ctx: Context) => void> = {
     updateCapitals(ctx);
   },
   food: () => {},
-  calamities: () => {},
+  calamities: resolveCalamities,
   support: resolveSupport,
   instability: resolveInstability,
   growth: (ctx) => {

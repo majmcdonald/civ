@@ -181,6 +181,20 @@ function StepText({ view }: { view: AdvanceView }) {
   );
 }
 
+// What the advance does against calamities (design doc §12): halving damage, sheltering towns from
+// a tier drop, opening a buy-off, or gaining learning from a strike.
+function calamityEffects(content: Content, id: string): string[] {
+  return content.calamities.flatMap((c) => {
+    const name = c.name.toLowerCase();
+    return [
+      ...(c.softenedBy ?? []).filter((x) => x.advance === id).map((x) => `${x.stage === 'mastered' ? 'Mastered' : 'Developed'}: halves ${name} damage${x.stage === 'mastered' ? ' again' : ''}${x.minTier ? ` (${x.minTier}s and larger)` : ''}`),
+      ...((c.shelter ?? []).includes(id) ? [`Developed: towns and larger keep their tier in ${name === 'earthquake' ? 'an' : 'a'} ${name}`] : []),
+      ...(c.buyOff?.requires === id ? [`Developed: ${name} can be bought off (${c.buyOff.cost})`] : []),
+      ...(c.grants?.advance === id ? [`Each ${name} strike gives ${c.grants.learning} free learning toward it`] : []),
+    ];
+  });
+}
+
 function AdvanceCard({ view, content, names, canStudy, onAdd }: { view: AdvanceView; content: Content; names: Names; canStudy: boolean; onAdd: () => void }) {
   const { advance } = view;
   const effects = [
@@ -188,6 +202,7 @@ function AdvanceCard({ view, content, names, canStudy, onAdd }: { view: AdvanceV
     ...content.resources.filter((r) => r.requires === advance.id).map((r) => `Developed: ${r.name.toLowerCase()} can be ${r.from ? `made from ${either(r.from.map((f) => names.resource(f).toLowerCase()))} areas` : 'gathered'}${r.luxury ? ' (luxury: calms instability)' : ''}`),
     ...advance.effects.map((e) => `Developed: ${describeEffect(e, names)}`),
     ...(advance.mastered ?? []).map((e) => `Mastered: ${describeEffect(e, names)}`),
+    ...calamityEffects(content, advance.id),
   ];
   return (
     <li className={`kn-card kn-${view.stage} ${view.plausible || view.stage !== 'none' ? '' : 'kn-closed'} ${view.queued ? 'kn-queued' : ''}`}>

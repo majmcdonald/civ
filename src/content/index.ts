@@ -313,4 +313,21 @@ export const content: ContentBundle = {
     { id: 'copper', name: 'Copper', food: false, price: 10, luxury: true, requires: 'copperWorking' },
     { id: 'cloth', name: 'Cloth', food: false, price: 10, luxury: true, requires: 'weaving', from: ['grain', 'livestock'] },
   ],
+  // Stone Age calamities (design doc §12, v0.22); weights and effects are engine rules.
+  calamities: [
+    { id: 'famine', name: 'Famine', softenedBy: [{ advance: 'pottery' }, { advance: 'pottery', stage: 'mastered' }], buyOff: { cost: 10, requires: 'barter' } },
+    { id: 'superstition', name: 'Superstition', softenedBy: [{ advance: 'ritual' }, { advance: 'ritual', stage: 'mastered' }], buyOff: { cost: 10 }, grants: { advance: 'ritual', learning: 1 } },
+    { id: 'civilDisorder', name: 'Civil disorder', softenedBy: [{ advance: 'tallies' }, { advance: 'tallies', stage: 'mastered' }], buyOff: { cost: 10 } },
+    { id: 'epidemic', name: 'Epidemic', spreads: true },
+    {
+      id: 'raid',
+      name: 'Barbarian raid',
+      softenedBy: [{ advance: 'archery' }, { advance: 'palisades' }, { advance: 'masonry', minTier: 'town' }],
+      shelter: ['palisades', 'masonry'],
+      buyOff: { cost: 10 },
+    },
+    { id: 'flood', name: 'Flood' },
+    { id: 'earthquake', name: 'Earthquake', shelter: ['masonry'] },
+    { id: 'drought', name: 'Drought', softenedBy: [{ advance: 'pottery' }] },
+  ],
 };

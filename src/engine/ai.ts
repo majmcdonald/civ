@@ -34,6 +34,9 @@ import { mapFor } from './world';
 // 5. Put idle manpower to work: on the area's first food the civilization can gather, else the
 //    first good it can (copper, cloth).
 //
+// It marks every calamity that can be bought off (design doc §12), so its treasury pays 10 to avert
+// one whenever it can.
+//
 // Each trade phase, once it can trade (design doc §7, v0.21), it buys only what it needs, as
 // market orders: the cheapest food (earlier goods on ties) for this turn's forecast support
 // shortfall, and the cheapest luxury for each settlement within 2 of collapse. It cancels any other
@@ -84,6 +87,9 @@ export function aiCommands(state: GameState, content: Content, player: PlayerId)
     current = result.state;
     commands.push(command);
   };
+
+  const buyable = content.calamities.filter((c) => c.buyOff).map((c) => c.id);
+  if (current.players.find((p) => p.id === player)!.buyOff.length !== buyable.length) issue({ type: 'setBuyOff', player, calamities: buyable });
 
   const reserved = new Set<AreaId>();
   const site = villageSite(current, map, player) ?? upgradeSite(current, map, player);

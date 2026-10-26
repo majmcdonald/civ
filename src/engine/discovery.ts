@@ -4,6 +4,7 @@ import { emit } from './context';
 import { capitalDistance } from './instability';
 import type { AreaId, GameMap } from './map/types';
 import { STARTING_TOKEN_CAP } from './population';
+import { activeWork } from './resources';
 import { randomInt } from './rng';
 import type { AdvanceProgress, Command, Context, GameState, PlayerId, PlayerState, Settlement } from './types';
 
@@ -150,9 +151,8 @@ export function inputCount(state: GameState, map: GameMap, content: Content, id:
       const traded = player(state, id).traded;
       return traded?.turn === state.turn ? traded.resources.length : 0;
     }
-    // Calamities arrive in Phase 4 step 5; until then nothing counts.
     case 'struck':
-      return 0;
+      return own.filter((s) => s.struck?.turn === state.turn && s.struck.calamity === input.calamity).length;
   }
 }
 
@@ -161,7 +161,21 @@ export function plausible(state: GameState, map: GameMap, content: Content, id: 
 }
 
 export function highLearning(state: GameState, id: PlayerId): number {
-  return state.settlements.filter((s) => s.player === id).reduce((sum, s) => sum + ((s.work ?? []).find((w) => w.resource === HIGH_LEARNING)?.count ?? 0), 0);
+  return state.settlements.filter((s) => s.player === id).reduce((sum, s) => sum + (activeWork(state, s).find((w) => w.resource === HIGH_LEARNING)?.count ?? 0), 0);
+}
+
+// Free learning toward an advance's next step, Known or Developed, while it is plausible
+// (Superstition's gift to Ritual, design doc §12). Resolved with the turn's discovery.
+export function grantLearning(ctx: Context, id: PlayerId, advanceId: string, units: number): void {
+  const { state, map, content } = ctx;
+  const advance = content.advances.find((a) => a.id === advanceId);
+  if (!advance) return;
+  const stage = stageOf(state, id, advanceId);
+  if (stage === 'developed' || !plausible(state, map, content, id, advance)) return;
+  const cost = stepCost(state, id, advance, stage);
+  if (cost === null) return;
+  const e = entry(player(state, id), advanceId, content);
+  e.progress = Math.min(cost, e.progress + units * LEARNING_PROGRESS);
 }
 
 // Learning a turn: one per High Learning unit.
@@ -412,7 +426,7 @@ export function resolveDiscovery(ctx: Context): void {
     if (plan.pool > 0 && plan.queued === 0 && plan.split > 0) emit(ctx, { type: 'studyQueueEmpty', player: p.id, learning: plan.split });
     for (const view of views) {
       const { advance } = view;
-      if (!view.next || view.rate <= 0) continue;
+      if (!view.next || (view.rate <= 0 && view.progress < view.cost)) continue;
       const e = entry(p, advance.id, content);
       const progress = fill(view.progress + view.rate, view.cost);
       if (view.next === 'mastered') {

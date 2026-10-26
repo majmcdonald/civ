@@ -5,7 +5,7 @@ import { gatherBonus } from './effects';
 import { BUREAUCRACY } from './instability';
 import type { AreaId, GameMap, ResourceId } from './map/types';
 import { settlementAt, tierRules } from './settlements';
-import type { Command, Context, GameState, PlayerId, Settlement } from './types';
+import type { Command, Context, GameState, PlayerId, Settlement, Work } from './types';
 
 // Manpower and goods (design doc §6). Each settlement has whole units of manpower by tier; standing
 // assignments gather one of the area's resources per unit in the resources phase. Goods last one
@@ -32,6 +32,24 @@ export function collectTax(ctx: Context): void {
     p.treasury += amount;
     emit(ctx, { type: 'taxCollected', player: p.id, amount });
   }
+}
+
+// Assignments working this turn: idle manpower (Superstition, Civil disorder) leaves the most
+// recently changed assignments first.
+export function activeWork(state: GameState, settlement: Settlement): Work[] {
+  const work = settlement.work ?? [];
+  const idle = settlement.idle?.turn === state.turn ? settlement.idle.units : 0;
+  if (idle === 0) return work;
+  const kept = work.map((w) => ({ ...w }));
+  let over = idle;
+  while (over > 0 && kept.length > 0) {
+    const last = kept[kept.length - 1]!;
+    const cut = Math.min(over, last.count);
+    last.count -= cut;
+    over -= cut;
+    if (last.count === 0) kept.pop();
+  }
+  return kept;
 }
 
 export function assigned(settlement: Settlement): number {
@@ -127,8 +145,10 @@ export function runResources(ctx: Context): void {
   const { state, content } = ctx;
   state.goods = [];
   for (const s of state.settlements) {
-    for (const w of s.work ?? []) {
+    const parched = s.drought !== undefined && state.turn <= s.drought;
+    for (const w of activeWork(state, s)) {
       if (w.count <= 0 || !usable(state, content, s.player, w.resource)) continue;
+      if (parched && isFood(content, w.resource)) continue;
       const count = w.count + gatherBonus(state, s.player, w.resource);
       state.goods.push({ area: s.area, player: s.player, resource: w.resource, count });
       emit(ctx, { type: 'goodsProduced', player: s.player, area: s.area, resource: w.resource, count });

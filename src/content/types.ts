@@ -151,8 +151,27 @@ export interface Resource {
   from?: string[];
 }
 
+// A calamity (design doc §12). Its weights and effects are rules in the engine, keyed by `id`
+// (engine/calamities.ts); the data says what softens it and whether it can be bought off.
+export interface Calamity {
+  id: string;
+  name: string;
+  // Each entry halves the damage once the advance reaches `stage` (default Developed), for
+  // settlements of `minTier` or larger (all tiers without it).
+  softenedBy?: { advance: string; stage?: 'developed' | 'mastered'; minTier?: SettlementTier }[];
+  // Advances, any one Developed, that spare a town or larger the tier drop.
+  shelter?: string[];
+  // Paid from the treasury to avert it when the ruler has marked it; `requires` must be Developed.
+  buyOff?: { cost: number; requires?: string };
+  // Free High Learning units toward an advance's next step (Known or Developed) when struck.
+  grants?: { advance: string; learning: number };
+  // It also strikes each civilization in the victim's market.
+  spreads?: boolean;
+}
+
 export interface ContentBundle {
   eras: Era[];
   advances: Advance[];
   resources: Resource[];
+  calamities: Calamity[];
 }

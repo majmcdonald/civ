@@ -10,6 +10,7 @@ const base: ContentBundle = {
   ],
   advances: [],
   resources: [],
+  calamities: [],
 };
 
 function errorsFor(bundle: ContentBundle, hooks = {}): string[] {

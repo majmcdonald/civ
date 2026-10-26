@@ -2,6 +2,7 @@ import type { Content } from './content';
 import { clone, emit } from './context';
 import { grantStartingKnowledge, setStudy, validateStudy } from './discovery';
 import { resolveMarket, setOrder, validateOrder } from './market';
+import { setBuyOff, validateBuyOff } from './calamities';
 import { runResolution, runResourcesPhase } from './phases';
 import { BASE_MOVEMENT, setMoveOrder, STARTING_TOKEN_CAP, validateMoveOrder } from './population';
 import { setWork, validateWork } from './resources';
@@ -19,7 +20,7 @@ import {
   type Phase,
 } from './types';
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 
 interface CommandHandler<C extends Command> {
   validate(ctx: Pick<Context, 'state' | 'map' | 'content'>, command: C): string | null;
@@ -97,6 +98,14 @@ const handlers: CommandHandlers = {
       setOrder(ctx, command);
     },
   },
+  setBuyOff: {
+    validate(ctx, command) {
+      return validateBuyOff(ctx, command);
+    },
+    execute(ctx, command) {
+      setBuyOff(ctx, command);
+    },
+  },
 };
 
 export function validateSetup(setup: GameSetup, content: Content): string | null {
@@ -121,7 +130,7 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
     rng: createRng(setup.seed),
     turn: 1,
     phase: 'resources',
-    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, treasury: 0, prices: {}, orders: [], capital: null, tiers: [...(setup.unlockedTiers ?? [])], effects: [], advances: [], study: [] })),
+    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, treasury: 0, prices: {}, orders: [], quiet: 0, buyOff: [], capital: null, tiers: [...(setup.unlockedTiers ?? [])], effects: [], advances: [], study: [] })),
     // Each civilization starts with one token in its starting area (design doc §4).
     stacks: setup.players
       .map((p, i) => ({ area: map.starts[i]!, player: p.id, count: 1 }))
@@ -130,6 +139,7 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
     settlements: [],
     conversions: [],
     goods: [],
+    dry: [],
   };
   const ctx: Context = { state, content, map, events: [], refugees: [] };
   emit(ctx, { type: 'gameStarted', seed: setup.seed, players: setup.players.map((p) => p.id) });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { GROWTH_PER_TOKEN, type AreaId, type GameMap, type SupportSummary } from '../../engine';
+import { GROWTH_PER_TOKEN, type AreaId, type CalamityView, type Counter, type GameMap, type SupportSummary } from '../../engine';
 import type { MapPieces, SettlementTier } from '../art/pieces';
 
 // Civilization overview (design doc §4, §5, §6, §10). Values come from the pieces on the map; the
@@ -185,9 +185,13 @@ interface CivilizationSheetProps {
   focus?: AreaId | null;
   onRename: (area: AreaId, name: string) => void;
   onShow: (area: AreaId) => void;
+  // Calamity chance, risks, and buy-off marks (engine, design doc §12).
+  calamities: CalamityView;
+  treasury: number;
+  onBuyOff: (calamities: string[]) => void;
 }
 
-export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, cap, names, support, planned, instability, work, canAssign, onWork, focus = null, onRename, onShow }: CivilizationSheetProps) {
+export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, cap, names, support, planned, instability, work, canAssign, onWork, focus = null, onRename, onShow, calamities, treasury, onBuyOff }: CivilizationSheetProps) {
   const focused = useRef<HTMLTableRowElement>(null);
   useEffect(() => focused.current?.scrollIntoView({ block: 'center' }), [focus]);
   const { loose, growth, rows, settled, manpower, working, bureaucracy, learning, urban } = summarize(map, pieces, civ, cap);
@@ -203,6 +207,10 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
   const ateOwn = (area: AreaId) => support.settlements.some((s) => s.area === area && s.ateOwn);
   const urbanNext = urban + support.settlements.filter((s) => s.ateOwn).length;
   const short = support.settlements.filter((s) => s.support < s.needed);
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  const risksOf = (area: AreaId) => calamities.settlements.find((s) => s.area === area)?.risks ?? [];
+  const exposed = calamities.settlements.flatMap((s) => s.risks.filter((r) => r.level !== 'low').map((r) => ({ area: s.area, ...r })));
+  const marked = calamities.buyOff.filter((b) => b.marked).map((b) => b.calamity);
   const label = (area: AreaId) => {
     const s = support.settlements.find((x) => x.area === area)!;
     return `${names.get(area) ?? 'Unnamed'} – ${TIER[s.tier as TierId].name}`;
@@ -329,6 +337,48 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
             <p className="civ-note">{rows.length > 0 ? 'No settlement close to collapse' : 'No settlements'}</p>
           )}
         </section>
+        <section className="civ-card">
+          <h2>Calamities</h2>
+          <div className="civ-big" title="One roll a turn: 1% per settlement tier point (village 1, town 2), plus 5% for every turn in a row without a calamity; it falls back when one strikes (§12)">
+            {pct(calamities.chance)}
+            <span> this turn</span>
+          </div>
+          <dl className="civ-facts">
+            <dt title="1% per settlement tier point">Settlements</dt>
+            <dd>{pct(calamities.base)}</dd>
+            <dt title="5% for each turn in a row without a calamity">Quiet turns</dt>
+            <dd>
+              {calamities.quiet} (+{pct(calamities.buildUp)})
+            </dd>
+          </dl>
+          <ul className="civ-buyoff" title="When a marked calamity strikes and the treasury holds the cost, it is paid and the calamity averted; the chance still falls back (§12)">
+            {calamities.buyOff.map((b) => (
+              <li key={b.calamity}>
+                <label title={b.available ? undefined : 'Needs Barter Developed: food bought in'}>
+                  <input
+                    type="checkbox"
+                    checked={b.marked}
+                    disabled={!canAssign}
+                    onChange={(e) => onBuyOff(e.target.checked ? [...marked, b.calamity] : marked.filter((c) => c !== b.calamity))}
+                  />
+                  Buy off {b.name.toLowerCase()} ({b.cost}){!b.available && ' — needs Barter'}
+                </label>
+              </li>
+            ))}
+          </ul>
+          {treasury < 10 && marked.length > 0 && <p className="civ-note">Treasury {treasury}: too little to buy one off</p>}
+          {exposed.length > 0 ? (
+            <ul className="civ-warnings">
+              {exposed.map((r) => (
+                <li key={`${r.area}-${r.calamity}`} title={`${r.reasons.join('; ')} · ${pct(r.share)} of strikes · ${countersText(r.counters)}`}>
+                  {names.get(r.area) ?? 'Unnamed'}: {r.name.toLowerCase()} risk {r.level}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="civ-note">{rows.length > 0 ? 'No settlement at medium or high risk' : 'No settlements, no calamities'}</p>
+          )}
+        </section>
       </div>
 
       <section className="civ-table-wrap">
@@ -342,12 +392,13 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
               <th title="Manpower assigned to jobs, of the settlement's total; idle manpower produces nothing (§6)">Manpower</th>
               <th title="Tokens added to adjacent areas each turn (§5)">Urban growth</th>
               <th title="Local instability meter plus the civ-wide meter, against the threshold at which it collapses (§10)">Instability</th>
+              <th title="The calamity it is most exposed to; hover for every risk and its reasons (§12)">Risk</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="civ-empty">
+                <td colSpan={7} className="civ-empty">
                   No settlements yet. Six tokens in or next to one area can found a village.
                 </td>
               </tr>
@@ -384,6 +435,7 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
                   <td className={gap(r) <= 2 ? 'warn' : ''} title={`Local ${r.instability} + civ-wide ${instability.civ}; collapses at ${r.threshold}, lower far from the capital`}>
                     {r.instability + instability.civ} / {r.threshold}
                   </td>
+                  <RiskCell risks={risksOf(r.area)} />
                 </tr>
               );
             })}
@@ -392,4 +444,24 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
       </section>
     </div>
   );
+}
+
+function RiskCell({ risks }: { risks: CalamityView['settlements'][number]['risks'] }) {
+  const top = [...risks].sort((a, b) => b.weight - a.weight)[0];
+  if (!top) return <td>—</td>;
+  const title = risks.map((r) => `${r.name}: ${r.level} (${r.reasons.join('; ')}) · ${countersText(r.counters)}`).join('\n');
+  return (
+    <td className={top.level === 'high' ? 'warn' : ''} title={title}>
+      {top.name} · {top.level}
+    </td>
+  );
+}
+
+// Which advances soften a calamity here, those in force and those not yet reached (§12).
+function countersText(counters: Counter[]): string {
+  if (counters.length === 0) return 'nothing softens it yet';
+  const label = (c: Counter) => `${c.name}${c.stage === 'mastered' ? ' Mastered' : ''} ${c.effect === 'halves' ? 'halves it' : 'keeps the tier'}`;
+  const met = counters.filter((c) => c.met).map(label);
+  const not = counters.filter((c) => !c.met).map((c) => `${label(c)} (not yet ${c.stage === 'mastered' ? 'Mastered' : 'Developed'})`);
+  return [...met, ...not].join(', ');
 }

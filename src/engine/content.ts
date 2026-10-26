@@ -1,10 +1,12 @@
-import type { Advance, AreaFilter, ContentBundle, Effect, Era, Gathering, Input, Resource } from '../content/types';
+import type { Advance, AreaFilter, Calamity, ContentBundle, Effect, Era, Gathering, Input, Resource } from '../content/types';
+import { CALAMITY_RULES } from './calamities';
 import { hooks as defaultHooks, type HookRegistry } from './hooks';
 
 export interface Content {
   eras: readonly Era[];
   advances: readonly Advance[];
   resources: readonly Resource[];
+  calamities: readonly Calamity[];
   hooks: HookRegistry;
 }
 
@@ -50,8 +52,29 @@ export function loadContent(bundle: ContentBundle, hooks: HookRegistry = default
     for (const problem of checkDiscovery(advance, advanceIds, resourceIds)) errors.push(`Advance "${advance.id}": ${problem}`);
   }
 
+  const calamityIds = new Set<string>();
+  for (const calamity of bundle.calamities) {
+    const at = `Calamity "${calamity.id}"`;
+    if (calamityIds.has(calamity.id)) errors.push(`Duplicate calamity id "${calamity.id}"`);
+    calamityIds.add(calamity.id);
+    if (!(CALAMITY_RULES as readonly string[]).includes(calamity.id)) errors.push(`${at} has no rules in the engine`);
+    const advance = (id: string, what: string) => {
+      if (!advanceIds.has(id)) errors.push(`${at}: ${what} references unknown advance "${id}"`);
+    };
+    for (const soft of calamity.softenedBy ?? []) advance(soft.advance, 'softenedBy');
+    for (const id of calamity.shelter ?? []) advance(id, 'shelter');
+    if (calamity.buyOff) {
+      if (!(Number.isInteger(calamity.buyOff.cost) && calamity.buyOff.cost > 0)) errors.push(`${at}: buy-off cost must be a positive integer`);
+      if (calamity.buyOff.requires !== undefined) advance(calamity.buyOff.requires, 'buyOff');
+    }
+    if (calamity.grants) {
+      advance(calamity.grants.advance, 'grants');
+      if (!(Number.isInteger(calamity.grants.learning) && calamity.grants.learning > 0)) errors.push(`${at}: granted learning must be a positive integer`);
+    }
+  }
+
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, content: { eras: bundle.eras, advances: bundle.advances, resources: bundle.resources, hooks } };
+  return { ok: true, content: { eras: bundle.eras, advances: bundle.advances, resources: bundle.resources, calamities: bundle.calamities, hooks } };
 }
 
 const DOMAIN_IDS = ['land', 'crafts', 'beliefs', 'travel', 'war'];

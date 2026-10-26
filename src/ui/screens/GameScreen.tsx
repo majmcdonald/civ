@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { content as contentBundle } from '../../content';
 import {
   aiCommands,
+  calamityView,
   canTrade,
   marketView,
   assigned,
@@ -19,7 +20,6 @@ import {
   OVEREXTENSION_FREE,
   threshold,
   totalInstability,
-  type InstabilitySource,
   conversionCost,
   hooks,
   loadContent,
@@ -62,6 +62,7 @@ import type { MapPieces, SettlementTier } from '../art/pieces';
 import { CivilizationSheet, type WorkOption } from './CivilizationSheet';
 import { KnowledgeSheet } from './KnowledgeSheet';
 import { MarketSheet } from './MarketSheet';
+import { buildReport, Chronicle, loadReportMode, REPORT_MODE_NAMES, REPORT_MODES, ReportPage, saveReportMode, SOURCE_NAMES, type ReportEvent, type ReportLine, type ReportMode } from './TurnReport';
 import { RivalsSheet } from './RivalsSheet';
 import { CITY_NAMES } from '../cityNames';
 import { AUTOSAVE_ID, downloadLog, downloadSave, writeSave } from '../saves';
@@ -169,30 +170,6 @@ function conflictLine(e: ConflictEvent, me: string, who: (player: string) => str
   return `Attack on ${name} fails against ${rules.defense} defense — all ${sent} lost`;
 }
 
-// One line per notable result of the turn for the player, for the notice after resolution.
-function turnReport(events: GameEvent[], me: string, conflict: (e: ConflictEvent) => string | null, place: (area: AreaId) => string, advanceName: (id: string) => string): string[] {
-  const lines: string[] = [];
-  // A collapse is reported as such, not as the tier drop it causes.
-  const collapsed = new Set(events.flatMap((e) => (e.type === 'settlementCollapsed' ? [e.area] : [])));
-  for (const e of events) {
-    if (e.type === 'conflict' || e.type === 'settlementAttacked') {
-      const line = conflict(e);
-      if (line) lines.push(line);
-    }
-    if (!('player' in e) || e.player !== me) continue;
-    if (e.type === 'settlementBuilt') lines.push(`${tierRules(e.tier).name} ${e.tier === 'village' ? 'founded' : 'built'}`);
-    if (e.type === 'conversionFailed') lines.push(`Not built: ${e.reason}`);
-    if (e.type === 'settlementCollapsed') lines.push(`A ${e.tier} collapsed in unrest`);
-    if (e.type === 'capitalMoved' && e.area !== null) lines.push(`Capital: ${place(e.area)}`);
-    if (e.type === 'studyQueueEmpty') lines.push(`Study queue empty: ${Math.round(e.learning * 10) / 10} learning split evenly`);
-    if (e.type === 'advanceReached') lines.push(`${advanceName(e.advance)} is ${e.stage === 'known' ? 'Known' : e.stage === 'developed' ? 'Developed' : 'Mastered'}`);
-    if (e.type === 'settlementDropped' && !collapsed.has(e.area)) lines.push(e.tier ? `A settlement dropped to ${e.tier} for lack of support` : 'A village dissolved for lack of support');
-    if (e.type === 'foodSupport') lines.push(`Food stood in for ${plural(e.count, 'support token')}`);
-    if (e.type === 'marketTrade') lines.push(`${e.side === 'buy' ? 'Bought' : 'Sold'} ${e.count} ${e.resource} at ${e.price}`);
-  }
-  return lines;
-}
-
 // A settlement's shown name; an unnamed capital is called "Capital".
 function settlementName(state: GameState, s: Settlement): string | undefined {
   return s.name ?? (capitalOf(state, s.player) === s.area ? 'Capital' : undefined);
@@ -216,17 +193,6 @@ function usesText(p: ConversionPreview): string {
   const parts = [here > 0 ? `${here} here` : '', near > 0 ? `${near} from neighbours` : ''].filter(Boolean);
   return `Uses ${parts.join(', ')} · support ${p.support} of ${p.needed}`;
 }
-
-const SOURCE_NAMES: Record<InstabilitySource, string> = {
-  overextension: 'overextension',
-  losses: 'settlements lost',
-  lostSupport: 'lost support',
-  conflict: 'nearby fight',
-  bureaucracy: 'Bureaucracy',
-  calm: 'advances (Ritual)',
-  luxury: 'luxuries',
-  noSettlements: 'no settlements left',
-};
 
 function thresholdReason(distance: number | null, capital: boolean): string {
   if (capital) return 'capital, 1 free Bureaucracy';
@@ -430,6 +396,11 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   // What happened to the player's settlements in the last resolution, and the instability changes.
   const [report, setReport] = useState<string[]>(message ? [message] : []);
   const [lastEvents, setLastEvents] = useState<GameEvent[]>([]);
+  // How the turn's results are shown (Brief, Normal, Detailed), and the report page when open.
+  const [reportMode, setReportMode] = useState<ReportMode>(loadReportMode);
+  const [reportPage, setReportPage] = useState<{ title: string; lines: ReportLine[]; detailed: boolean } | null>(null);
+  const reportOpen = useRef(false);
+  reportOpen.current = reportPage !== null;
   const [menuOpen, setMenuOpen] = useState(false);
   // The player's settlements founded in the last resolution, waiting for a name.
   const [toName, setToName] = useState<AreaId[]>([]);
@@ -453,6 +424,11 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      // An open report closes first, leaving the screen under it.
+      if (reportOpen.current) {
+        setReportPage(null);
+        return;
+      }
       setScreen('map');
       setSelected(null);
     };
@@ -525,17 +501,22 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   // once. The trade phase is skipped while the player cannot trade (Barter, design doc §7).
   const endPhase = () => {
     const events: GameEvent[] = [];
+    const stamped: ReportEvent[] = [];
     const turn = session.state.turn;
     do {
       for (const player of session.state.players) {
         if (player.kind === 'ai') for (const command of aiCommands(session.state, session.content, player.id)) submit(session, command);
         const result = submit(session, { type: 'endPhase', player: player.id });
-        if (result.ok) events.push(...result.events.map((e) => e.event));
+        if (result.ok) {
+          events.push(...result.events.map((e) => e.event));
+          stamped.push(...result.events);
+        }
       }
     } while (session.state.phase === 'trade' && !canTrade(session.state, me));
-    // An advance with no adoption is Mastered when Developed; only Developed is reported.
-    const reported = events.filter((e) => !(e.type === 'advanceReached' && e.stage === 'mastered' && !session.content.advances.find((a) => a.id === e.advance)?.adoption));
-    setReport(turnReport(reported, me, describeConflict, (area) => areaName(area), (id) => session.content.advances.find((a) => a.id === id)?.name ?? id));
+    const lines = buildReport(stamped, reportNames);
+    const notable = lines.filter((l) => l.notable);
+    if (reportMode === 'brief') setReport(notable.map((l) => l.text));
+    else if (reportMode === 'detailed' || notable.length > 0) setReportPage({ title: `Turn ${turn} report`, lines, detailed: reportMode === 'detailed' });
     setLastEvents(events);
     const founded = events.filter((e) => e.type === 'settlementBuilt' && e.player === me && e.tier === 'village').map((e) => (e as Extract<GameEvent, { type: 'settlementBuilt' }>).area);
     setToName((queue) => [...queue, ...founded.filter((area) => settlementAt(session.state, area)?.player === me && !settlementAt(session.state, area)!.name)]);
@@ -574,6 +555,11 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   const describeConflict = (e: ConflictEvent) => {
     const involved = e.type === 'conflict' ? e.losses.some((l) => l.player === me) : e.defender === me || e.attackers.some((a) => a.player === me);
     return involved ? conflictLine(e, me, who, areaName(e.area)) : null;
+  };
+  const reportNames = { me, content: session.content, place: areaName, conflict: describeConflict };
+  const jumpTo = (area: AreaId) => {
+    setReportPage(null);
+    showOnMap(area);
   };
   // Fights this turn's planned moves lead to, if the turn resolved now (design doc §11).
   const conflicts = useMemo(() => (planning ? previewConflicts(state, map, session.content, me) : []), [planning, state, map, session, me]);
@@ -734,7 +720,18 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
           <button type="button" className="game-menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
             Menu
           </button>
-          {menuOpen && <GameMenu session={session} onClose={() => setMenuOpen(false)} onExit={onExit} />}
+          {menuOpen && (
+            <GameMenu
+              session={session}
+              reportMode={reportMode}
+              onReportMode={(mode) => {
+                setReportMode(mode);
+                saveReportMode(mode);
+              }}
+              onClose={() => setMenuOpen(false)}
+              onExit={onExit}
+            />
+          )}
         </dl>
       </header>
 
@@ -844,7 +841,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
           </>
         ) : (
           <div className="game-sheet-backdrop" onClick={() => setScreen('map')}>
-            <article className={`game-sheet ${screen === 'civilization' || screen === 'rivals' || screen === 'knowledge' || screen === 'market' ? 'filled' : ''}`} onClick={(e) => e.stopPropagation()}>
+            <article className={`game-sheet ${screen === 'civilization' || screen === 'rivals' || screen === 'knowledge' || screen === 'market' || screen === 'chronicle' ? 'filled' : ''}`} onClick={(e) => e.stopPropagation()}>
               {screen === 'civilization' ? (
                 <CivilizationSheet
                   map={map}
@@ -865,6 +862,13 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   focus={listed}
                   onRename={rename}
                   onShow={showOnMap}
+                  calamities={calamityView(state, map, session.content, me)}
+                  treasury={treasury}
+                  onBuyOff={(calamities) => {
+                    const result = submit(session, { type: 'setBuyOff', player: me, calamities });
+                    if (!result.ok) setNotice(result.reason);
+                    setVersion((v) => v + 1);
+                  }}
                 />
               ) : screen === 'rivals' ? (
                 <RivalsSheet
@@ -902,15 +906,34 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                     setVersion((v) => v + 1);
                   }}
                 />
+              ) : screen === 'chronicle' ? (
+                <Chronicle
+                  events={loggedEvents(session)}
+                  names={reportNames}
+                  currentTurn={state.turn}
+                  onOpen={(t) => setReportPage({ title: `Turn ${t}`, lines: buildReport(loggedEvents(session).filter((e) => e.turn === t), reportNames), detailed: true })}
+                />
               ) : (
                 <p className="game-placeholder">Placeholder</p>
               )}
             </article>
           </div>
         )}
+        {reportPage && (
+          <div className="game-sheet-backdrop report-backdrop" onClick={() => setReportPage(null)}>
+            <article className="game-sheet filled" onClick={(e) => e.stopPropagation()}>
+              <ReportPage title={reportPage.title} lines={reportPage.lines} detailed={reportPage.detailed} onJump={jumpTo} onClose={() => setReportPage(null)} closeLabel={screen === 'chronicle' ? 'Back to the Chronicle' : 'Continue'} />
+            </article>
+          </div>
+        )}
       </section>
     </main>
   );
+}
+
+// Every event in the session's game log, stamped with its turn and phase.
+function loggedEvents(session: Session): ReportEvent[] {
+  return session.log.filter((l) => l.kind === 'event').map((l) => ({ turn: l.turn, phase: l.phase, event: l.data as GameEvent }));
 }
 
 function gameName(session: Session): string {
@@ -958,7 +981,7 @@ function NameDialog({ capital, taken, onDone }: { capital: boolean; taken: strin
 }
 
 // In-game menu: save to a browser slot, export to a file, or return to the title screen.
-function GameMenu({ session, onClose, onExit }: { session: Session; onClose: () => void; onExit: () => void }) {
+function GameMenu({ session, reportMode, onReportMode, onClose, onExit }: { session: Session; reportMode: ReportMode; onReportMode: (mode: ReportMode) => void; onClose: () => void; onExit: () => void }) {
   const fallback = `${gameName(session)} - turn ${session.state.turn}`;
   const [name, setName] = useState(fallback);
   const [status, setStatus] = useState<string | null>(null);
@@ -987,6 +1010,16 @@ function GameMenu({ session, onClose, onExit }: { session: Session; onClose: () 
       >
         Download game log
       </button>
+      <label className="game-menu-report" title="Brief: results flash and fade. Normal: a page of notable results, each line linked to the map. Detailed: the page lists every event">
+        <span>Turn reports</span>
+        <select value={reportMode} onChange={(e) => onReportMode(e.target.value as ReportMode)}>
+          {REPORT_MODES.map((m) => (
+            <option key={m} value={m}>
+              {REPORT_MODE_NAMES[m]}
+            </option>
+          ))}
+        </select>
+      </label>
       <button type="button" onClick={onExit} title="Progress since the last save or autosave is lost">
         Exit to title
       </button>

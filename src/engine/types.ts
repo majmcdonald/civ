@@ -80,6 +80,11 @@ export interface PlayerState {
   orders: MarketOrder[];
   // Goods it bought or sold during `turn`'s trade phase (Barter's adoption); absent means none.
   traded?: { turn: number; resources: ResourceId[] };
+  // Turns in a row with a settlement and no calamity: each adds to the calamity chance (design doc
+  // §12).
+  quiet: number;
+  // Calamities to buy off when they strike (design doc §12, Buying off); a standing choice.
+  buyOff: string[];
   // The capital's area: the first settlement, then the largest remaining (design doc §10).
   capital: AreaId | null;
   // Settlement tiers the civilization can build (design doc §5): the setup's plus its advances'.
@@ -137,6 +142,14 @@ export interface Settlement {
   // The last turn it gathered food and ate some of its own for support: +1 urban growth (design
   // doc §5, Urban growth).
   ateOwn?: number;
+  // The last turn food covered any of its support (Famine's weight).
+  fed?: number;
+  // The last calamity to strike it (design doc §12).
+  struck?: { turn: number; calamity: string };
+  // Manpower idle in `turn` (Superstition, Civil disorder): the most recent assignments first.
+  idle?: { turn: number; units: number };
+  // It gathers no food through this turn (Drought).
+  drought?: number;
 }
 
 // A founding (no settlement in the area) or an upgrade to the next tier, ordered in allocation.
@@ -166,6 +179,8 @@ export interface GameState {
   settlements: Settlement[];
   conversions: ConversionOrder[];
   goods: Good[];
+  // Areas whose limit is lowered by 1 through `until` (Drought, design doc §12).
+  dry: { area: AreaId; until: number }[];
 }
 
 export type Command =
@@ -181,7 +196,9 @@ export type Command =
   // Orders the study queue; an empty queue splits learning evenly.
   | { type: 'setStudy'; player: PlayerId; queue: string[] }
   // Sets the standing market order for one good; a count of 0 cancels it.
-  | { type: 'setOrder'; player: PlayerId; resource: ResourceId; side: 'buy' | 'sell'; count: number; limit?: number };
+  | { type: 'setOrder'; player: PlayerId; resource: ResourceId; side: 'buy' | 'sell'; count: number; limit?: number }
+  // Sets which calamities to buy off when they strike.
+  | { type: 'setBuyOff'; player: PlayerId; calamities: string[] };
 
 // Tokens taken from one area by a conversion.
 export interface TokenSource {
@@ -215,6 +232,9 @@ export type GameEvent =
   // A market price moved: `imbalance` units bought minus sold in that player's market.
   | { type: 'priceChanged'; player: PlayerId; resource: ResourceId; from: number; to: number; imbalance: number }
   | { type: 'marketTrade'; player: PlayerId; resource: ResourceId; side: 'buy' | 'sell'; count: number; price: number }
+  // A calamity struck (or was bought off): `tokens` lost, `dropped` if the settlement lost a tier;
+  // `from` is the civilization an epidemic spread from.
+  | { type: 'calamity'; player: PlayerId; calamity: string; area: AreaId; averted: boolean; paid: number; tokens: number; dropped: boolean; from?: PlayerId }
   | { type: 'instabilityChanged'; player: PlayerId; area: AreaId | null; amount: number; source: InstabilitySource }
   | { type: 'settlementCollapsed'; player: PlayerId; area: AreaId; tier: SettlementTier }
   | { type: 'capitalMoved'; player: PlayerId; area: AreaId | null }

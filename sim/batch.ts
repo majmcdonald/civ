@@ -78,6 +78,9 @@ interface Totals {
   fights: number;
   // Goods bought on the market.
   bought: number;
+  // Calamities suffered, and bought off.
+  calamities: number;
+  averted: number;
   // First turn any civilization's loose tokens reached its cap.
   firstAtCap: number | null;
 }
@@ -108,6 +111,10 @@ function count(totals: Totals, event: GameEvent, step: string): void {
   if (event.type === 'settlementAttacked' && event.capturedBy) totals.captures += 1;
   if (event.type === 'conflict' || event.type === 'settlementAttacked') totals.fights += 1;
   if (event.type === 'marketTrade' && event.side === 'buy') totals.bought += event.count;
+  if (event.type === 'calamity') {
+    if (event.averted) totals.averted += 1;
+    else totals.calamities += 1;
+  }
 }
 
 function playGame(options: Options, seed: number, map: MapType): { samples: Sample[]; totals: Totals; session: Session } {
@@ -117,7 +124,7 @@ function playGame(options: Options, seed: number, map: MapType): { samples: Samp
   const session = startSession({ seed, players, finalEra: 'modern', map: { type: map, room: options.room } }, loaded.content);
   const game = `${map}/${seed}`;
   const samples: Sample[] = [];
-  const totals: Totals = { game, built: 0, collapses: 0, supportDrops: 0, captures: 0, fights: 0, bought: 0, firstAtCap: null };
+  const totals: Totals = { game, built: 0, collapses: 0, supportDrops: 0, captures: 0, fights: 0, bought: 0, calamities: 0, averted: 0, firstAtCap: null };
   let step = '';
   while (session.state.turn <= options.turns) {
     const turn = session.state.turn;
@@ -183,11 +190,11 @@ console.log(
     }),
   ),
 );
-console.log('\nPer game: settlements built, collapses, support drops, captures, fights, goods bought on the market, first turn a civilization reached its token cap.\n');
+console.log('\nPer game: settlements built, collapses, support drops, captures, fights, goods bought on the market, calamities suffered and bought off, first turn a civilization reached its token cap.\n');
 console.log(
   table(
-    ['Game', 'Built', 'Collapses', 'Support drops', 'Captures', 'Fights', 'Bought', 'First at cap'],
-    totals.map((t) => [t.game, String(t.built), String(t.collapses), String(t.supportDrops), String(t.captures), String(t.fights), String(t.bought), t.firstAtCap === null ? '—' : String(t.firstAtCap)]),
+    ['Game', 'Built', 'Collapses', 'Support drops', 'Captures', 'Fights', 'Bought', 'Calamities', 'Bought off', 'First at cap'],
+    totals.map((t) => [t.game, String(t.built), String(t.collapses), String(t.supportDrops), String(t.captures), String(t.fights), String(t.bought), String(t.calamities), String(t.averted), t.firstAtCap === null ? '—' : String(t.firstAtCap)]),
   ),
 );
 if (options.json) fs.writeFileSync(options.json, JSON.stringify({ options, samples, totals }, null, 2));

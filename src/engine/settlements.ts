@@ -295,7 +295,10 @@ export function resolveSupport(ctx: Context): void {
   for (const s of ctx.state.settlements) {
     if (ateOwn.has(s.area)) s.ateOwn = ctx.state.turn;
     const count = fed.get(s.area);
-    if (count) emit(ctx, { type: 'foodSupport', player: s.player, area: s.area, count });
+    if (count) {
+      s.fed = ctx.state.turn;
+      emit(ctx, { type: 'foodSupport', player: s.player, area: s.area, count });
+    }
     const keep = kept.get(s.area);
     if (keep) s.stored = keep;
     else delete s.stored;
