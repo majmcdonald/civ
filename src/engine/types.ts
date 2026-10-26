@@ -8,9 +8,9 @@ import type { RngState } from './rng';
 export type PlayerId = string;
 
 // Design doc §3. Resources and Resolution run automatically; players act in Trade and Allocation.
-export type Phase = 'resources' | 'trade' | 'allocation' | 'resolution';
-export const PHASES: readonly Phase[] = ['resources', 'trade', 'allocation', 'resolution'];
-export const PLAYER_PHASES: readonly Phase[] = ['trade', 'allocation'];
+export type Phase = 'resources' | 'allocation' | 'resolution';
+export const PHASES: readonly Phase[] = ['resources', 'allocation', 'resolution'];
+export const PLAYER_PHASES: readonly Phase[] = ['allocation'];
 
 export interface PlayerSetup {
   id: PlayerId;

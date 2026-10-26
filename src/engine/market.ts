@@ -6,10 +6,11 @@ import { usable } from './resources';
 import type { Command, Context, GameState, MarketOrder, PlayerId } from './types';
 
 // The market (design doc §7). Each player's market holds its own orders and those of every player
-// in reach with market access. Each turn, at the close of the trade phase, a good's price moves by
-// the imbalance of units ordered bought and sold in that market, then the player's own orders fill
-// against the game at the new price: sales first, then purchases as far as the treasury allows.
-// Bought goods go to the civilization's pool.
+// in reach with market access. Each turn in the resources phase, after gathering and tax, a good's
+// price moves by the imbalance of units ordered bought and sold in that market, then the player's
+// own orders fill against the game at the new price: sales first, then purchases as far as the
+// treasury allows. Bought goods go to the civilization's pool. Orders are set in allocation and,
+// like manpower, take effect from the next turn (design doc §7, v0.24).
 
 // Steps of transport distance, settlement to settlement, before Barter Mastered.
 export const BASE_REACH = 2;
@@ -131,7 +132,7 @@ function removeHeld(state: GameState, player: PlayerId, resource: ResourceId, co
   }
 }
 
-// The close of the trade phase (phase 2): prices move in every market, then orders fill.
+// Resources phase, after tax: prices move in every market, then orders fill.
 export function resolveMarket(ctx: Context): void {
   const { state, map, content } = ctx;
   const traders = state.players.filter((p) => canTrade(state, p.id));
@@ -173,8 +174,8 @@ export function validateOrder(ctx: Pick<Context, 'state' | 'content'>, command: 
   const { state, content } = ctx;
   const player = state.players.find((p) => p.id === command.player);
   if (!player) return `Unknown player "${command.player}"`;
-  if (state.phase !== 'trade') return 'Market orders are placed in the trade phase';
-  if (player.endedPhase) return 'You have already ended the trade phase';
+  if (state.phase !== 'allocation') return 'Market orders are placed in the allocation phase';
+  if (player.endedPhase) return 'You have already ended the allocation phase';
   if (!marketAccess(state, command.player)) return 'No market access (Barter)';
   if (!content.resources.some((r) => r.id === command.resource)) return `Unknown good "${command.resource}"`;
   if (!Number.isInteger(command.count) || command.count < 0 || command.count > ORDER_MAX) return `Order between 0 and ${ORDER_MAX} units`;
@@ -210,7 +211,7 @@ export interface GoodView {
   canSell: boolean;
   order: MarketOrder | null;
   // Units bought minus sold in the player's market from the standing orders, and the price they
-  // would move it to at the close of the trade phase.
+  // would move it to in next turn's resources phase.
   imbalance: number;
   forecast: number;
 }

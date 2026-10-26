@@ -45,9 +45,10 @@ function context(game: Session): Context {
 }
 
 describe('conversion orders', () => {
-  it('are only accepted in the allocation phase', () => {
+  it('are refused once the player has ended the allocation phase', () => {
     const { game, area } = scene();
-    expectRejected(game, { type: 'orderConversion', player: 'p1', area, ordered: true }, /allocation phase/);
+    play(game, { type: 'endPhase', player: 'p1' });
+    expectRejected(game, { type: 'orderConversion', player: 'p1', area, ordered: true }, /already ended/);
   });
 
   it('are recorded and cancelled', () => {

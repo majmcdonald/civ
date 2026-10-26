@@ -40,6 +40,14 @@ function settle(game: Session, area: AreaId, tier: SettlementTier, player: strin
   game.state.settlements.sort((a, b) => a.area - b.area);
 }
 
+// Support tokens around the village so it survives the turn.
+function place(game: Session, home: AreaId): void {
+  const map = mapFor(game.setup);
+  const next = map.areas[home]!.neighbors.find((n) => map.areas[n]!.kind === 'land' && !settlementAt(game.state, n))!;
+  game.state.stacks.push({ area: next, player: 'p1', count: 3 });
+  game.state.stacks.sort((a, b) => a.area - b.area);
+}
+
 function market(game: Session): Context {
   const ctx: Context = { state: game.state, content, map: mapFor(game.setup), events: [], refugees: [] };
   resolveMarket(ctx);
@@ -50,9 +58,9 @@ const p1 = (game: Session) => game.state.players[0]!;
 const ai1 = (game: Session) => game.state.players[1]!;
 
 describe('market orders (v0.21)', () => {
-  it('opens in the trade phase and accepts standing orders', () => {
+  it('takes standing orders in the allocation phase', () => {
     const { game } = scene();
-    expect(game.state.phase).toBe('trade');
+    expect(game.state.phase).toBe('allocation');
     play(game, { type: 'setOrder', player: 'p1', resource: 'grain', side: 'buy', count: 2 }, { type: 'setOrder', player: 'p1', resource: 'copper', side: 'buy', count: 1, limit: 12 });
     expect(p1(game).orders).toEqual([
       { resource: 'grain', side: 'buy', count: 2 },
@@ -62,12 +70,24 @@ describe('market orders (v0.21)', () => {
     expect(p1(game).orders).toEqual([{ resource: 'copper', side: 'buy', count: 1, limit: 12 }]);
   });
 
-  it('rejects selling a good the civilization cannot use, and orders outside the trade phase', () => {
+  it('rejects selling a good the civilization cannot use, and orders after the phase has ended', () => {
     const { game } = scene();
     expectRejected(game, { type: 'setOrder', player: 'p1', resource: 'copper', side: 'sell', count: 1 }, /sell only goods you can use/);
-    endPhaseAll(game);
+    play(game, { type: 'endPhase', player: 'p1' });
+    expectRejected(game, { type: 'setOrder', player: 'p1', resource: 'grain', side: 'buy', count: 1 }, /already ended/);
+  });
+});
+
+describe('timing (v0.24)', () => {
+  it('fills standing orders in the next resources phase, before allocation', () => {
+    const { game, home } = scene();
+    place(game, home);
+    p1(game).treasury = 20;
+    play(game, { type: 'setOrder', player: 'p1', resource: 'grain', side: 'buy', count: 1 });
+    const events = endPhaseAll(game);
     expect(game.state.phase).toBe('allocation');
-    expectRejected(game, { type: 'setOrder', player: 'p1', resource: 'grain', side: 'buy', count: 1 }, /trade phase/);
+    expect(eventsOfType(events, 'marketTrade')).toEqual([{ type: 'marketTrade', player: 'p1', resource: 'grain', side: 'buy', count: 1, price: 6 }]);
+    expect(game.state.goods).toContainEqual({ area: null, player: 'p1', resource: 'grain', count: 1 });
   });
 });
 

@@ -200,7 +200,6 @@ describe('learning and the study queue', () => {
     const [a] = land(game);
     settle(game, a!.id, 'town');
     know(game, 'settle', 'known');
-    expectRejected(game, { type: 'setStudy', player: 'p1', queue: ['pottery'] }, /allocation phase/);
     while (game.state.phase !== 'allocation') endPhaseAll(game);
     play(game, { type: 'assignWork', player: 'p1', area: a!.id, resource: 'highLearning', count: 2 }, { type: 'setStudy', player: 'p1', queue: ['pottery', 'settle'] });
     expect(settlementAt(game.state, a!.id)!.work).toEqual([{ resource: 'highLearning', count: 2 }]);

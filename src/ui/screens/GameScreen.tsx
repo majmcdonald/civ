@@ -3,7 +3,6 @@ import { content as contentBundle } from '../../content';
 import {
   aiCommands,
   calamityView,
-  canTrade,
   marketView,
   assigned,
   BUREAUCRACY,
@@ -86,7 +85,6 @@ type ScreenId = (typeof SCREENS)[number]['id'];
 
 const PHASE_NAMES: Record<Phase, string> = {
   resources: 'Resources',
-  trade: 'Trade',
   allocation: 'Allocation',
   resolution: 'Resolution',
 };
@@ -409,13 +407,6 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
 
   // Open on the player's starting area.
   useEffect(() => {
-    // The trade phase is skipped while the player cannot trade (design doc §7); AI players still place their orders.
-    while (session.state.phase === 'trade' && !canTrade(session.state, session.state.players[HUMAN]!.id)) {
-      for (const player of session.state.players) {
-        if (player.kind === 'ai') for (const command of aiCommands(session.state, session.content, player.id)) submit(session, command);
-        submit(session, { type: 'endPhase', player: player.id });
-      }
-    }
     setVersion((v) => v + 1);
     mapHandle.current?.focus(mapFor(session.setup).starts[HUMAN]!);
   }, [session]);
@@ -498,12 +489,12 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
   }, [report]);
 
   // The player ends the phase; AI players (minimal until Phase 7) give their orders and end it at
-  // once. The trade phase is skipped while the player cannot trade (Barter, design doc §7).
+  // once.
   const endPhase = () => {
     const events: GameEvent[] = [];
     const stamped: ReportEvent[] = [];
     const turn = session.state.turn;
-    do {
+    {
       for (const player of session.state.players) {
         if (player.kind === 'ai') for (const command of aiCommands(session.state, session.content, player.id)) submit(session, command);
         const result = submit(session, { type: 'endPhase', player: player.id });
@@ -512,7 +503,7 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
           stamped.push(...result.events);
         }
       }
-    } while (session.state.phase === 'trade' && !canTrade(session.state, me));
+    }
     const lines = buildReport(stamped, reportNames);
     const notable = lines.filter((l) => l.notable);
     if (reportMode === 'brief') setReport(notable.map((l) => l.text));
@@ -818,12 +809,12 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   </>
                 )
               ) : (
-                <span className="game-hint">{state.phase === 'trade' ? 'Trade phase: place or change orders on the Market screen, then end the phase' : planning ? 'Drag your tokens to move them (Shift-drag for all) · click an area for details and actions · double-click a settlement to see it in your list · arrow keys scroll' : 'Drag or use the arrow keys to pan · scroll to zoom · click an area for details'}</span>
+                <span className="game-hint">{planning ? 'Drag your tokens to move them (Shift-drag for all) · click an area for details and actions · double-click a settlement to see it in your list · arrow keys scroll' : 'Drag or use the arrow keys to pan · scroll to zoom · click an area for details'}</span>
               )}
             </div>
             <div className="game-turn-panel">
               <ol className="game-phases" aria-label="Phases">
-                {(['resources', 'trade', 'allocation', 'resolution'] as const).map((p) => (
+                {(['resources', 'allocation', 'resolution'] as const).map((p) => (
                   <li key={p} className={p === state.phase ? 'current' : ''}>
                     {PHASE_NAMES[p]}
                   </li>
@@ -898,8 +889,8 @@ export function GameScreen({ session, message, onExit }: GameScreenProps) {
                   view={marketView(state, map, session.content, me)}
                   treasury={treasury}
                   members={marketView(state, map, session.content, me).members.map((id) => state.players.find((p) => p.id === id)!.name)}
-                  canOrder={state.phase === 'trade' && !state.players[HUMAN]!.endedPhase}
-                  trades={lastEvents.filter((e): e is Extract<GameEvent, { type: 'marketTrade' }> => e.type === 'marketTrade' && e.player === me && session.state.phase !== 'trade')}
+                  canOrder={planning && !state.players[HUMAN]!.endedPhase}
+                  trades={lastEvents.filter((e): e is Extract<GameEvent, { type: 'marketTrade' }> => e.type === 'marketTrade' && e.player === me)}
                   onOrder={(resource, side, count, limit) => {
                     const result = submit(session, { type: 'setOrder', player: me, resource, side, count, ...(limit !== undefined ? { limit } : {}) });
                     if (!result.ok) setNotice(result.reason);

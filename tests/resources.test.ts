@@ -115,7 +115,6 @@ describe('manpower', () => {
     settle(game, grain, 'town');
     settle(game, barren, 'village', [], 'ai1');
     const command = { type: 'assignWork' as const, player: 'p1', area: grain, resource: 'grain', count: 1 };
-    expectRejected(game, command, /allocation phase/);
     toAllocation(game);
     expectRejected(game, { ...command, area: barren }, /no settlement there/);
     expectRejected(game, { ...command, resource: 'fish' }, /not in this area/);

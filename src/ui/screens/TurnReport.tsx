@@ -39,7 +39,7 @@ export const SOURCE_NAMES: Record<InstabilitySource, string> = {
   calamity: 'calamity',
 };
 
-const PHASE_NAMES: Record<Phase, string> = { resources: 'Resources', trade: 'Trade', allocation: 'Allocation', resolution: 'Resolution' };
+const PHASE_NAMES: Record<Phase, string> = { resources: 'Resources', allocation: 'Allocation', resolution: 'Resolution' };
 
 export interface ReportEvent {
   turn: number;

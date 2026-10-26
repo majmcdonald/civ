@@ -32,9 +32,10 @@ function place(game: Session, area: AreaId, player: string, count: number): void
 }
 
 describe('move orders', () => {
-  it('are only accepted in the allocation phase', () => {
+  it('are refused once the player has ended the allocation phase', () => {
     const { game, map, start } = setup();
-    expectRejected(game, { type: 'orderMove', player: 'p1', from: start, to: landNeighbor(map, start), count: 1 }, /allocation phase/);
+    play(game, { type: 'endPhase', player: 'p1' });
+    expectRejected(game, { type: 'orderMove', player: 'p1', from: start, to: landNeighbor(map, start), count: 1 }, /already ended/);
   });
 
   it('are recorded, replaced, and cancelled with 0', () => {

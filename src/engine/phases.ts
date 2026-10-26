@@ -4,6 +4,7 @@ import { emit } from './context';
 import { resolveDiscovery } from './discovery';
 import { resolveInstability, runBureaucracy, updateCapitals } from './instability';
 import { resolveGrowth, resolveMovement, resolveSurplus } from './population';
+import { resolveMarket } from './market';
 import { collectTax, runResources } from './resources';
 import { resolveConversion, resolveSupport, resolveUrbanGrowth } from './settlements';
 import type { Context } from './types';
@@ -50,10 +51,12 @@ const resolutionSteps: Record<ResolutionStepId, (ctx: Context) => void> = {
   ast: () => {},
 };
 
-// Resources phase: goods are gathered, tax is collected, and Bureaucracy calms (design doc §6, §10).
+// Resources phase: goods are gathered, tax is collected, standing market orders fill, and
+// Bureaucracy calms (design doc §6, §7, §10).
 export function runResourcesPhase(ctx: Context): void {
   runResources(ctx);
   collectTax(ctx);
+  resolveMarket(ctx);
   runBureaucracy(ctx);
 }
 

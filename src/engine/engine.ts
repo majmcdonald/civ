@@ -1,7 +1,7 @@
 import type { Content } from './content';
 import { clone, emit } from './context';
 import { grantStartingKnowledge, setStudy, validateStudy } from './discovery';
-import { resolveMarket, setOrder, validateOrder } from './market';
+import { setOrder, validateOrder } from './market';
 import { setBuyOff, validateBuyOff } from './calamities';
 import { runResolution, runResourcesPhase } from './phases';
 import { BASE_MOVEMENT, setMoveOrder, STARTING_TOKEN_CAP, validateMoveOrder } from './population';
@@ -20,7 +20,7 @@ import {
   type Phase,
 } from './types';
 
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 
 interface CommandHandler<C extends Command> {
   validate(ctx: Pick<Context, 'state' | 'map' | 'content'>, command: C): string | null;
@@ -44,7 +44,6 @@ const handlers: CommandHandlers = {
       emit(ctx, { type: 'phaseEnded', player: player.id, phase: ctx.state.phase });
       // Simultaneous turns: the phase closes once every player has ended it.
       if (ctx.state.players.every((p) => p.endedPhase)) {
-        if (ctx.state.phase === 'trade') resolveMarket(ctx);
         advancePhase(ctx);
         runUntilPlayerInput(ctx);
       }

@@ -37,8 +37,8 @@ import { mapFor } from './world';
 // It marks every calamity that can be bought off (design doc §12), so its treasury pays 10 to avert
 // one whenever it can.
 //
-// Each trade phase, once it can trade (design doc §7, v0.21), it buys only what it needs, as
-// market orders: the cheapest food (earlier goods on ties) for this turn's forecast support
+// Each allocation phase, once it can trade (design doc §7, v0.21), it buys only what it needs, as
+// standing market orders that fill from next turn's resources phase: the cheapest food (earlier goods on ties) for this turn's forecast support
 // shortfall, and the cheapest luxury for each settlement within 2 of collapse. It cancels any other
 // order and never sells. Purchases fill only as far as its treasury allows.
 
@@ -76,7 +76,6 @@ function tradeCommands(state: GameState, map: GameMap, content: Content, player:
 }
 
 export function aiCommands(state: GameState, content: Content, player: PlayerId): Command[] {
-  if (state.phase === 'trade') return tradeCommands(state, mapFor(state.setup), content, player);
   if (state.phase !== 'allocation') return [];
   const map = mapFor(state.setup);
   const commands: Command[] = [];
@@ -159,6 +158,7 @@ export function aiCommands(state: GameState, content: Content, player: PlayerId)
     const on = (s.work ?? []).find((w) => w.resource === resource)?.count ?? 0;
     issue({ type: 'assignWork', player, area, resource, count: on + idle });
   }
+  for (const command of tradeCommands(current, map, content, player)) issue(command);
   return commands;
 }
 

@@ -20,8 +20,7 @@ function playTurns(game: Session, turns: number): void {
 describe('minimal AI', () => {
   it('only acts in the allocation phase', () => {
     const game = newGame();
-    expect(game.state.phase).not.toBe('allocation');
-    expect(aiCommands(game.state, game.content, 'ai1')).toEqual([]);
+    expect(aiCommands({ ...game.state, phase: 'resolution' }, game.content, 'ai1')).toEqual([]);
   });
 
   it('expands into new areas and founds villages', () => {

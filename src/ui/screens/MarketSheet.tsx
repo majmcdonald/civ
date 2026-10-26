@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ORDER_MAX, type GoodView, type MarketView } from '../../engine';
 
 // The Market screen (design doc §7): prices in the player's market, goods held, standing orders, and
-// last turn's trades. Orders are placed in the trade phase.
+// this turn's trades. Orders are placed in allocation and fill from next turn's resources phase.
 
 export interface MarketTrade {
   resource: string;
@@ -16,9 +16,9 @@ interface MarketSheetProps {
   treasury: number;
   // Players in the market by name, the player first.
   members: string[];
-  // The trade phase is open and the player has not ended it.
+  // The allocation phase is open and the player has not ended it.
   canOrder: boolean;
-  // This turn's trades, after the trade phase closes.
+  // This turn's trades, made in the resources phase.
   trades: MarketTrade[];
   onOrder: (resource: string, side: 'buy' | 'sell', count: number, limit?: number) => void;
 }
@@ -44,7 +44,7 @@ export function MarketSheet({ view, treasury, members, canOrder, trades, onOrder
               <tr>
                 <th title="Food covers support anywhere in your civilization; luxuries calm (§6)">Good</th>
                 <th title="What orders fill at now; it starts at food 5, luxury 10 and stays between half and triple">Price</th>
-                <th title="The price at the close of the trade phase from the standing orders in your market: 10% of the starting price per unit bought minus sold">At close</th>
+                <th title="The price next turn, when the standing orders in your market fill: 10% of the starting price per unit bought minus sold">Next turn</th>
                 <th title="Goods gathered this turn, plus stored grain, that you can sell">Held</th>
                 <th>Order</th>
               </tr>
@@ -68,7 +68,7 @@ export function MarketSheet({ view, treasury, members, canOrder, trades, onOrder
               </ul>
             </section>
           )}
-          <p className="civ-note">Orders stand every turn until changed. Sales fill first, then purchases as far as the treasury allows. Bought goods reach every settlement.</p>
+          <p className="civ-note">Orders stand every turn until changed and fill in the resources phase, so a change made now fills next turn. Sales fill first, then purchases as far as the treasury allows. Bought goods reach every settlement.</p>
         </>
       )}
     </div>

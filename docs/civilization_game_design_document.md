@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.23  
+**Version:** 0.24  
 **Date:** October 25, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -52,14 +52,15 @@ Where a system has a clear equivalent in the original game, the default is to **
 
 ## 3. Turn structure — Decided
 
-Four phases. All players act simultaneously within each phase.
+Three phases (v0.24; the separate trade phase of v0.2 is folded into Resources and Allocation). All players act simultaneously within each phase.
 
 | Phase | What happens |
 |---|---|
-| **1. Resources** | Settlements produce from manpower assigned to production. Towns and larger pay tax into the treasury (§6, Currency) |
-| **2. Trade** | Players with the trade discovery place market orders; prices are set and orders filled. Goods are usable this turn |
-| **3. Allocation** | Players assign manpower (production, Bureaucracy, High Learning, Artists, wonders), set the study queue (§8), mark calamities to buy off (§12), order movement and migration, and order settlement conversions |
-| **4. Resolution** | The game resolves all consequences in a fixed order (below) |
+| **1. Resources** | Settlements produce from manpower assigned to production. Towns and larger pay tax into the treasury (§6, Currency). Standing market orders fill (§7): prices move, then sales and purchases; goods are usable this turn |
+| **2. Allocation** | Players assign manpower (production, Bureaucracy, High Learning, Artists, wonders), set the study queue (§8), place or change market orders (§7), mark calamities to buy off (§12), order movement and migration, and order settlement conversions |
+| **3. Resolution** | The game resolves all consequences in a fixed order (below) |
+
+- **Why no trade phase** (v0.24). The original's trade phase existed for haggling between players; this design trades only through market listings with the game as counterparty (§7), so a phase of its own was a stop with nothing to decide. Market orders work like manpower: set in allocation, they take effect from the next turn's resources phase, and standing orders fill every turn before the player allocates, so plans are made against goods already bought.
 
 ### Resolution order (starting point; adjust in playtesting)
 
@@ -261,9 +262,9 @@ Each tier keeps the abilities of the tiers below it. Higher tiers justify their 
 - **Resources are revealed before they are usable,** and use has requirements. Example: iron is revealed by stone tools but cannot yet be used.
 - **Occupation drives discovery.** Any presence (loose tokens or settlements) in an area with a revealed resource contributes progress toward the related discovery. Example: occupying an iron area leads toward mining.
 
-- **Goods last one turn.** Goods are produced in phase 1, can be traded in phase 2, and are used in resolution; anything unused is lost at the end of the turn. Example: wheat gathered in turn 10 and not used cannot cover a support shortfall in turn 14. Storage comes later through advances (e.g., granaries for food), which may let some goods carry over or spoil slowly. The original kept commodity cards in hand between turns; this design does not.
+- **Goods last one turn.** Goods are produced and traded in phase 1 (resources) and used in resolution; anything unused is lost at the end of the turn. Example: wheat gathered in turn 10 and not used cannot cover a support shortfall in turn 14. Storage comes later through advances (e.g., granaries for food), which may let some goods carry over or spoil slowly. The original kept commodity cards in hand between turns; this design does not.
 
-- **Luxury goods** (v0.14). A category of goods given to the people to lower instability (§10). They create demand on the market: a civilization struggling with instability buys luxuries, so a luxury's price is not just a sale price that only falls. **Copper** (Copper Working) and **cloth** (Weaving) are the first (§8). **Use is automatic** (v0.14): luxuries left after the market (phase 2) are used in resolution step 7, before the collapse check. Each calms −1 on the settlement nearest its collapse threshold (smallest margin; lower area numbers break ties), **at most 1 per settlement per turn**; luxuries beyond one per settlement come off the civ-wide meter. Luxuries reach every settlement of the civilization regardless of transport (the ruler's gifts). Ritual's calm comes off the civ-wide meter in the resources phase, after Bureaucracy. Example: 2 copper, a far village 1 below its threshold and a town 5 below: the village and then the town each lose 1. The ruler's choice is how much to gather, buy, or sell, not where each unit goes; the cap keeps currency from replacing governance.
+- **Luxury goods** (v0.14). A category of goods given to the people to lower instability (§10). They create demand on the market: a civilization struggling with instability buys luxuries, so a luxury's price is not just a sale price that only falls. **Copper** (Copper Working) and **cloth** (Weaving) are the first (§8). **Use is automatic** (v0.14): luxuries left after the market (resources phase) are used in resolution step 7, before the collapse check. Each calms −1 on the settlement nearest its collapse threshold (smallest margin; lower area numbers break ties), **at most 1 per settlement per turn**; luxuries beyond one per settlement come off the civ-wide meter. Luxuries reach every settlement of the civilization regardless of transport (the ruler's gifts). Ritual's calm comes off the civ-wide meter in the resources phase, after Bureaucracy. Example: 2 copper, a far village 1 below its threshold and a town 5 below: the village and then the town each lose 1. The ruler's choice is how much to gather, buy, or sell, not where each unit goes; the cap keeps currency from replacing governance.
 
 Candidate resource categories (from v0.1, not yet finalized): renewable production, extracted materials, manufactured goods, stored resources.
 
@@ -278,7 +279,7 @@ Candidate resource categories (from v0.1, not yet finalized): renewable producti
 - **Food is a special resource**, not a base need. It appears only in some areas (e.g., wheat on a floodplain), and nothing consumes food by default: loose tokens live off the land (area limits stand for carrying capacity, as in the original) and settlements are fed by their support tokens.
 - **Any settlement can produce food**, with production manpower, once its civilization has discovered the technology that farms that resource. Example: a village on a wheat floodplain farms nothing until irrigation (or similar) is discovered, then can assign its 1 manpower to wheat.
 - **Food is a category of named goods**, each with its own market price: grain and fish to start, livestock with Herding (v0.14), more later (rice). Any food good counts as food for support. As in the original, where each commodity (grain, cloth, salt) had its own cards and value.
-- **Food is a good like any other resource**: production manpower gathers it in phase 1, and it can be traded on the market in phase 2 (§7). Further uses may be added later.
+- **Food is a good like any other resource**: production manpower gathers it in phase 1, and it can be traded on the market in the same phase (§7). Further uses may be added later.
 - **Food substitutes for support tokens: 1 food replaces 1 support token**, and 1 production manpower gathers 1 food. Example: a town (2 manpower, 3 support) left with 1 support token can farm with both manpower and stay a town, but does no other work that turn. A village (1 manpower, 2 support) can cover only half its own support, so settlements still need hinterland.
 - **Food in reach.** A settlement can be supported by its own food or food gathered by one of its civilization's settlements in an adjacent area (§6, Transport); farther food needs transport discoveries or the market. The engine assigns food in the support check (resolution step 6), after support tokens, larger tiers first, then lower area numbers. Example: a town 1 support short is covered by a neighbouring village's grain; fish gathered three areas away cannot help.
 - **Food goods differ through advances and storage, not base yield or conversion.** Every food good starts at 1 food per manpower and 1 support per food. Grain gains from the plough and irrigation and later keeps in granaries; fish gains from boats and nets, scales less, and spoils without salt. Historically, fishing matched or beat early farming (Jōmon, Pacific Northwest, Baltic), but grain scaled with technology and stored for years, which made it the base of early states.
@@ -322,7 +323,7 @@ Trade is **market listings only**. There is no negotiation, proposal round, or t
 | Element | Decision |
 |---|---|
 | Access | Requires a trade discovery: **Barter** Developed (v0.14, §8); Barter Mastered adds 1 step of reach. Before it, a civilization has no market access at all |
-| Phase | Phase 2; orders placed and filled; goods usable the same turn |
+| Phase | Orders are placed in allocation and stand; they fill in the resources phase, after gathering and tax, from the next turn on (v0.24); goods usable the same turn |
 | Counterparty | The game supplies and absorbs any quantity |
 | Order types | **Limit** (maximum buy / minimum sell price) or **market** (accept the resulting price) |
 | Market scope | **Per player:** a player's market includes their own orders plus those of every player directly in reach who has discovered trade |
@@ -331,7 +332,7 @@ Trade is **market listings only**. There is no negotiation, proposal round, or t
 | Chaining | **Direct only:** A–B–C does not connect A and C |
 | Pricing | Per player, recalculated each turn from the buy/sell imbalance in that player's market; orders then fill at the new price. Limit orders the new price misses go unfilled |
 | Conflict | Civilizations in a conflict state are **excluded** from each other's markets |
-| Goods (v0.21) | **Sell** any good you can use (its advance Developed) and hold, including stored grain; selling food in phase 2 leaves it out of that turn's support check. **Buy** any good, with or without its advance: bought goods work as their category says (food supports, luxuries calm), as finished goods, the way copper was traded long before smelting spread |
+| Goods (v0.21) | **Sell** any good you can use (its advance Developed) and hold, including stored grain; selling food in the resources phase leaves it out of that turn's support check. **Buy** any good, with or without its advance: bought goods work as their category says (food supports, luxuries calm), as finished goods, the way copper was traded long before smelting spread |
 | Starting prices (v0.21) | **Food 5** (grain, fish, livestock), **luxury 10** (copper, cloth), the same in every player's market at the start |
 | Price change (v0.21) | Each turn, before orders fill, each good's price moves **10% of its starting price per unit of imbalance** (units ordered bought minus sold in that market), rounded; food ±0.5 per unit, luxury ±1. Example: grain at 5, 4 bought and none sold: grain 7, and the 4 cost 28 |
 | Limits (v0.21) | **Price bounds only**: half to triple the starting price (food 3–15, luxury 5–30). No cap on quantity |
@@ -851,6 +852,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.24 (October 25, 2026):** The trade phase is removed (§3): three phases, Resources, Allocation, Resolution. Market orders are placed in allocation and fill in the resources phase after gathering and tax, so a change takes effect next turn and standing orders fill before the player allocates (§7).
 - **0.23 (October 25, 2026):** Resolution reports (§3): Brief (the current flash), Normal (a paused page of notable results, each line linked to the map), Detailed (every event, routine ones included). The Chronicle lists past turns, each opening its Detailed page.
 - **0.22 (October 25, 2026):** Calamities designed (§12). One roll per civilization a turn: 1% per settlement tier point plus 5% per turn in a row without a calamity, reset when one strikes. One weighted draw over settlement × calamity pairs picks both; the weights are the shown risk (low, medium, high). Softening advances halve the damage once Developed (some again when Mastered), not the chance. Eight Stone Age calamities: Famine (Pottery), Superstition (Ritual; a strike also gives Ritual 1 free learning), Civil disorder (Tallies), Epidemic (spreads through the victim's market; no counter yet), Barbarian raid (Archery, Palisades, Masonry), Flood, Earthquake/volcano (Masonry), Drought (Pottery). Civil war, heresy, piracy, and market crash wait for later systems. Buying off: a standing choice to pay 10 when a marked calamity strikes (Famine with Barter Developed, Superstition, Civil disorder, Barbarian raid); it is averted but still resets the build-up; currency gains this use (§6). The candidate calamity tags of §8 are confirmed or dropped (§17).
 - **0.21 (October 25, 2026):** Market details (§7). Sell any good you can use and hold; buy any good, which works as its category says without its advance. Starting prices food 5, luxury 10. Prices move 10% of the starting price per unit of imbalance, rounded, within half to triple the start; no quantity limit and no recovery on quiet turns. Bought goods go to a civ-wide pool (food covers any settlement's shortfall after local food). Base market reach 2 steps settlement to settlement (3 with Barter Mastered). Orders stand until changed. The minimal AI buys food for shortfalls and luxuries for settlements near collapse, and does not sell.
