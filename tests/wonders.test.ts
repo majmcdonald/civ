@@ -4,8 +4,10 @@ import type { ContentBundle, Wonder } from '../src/content/types';
 import {
   calm,
   consolation,
+  cultureSources,
   goodsHeld,
   learningPool,
+  learningSources,
   loadContent,
   manpower,
   mapFor,
@@ -294,6 +296,8 @@ describe('wonder effects and sites (v0.28)', () => {
     expect(manpower(huts.game.state, settlementAt(huts.game.state, huts.site)!)).toBe(3);
     const henge = completed('henge');
     expect(learningPool(henge.game.state, 'p1')).toBe(2);
+    expect(learningSources(henge.game.state, 'p1')).toEqual([{ source: 'highLearning', amount: 0 }, { source: 'henge', amount: 2 }]);
+    expect(cultureSources(completed('mound').game.state, 'p1')).toEqual([{ source: 'artists', amount: 0 }, { source: 'mound', amount: 2 }]);
     const mound = completed('mound');
     runArtists(ctxOf(mound.game, mound.content));
     expect(treasury(mound.game).cultureProgress).toBe(2);
@@ -345,5 +349,21 @@ describe('Stone Age wonders (v0.28)', () => {
     expect(bad.ok).toBe(false);
     if (bad.ok) return;
     expect(bad.errors).toEqual(['Wonder "x" requires unknown advance "nope"', 'Wonder "x" needs unknown good "gold"', 'Wonder "y": era "iron" has no wonder points']);
+  });
+});
+
+describe('wonder forecast (v0.29)', () => {
+  it('says whether this turn is paid and the turn the build finishes if every turn is', () => {
+    const { game, content, map } = scene();
+    const [site] = settle(game, ['town']);
+    game.state.builds.push({ wonder: 'huts', player: 'p1', area: site!, worked: 0, started: game.state.turn });
+    const view = () => wonderViews(game.state, map, content, 'p1').find((v) => v.wonder.id === 'huts')!;
+    // Started this turn: first worked next turn, and 2 turns of work.
+    expect(view().forecast).toEqual({ worked: false, reason: null });
+    expect(view().finish).toBe(game.state.turn + 2);
+    game.state.builds[0]!.started = game.state.turn - 1;
+    game.state.players[0]!.treasury = 0;
+    expect(view().forecast).toEqual({ worked: false, reason: 'short of food (0 of 1)' });
+    expect(view().finish).toBe(game.state.turn + 1);
   });
 });

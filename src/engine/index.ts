@@ -12,10 +12,20 @@ export { mapFor, mapOptions } from './world';
 export { BASE_MOVEMENT, GROWTH_PER_TOKEN, looseTokens, reachable, STARTING_TOKEN_CAP, tokensAt } from './population';
 export { assigned, goodsHeld, isDurable, manpower, revealed, taxIncome, taxOf, usable, workable } from './resources';
 export { calm, cultureBonus, heldWonders, learningBonus, raidImmune, wonderManpower, capitalReach, gatherBonus, marketAccess, riverLeg, settlementBonus, storeCap, strength } from './effects';
-export { discoveryView, DOMAINS, HIGH_LEARNING, highLearning, learningPlan, learningPool, stageOf, type AdvanceView, type LearningPlan, type ProgressPart, type Stage } from './discovery';
+export { ADOPTION_COST, discoveryView, DOMAINS, HIGH_LEARNING, highLearning, LEARNING_ADOPTION, LEARNING_PROGRESS, learningPlan, learningPool, learningSources, stageOf, type AdvanceView, type LearningPlan, type ProgressPart, type Stage } from './discovery';
 export {
+  ATTACKED,
   BUREAUCRACY,
   bureaucracyAt,
+  CAPITAL_BUREAUCRACY,
+  DISTANCE_FREE,
+  DISTANCE_MAX_PENALTY,
+  DISTANCE_STEP,
+  instabilityForecast,
+  LOST_SUPPORT,
+  NEARBY_CONFLICT,
+  RAPID_CHANGE_FREE,
+  type InstabilityForecast,
   capitalDistance,
   capitalOf,
   civInstability,
@@ -44,7 +54,7 @@ export {
 } from './settlements';
 export { previewConflicts, type ConflictEvent } from './conflict';
 export { aiCommands } from './ai';
-export { calamityChance, calamityView, CHANCE_PER_QUIET, CHANCE_PER_TIER, riskLevel, type CalamityView, type Counter, type SettlementRisk } from './calamities';
+export { CALAMITY_EFFECTS, CALAMITY_LIKELY, calamityEffect, calamityChance, calamityView, CHANCE_PER_QUIET, CHANCE_PER_TIER, riskLevel, type CalamityView, type Counter, type SettlementRisk } from './calamities';
 export {
   ARTISTS,
   artists,
@@ -52,6 +62,9 @@ export {
   CULTURE_PROGRESS,
   eraOf,
   erasInOrder,
+  advancePoints,
+  cultureSources,
+  eraPoints,
   eraView,
   knowledgePoints,
   scoreOf,
@@ -61,5 +74,6 @@ export {
   type KnowledgePart,
 } from './eras';
 export { BASE_REACH, canTrade, marketOf, marketView, ORDER_MAX, PRICE_CEILING, PRICE_FLOOR, PRICE_STEP, priceOf, type GoodView, type MarketView } from './market';
-export { consolation, CURRENCY_PER_MANPOWER, goodName, isCompleted, movedTurns, WONDER, wonderPoints, wonderRule, wonderViews, wondersScore, type WonderView } from './wonders';
+export { consolation, CURRENCY_PER_MANPOWER, forecastWork, goodName, isCompleted, movedTurns, WONDER, wonderPoints, wonderRule, wonderViews, wondersScore, type WonderView } from './wonders';
 export { FOOD } from './content';
+export { attentionItems, goodsLedger, NEAR_COLLAPSE, treasuryForecast, type AttentionItem, type GoodLine, type GoodsLedger, type KindLine, type TreasuryForecast } from './attention';

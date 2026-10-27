@@ -1,7 +1,7 @@
 import type { Advance, AreaFilter, Condition, DomainId, Effect, Gathering, Input, SettlementTier } from '../content/types';
 import type { Content } from './content';
 import { emit } from './context';
-import { learningBonus } from './effects';
+import { heldWonders, learningBonus } from './effects';
 import { addCiv, capitalDistance, RAPID_CHANGE_FREE } from './instability';
 import type { AreaId, GameMap } from './map/types';
 import { STARTING_TOKEN_CAP } from './population';
@@ -182,6 +182,16 @@ export function grantLearning(ctx: Context, id: PlayerId, advanceId: string, uni
 // Learning a turn: one per High Learning unit, plus wonders that add learning (Stonehenge).
 export function learningPool(state: GameState, id: PlayerId): number {
   return highLearning(state, id) + learningBonus(state, id);
+}
+
+// Learning a turn by source: High Learning, each held wonder that adds learning (by wonder id), and
+// any other effect.
+export function learningSources(state: GameState, id: PlayerId): { source: string; amount: number }[] {
+  const wonders = heldWonders(state, id)
+    .map((w) => ({ source: w.wonder, amount: w.effects.reduce((sum, e) => sum + (e.type === 'learning' ? e.amount : 0), 0) }))
+    .filter((w) => w.amount > 0);
+  const other = learningBonus(state, id) - wonders.reduce((sum, w) => sum + w.amount, 0);
+  return [{ source: HIGH_LEARNING, amount: highLearning(state, id) }, ...wonders, ...(other > 0 ? [{ source: 'other', amount: other }] : [])];
 }
 
 // What an advance's next step costs, in its own units: progress toward Known or Developed, or

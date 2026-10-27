@@ -29,9 +29,9 @@ export const CAPITAL_BUREAUCRACY = 1;
 // Distance lowers the threshold by 1 for every 2 land moves beyond 2 from the capital, by at most
 // 4 (the 9+ band, also used for settlements the capital cannot reach by land), and never below
 // half the tier's base.
-const DISTANCE_FREE = 2;
-const DISTANCE_STEP = 2;
-const DISTANCE_MAX_PENALTY = 4;
+export const DISTANCE_FREE = 2;
+export const DISTANCE_STEP = 2;
+export const DISTANCE_MAX_PENALTY = 4;
 
 export type InstabilitySource = 'overextension' | 'losses' | 'lostSupport' | 'conflict' | 'bureaucracy' | 'calm' | 'luxury' | 'noSettlements' | 'calamity' | 'rapidChange';
 
@@ -115,6 +115,35 @@ export function totalInstability(state: GameState, settlement: Settlement): numb
 
 export function overextension(state: GameState, player: PlayerId): number {
   return Math.max(0, state.settlements.filter((s) => s.player === player).length - OVEREXTENSION_FREE);
+}
+
+// The civ-wide meter after this turn's resolution and next turn's resources phase, from the sources
+// known now (design doc §3, Society · Instability): overextension added at the check, then the
+// Bureaucracy not needed by its own settlement's meter, then calm (Ritual, Göbekli Tepe). Fights,
+// losses, and calamities are not known in advance.
+export interface InstabilityForecast {
+  civ: number;
+  overextension: number;
+  bureaucracy: number;
+  calm: number;
+  next: number;
+}
+
+export function instabilityForecast(state: GameState, player: PlayerId): InstabilityForecast {
+  const civ = civInstability(state, player);
+  const over = overextension(state, player);
+  const spare = state.settlements
+    .filter((s) => s.player === player)
+    .reduce((sum, s) => {
+      const units = ((s.work ?? []).find((w) => w.resource === BUREAUCRACY)?.count ?? 0) + (capitalOf(state, player) === s.area ? CAPITAL_BUREAUCRACY : 0);
+      return sum + Math.max(0, units - localInstability(s));
+    }, 0);
+  let meter = civ + over;
+  const bureaucracy = Math.min(spare, meter);
+  meter -= bureaucracy;
+  const calmed = state.settlements.some((s) => s.player === player) ? Math.min(calm(state, player), meter) : 0;
+  meter -= calmed;
+  return { civ, overextension: over, bureaucracy, calm: calmed, next: meter };
 }
 
 export function addLocal(ctx: Context, settlement: Settlement, amount: number, source: InstabilitySource): void {

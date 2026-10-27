@@ -345,7 +345,7 @@ describe('Stone Age goods (v0.14)', () => {
 
 describe('tax (v0.20)', () => {
   it('collects a fixed tax from towns and larger into a treasury that keeps', () => {
-    // Village 0, town 2 (design doc §6, Currency).
+    // Village 0, town 1 (design doc §6, Currency, v0.29).
     const { game, grain, b, c } = scene();
     game.state.settlements = [
       { area: grain, player: 'p1', tier: 'town' },
@@ -355,11 +355,11 @@ describe('tax (v0.20)', () => {
     const ctx: Context = { state: game.state, content: testContent(), map: mapFor(game.setup), events: [], refugees: [] };
     collectTax(ctx);
     collectTax(ctx);
-    expect(game.state.players.find((p) => p.id === 'p1')!.treasury).toBe(4);
+    expect(game.state.players.find((p) => p.id === 'p1')!.treasury).toBe(2);
     expect(game.state.players.find((p) => p.id === 'ai1')!.treasury).toBe(0);
     expect(eventsOfType(ctx.events, 'taxCollected')).toEqual([
-      { type: 'taxCollected', player: 'p1', amount: 2 },
-      { type: 'taxCollected', player: 'p1', amount: 2 },
+      { type: 'taxCollected', player: 'p1', amount: 1 },
+      { type: 'taxCollected', player: 'p1', amount: 1 },
     ]);
   });
 
@@ -370,6 +370,6 @@ describe('tax (v0.20)', () => {
     const before = game.state.turn;
     while (game.state.turn === before) endPhaseAll(game);
     expect(settlementAt(game.state, grain)?.tier).toBe('town');
-    expect(game.state.players.find((p) => p.id === 'p1')!.treasury).toBe(2);
+    expect(game.state.players.find((p) => p.id === 'p1')!.treasury).toBe(1);
   });
 });

@@ -201,6 +201,7 @@ export interface GoodView {
   name: string;
   food: boolean;
   luxury: boolean;
+  durable: boolean;
   start: number;
   // The price orders fill at now, and unrounded.
   price: number;
@@ -238,6 +239,7 @@ export function marketView(state: GameState, map: GameMap, content: Content, pla
       name: r.name,
       food: r.food,
       luxury: Boolean(r.luxury),
+      durable: Boolean(r.durable),
       start: r.price,
       price: Math.round(exact),
       exact,

@@ -1,11 +1,10 @@
-import type { AreaFilter, Condition, DomainId, Effect, Gathering, Input } from '../../content/types';
-import type { AdvanceView, Content, LearningPlan, ProgressPart } from '../../engine';
+import type { Advance, AreaFilter, Condition, DomainId, Effect, Gathering, Input } from '../../content/types';
+import { ADOPTION_COST, advancePoints, LEARNING_ADOPTION, LEARNING_PROGRESS, type AdvanceView, type Content, type LearningPlan, type ProgressPart } from '../../engine';
 
-// Knowledge (design doc §8): the whole advance tree by domain, each advance's stage, its progress
-// and the sources of its rate (usage and learning), and the study queue. Every number shows where it
-// comes from.
+// Knowledge (design doc §3, §8, v0.29): the whole advance tree by domain, each advance's stage, its
+// progress and what drives it, the cost of every step, what it gives and opens, and the study queue.
 
-const DOMAIN_NAMES: Record<DomainId, string> = {
+export const DOMAIN_NAMES: Record<DomainId, string> = {
   land: 'Land and food',
   crafts: 'Crafts',
   beliefs: 'Beliefs and society',
@@ -21,7 +20,7 @@ function number(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-interface Names {
+export interface Names {
   advance: (id: string) => string;
   resource: (id: string) => string;
 }
@@ -46,7 +45,7 @@ function gathering(what: Gathering, names: Names): string {
   return `gathering ${either(what.map((r) => names.resource(r).toLowerCase()))}`;
 }
 
-function describeInput(input: Input, names: Names): string {
+export function describeInput(input: Input, names: Names): string {
   switch (input.per) {
     case 'turn':
       return 'each turn';
@@ -86,7 +85,23 @@ function describePart(part: ProgressPart, names: Names): string {
   return `+${number(part.value)}: ${number(part.input.amount)} ${describeInput(part.input, names)} (${part.count})`;
 }
 
-function describeCondition(condition: Condition, names: Names): string {
+export function describeRule(input: Input, names: Names): string {
+  return `+${number(input.amount)} ${describeInput(input, names)}`;
+}
+
+// Every step of an advance with its cost and what adds to it; reached steps are ticked. Baseline
+// advances have reached them all from turn 1.
+function stepCosts(view: AdvanceView, names: Names): { name: string; cost: string; inputs: string; reached: boolean }[] {
+  const { advance, stage } = view;
+  if (advance.baseline) return [];
+  const rows = [];
+  if (advance.known) rows.push({ name: 'Known', cost: String(advance.known.cost), inputs: advance.known.inputs.map((i) => describeRule(i, names)).join(', '), reached: stage !== 'none' });
+  if (advance.developed) rows.push({ name: 'Developed', cost: String(advance.developed.cost), inputs: advance.developed.inputs.map((i) => describeRule(i, names)).join(', '), reached: stage === 'developed' });
+  if (advance.adoption) rows.push({ name: 'Mastered', cost: `${ADOPTION_COST} adoption`, inputs: advance.adoption.inputs.map((i) => describeRule(i, names)).join(', '), reached: stage === 'developed' && view.adoption >= 100 });
+  return rows;
+}
+
+export function describeCondition(condition: Condition, names: Names): string {
   switch (condition.type) {
     case 'knows':
       return `${names.advance(condition.advance)} ${condition.stage}`;
@@ -101,7 +116,7 @@ function describeCondition(condition: Condition, names: Names): string {
   }
 }
 
-function describeEffect(effect: Effect, names: Names): string {
+export function describeEffect(effect: Effect, names: Names): string {
   switch (effect.type) {
     case 'unlockTier':
       return `Unlocks ${effect.tier === 'city' ? 'cities' : `${effect.tier}s`}`;
@@ -203,15 +218,28 @@ function calamityEffects(content: Content, id: string): string[] {
   });
 }
 
-function AdvanceCard({ view, content, names, canStudy, onAdd }: { view: AdvanceView; content: Content; names: Names; canStudy: boolean; onAdd: () => void }) {
-  const { advance } = view;
-  const effects = [
+// What an advance gives, by stage: goods it reveals or opens, its effects, and its calamity rules.
+export function advanceEffects(advance: Advance, content: Content, names: Names): string[] {
+  return [
     ...content.resources.filter((r) => (r.revealedBy ?? r.requires) === advance.id && !r.from).map((r) => `Known: reveals ${r.name.toLowerCase()}`),
     ...content.resources.filter((r) => r.requires === advance.id).map((r) => `Developed: ${r.name.toLowerCase()} can be ${r.from ? `made from ${either(r.from.map((f) => names.resource(f).toLowerCase()))} areas` : 'gathered'}${r.luxury ? ' (luxury: calms instability)' : ''}`),
     ...advance.effects.map((e) => `Developed: ${describeEffect(e, names)}`),
     ...(advance.mastered ?? []).map((e) => `Mastered: ${describeEffect(e, names)}`),
     ...calamityEffects(content, advance.id),
   ];
+}
+
+function AdvanceCard({ view, content, names, canStudy, onAdd }: { view: AdvanceView; content: Content; names: Names; canStudy: boolean; onAdd: () => void }) {
+  const { advance } = view;
+  const effects = advanceEffects(advance, content, names);
+  const steps = stepCosts(view, names);
+  const points = advancePoints(content, advance);
+  const opens = content.wonders
+    .filter((w) => w.requires.includes(advance.id))
+    .map((w) => {
+      const others = w.requires.filter((r) => r !== advance.id).map(names.advance);
+      return others.length > 0 ? `${w.name} (with ${others.join(', ')})` : w.name;
+    });
   return (
     <li className={`kn-card kn-${view.stage} ${view.plausible || view.stage !== 'none' ? '' : 'kn-closed'} ${view.queued ? 'kn-queued' : ''}`}>
       <div className="kn-card-head">
@@ -251,12 +279,32 @@ function AdvanceCard({ view, content, names, canStudy, onAdd }: { view: AdvanceV
           ))}
         </ul>
       )}
+      {steps.length > 0 && (
+        <ul className="kn-steps">
+          {steps.map((st) => (
+            <li key={st.name} className={st.reached ? 'reached' : ''}>
+              {st.reached ? '✓ ' : ''}
+              <b>
+                {st.name} {st.cost}
+              </b>
+              {st.inputs && `: ${st.inputs}`}
+            </li>
+          ))}
+        </ul>
+      )}
       {effects.length > 0 && (
         <ul className="kn-effects">
           {effects.map((e) => (
             <li key={e}>{e}</li>
           ))}
         </ul>
+      )}
+      {opens.length > 0 && <p className="kn-opens">Opens {opens.join('; ')}</p>}
+      {points && (
+        <p className="kn-points">
+          Knowledge points: Developed {points.developed}
+          {points.mastered !== null && `, Mastered ${points.mastered}`}
+        </p>
       )}
     </li>
   );
@@ -267,16 +315,19 @@ interface KnowledgeSheetProps {
   content: Content;
   queue: string[];
   plan: LearningPlan;
+  // Learning a turn by source: High Learning, wonders by id, other effects.
+  sources: { source: string; amount: number }[];
   // The queue is set in allocation.
   canStudy: boolean;
   onStudy: (queue: string[]) => void;
 }
 
-export function KnowledgeSheet({ views, content, queue, plan, canStudy, onStudy }: KnowledgeSheetProps) {
+export function KnowledgeSheet({ views, content, queue, plan, sources, canStudy, onStudy }: KnowledgeSheetProps) {
   const names: Names = {
     advance: (id) => content.advances.find((a) => a.id === id)?.name ?? id,
     resource: (id) => content.resources.find((r) => r.id === id)?.name ?? id,
   };
+  const sourceName = (id: string) => (id === 'highLearning' ? 'High Learning' : id === 'other' ? 'Other' : (content.wonders.find((w) => w.id === id)?.name ?? id));
   const domains = Object.keys(DOMAIN_NAMES) as DomainId[];
   const waiting = views.filter((v) => v.next !== null && v.progress + v.usageRate < v.cost && (v.stage === 'developed' || v.plausible)).length;
   const move = (i: number, by: number) => {
@@ -289,10 +340,13 @@ export function KnowledgeSheet({ views, content, queue, plan, canStudy, onStudy 
     <div className="civ-sheet kn-sheet">
       <header className="civ-head">
         <h1>Knowledge</h1>
-        <p title="Each High Learning unit adds 1 learning a turn. A unit of learning adds 2 progress toward Known or Developed, or 10 adoption toward Mastered; it speeds advances up but is never required (§8)">
-          Learning: {number(plan.pool)} a turn from High Learning
+        <p>
+          Learning {number(plan.pool)} a turn ({sources.filter((x) => x.amount > 0 || x.source === 'highLearning').map((x) => `${sourceName(x.source)} ${number(x.amount)}`).join(', ')})
         </p>
       </header>
+      <p className="civ-rule kn-rule">
+        Each High Learning unit adds 1 learning a turn. A unit of learning adds {LEARNING_PROGRESS} progress toward Known or Developed, or {LEARNING_ADOPTION} adoption toward Mastered. It goes down the study queue first, then splits evenly among the advances still waiting. Learning only speeds an advance up; its own inputs get it there too.
+      </p>
       <section className="kn-queue" aria-label="Study queue">
         <h2>Study queue</h2>
         {queue.length === 0 ? (

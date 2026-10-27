@@ -5,6 +5,7 @@ import { AtlasBackground } from '../art/AtlasBackground';
 import { CompassRose } from '../art/CompassRose';
 import { deleteSave, downloadSave, listSaves, nameFromFile, readSave, writeSave, type SaveSlot } from '../saves';
 import { DEFAULT_GAME, gameContent, type NewGameOptions } from './GameScreen';
+import { RulesSheet } from './RulesSheet';
 import { ROOM_NAMES, TYPE_NAMES } from './MapScreen';
 import './TitleScreen.css';
 
@@ -37,18 +38,20 @@ interface TitleScreenProps {
   onOpen: (session: Session, message: string | null) => void;
 }
 
-// New Game opens the game setup, Continue the most recent save, and Load Game the list of saves.
-// Rules Reference and Settings are inert.
+// New Game opens the game setup, Continue the most recent save, Load Game the list of saves, and
+// Rules Reference the rules page. Settings is inert.
 export function TitleScreen({ onStart, onOpen }: TitleScreenProps) {
   const eras = [...content.eras].sort((a, b) => a.order - b.order);
   const [setup, setSetup] = useState<NewGameOptions | null>(null);
   const [loading, setLoading] = useState(false);
+  const [rules, setRules] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const latest = listSaves()[0];
   const actions: Partial<Record<(typeof MENU)[number], () => void>> = {
     'New Game': () => setSetup({ ...DEFAULT_GAME, seed: randomSeed() }),
     Continue: () => latest && setError(openSlot(latest, onOpen)),
     'Load Game': () => setLoading(true),
+    'Rules Reference': () => setRules(true),
   };
   return (
     <main className="title-screen">
@@ -99,6 +102,17 @@ export function TitleScreen({ onStart, onOpen }: TitleScreenProps) {
       </ol>
 
       <CompassRose className="title-compass" />
+
+      {rules && (
+        <div className="game-sheet-backdrop title-rules" onClick={() => setRules(false)}>
+          <article className="game-sheet filled" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="title-rules-close" onClick={() => setRules(false)}>
+              Close
+            </button>
+            <RulesSheet content={gameContent()} />
+          </article>
+        </div>
+      )}
     </main>
   );
 }

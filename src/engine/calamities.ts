@@ -40,6 +40,35 @@ const DROUGHT_TURNS = 2;
 
 type View = Pick<Context, 'state' | 'map' | 'content'>;
 
+// What each calamity does at full strength, in a line, from the constants above (the Rules screen
+// and the buy-off marks; design doc §3, v0.29). Softening advances halve the numbers.
+export const CALAMITY_EFFECTS: Record<(typeof CALAMITY_RULES)[number], string> = {
+  famine: `Loses ${FAMINE_TOKENS.join('/')} support tokens (village/town/city/metropolis) and +${UNREST} local instability`,
+  superstition: `+${SUPERSTITION_UNREST} local instability and its manpower idle next turn; gives free learning toward Ritual`,
+  civilDisorder: `Its manpower idle next turn and +${UNREST} local instability`,
+  epidemic: `Loses ${EPIDEMIC_TOKENS.join('/')} support tokens; your settlements within ${EPIDEMIC_NEARBY} areas lose 1; spreads to every civilization in your market`,
+  raid: `Loses ${RAID_TOKENS} support tokens and +${UNREST} local instability; a town or larger drops a tier unless walled (Palisades or Masonry)`,
+  flood: 'Loses half (rounded up) of your tokens in river and floodplain areas at and around it; its food this turn is lost',
+  earthquake: `Drops a tier (a village dissolves); with Masonry a town or larger loses ${QUAKE_TOKENS} support tokens instead`,
+  drought: `Gathers no food for ${DROUGHT_TURNS} turns; unsettled areas around it hold 1 fewer token`,
+};
+
+// What makes each calamity likelier, from the exposure weights below (the Rules screen).
+export const CALAMITY_LIKELY: Record<(typeof CALAMITY_RULES)[number], string> = {
+  famine: 'Settlements gathering food; twice as likely after eating food for support, and twice again for a town or larger',
+  superstition: 'Every settlement; twice as likely before the belief it teaches is Known',
+  civilDisorder: 'Settlements at half their collapse threshold or more; likelier the higher their instability',
+  epidemic: 'Towns and larger, likelier by tier and for a civilization that shares a market',
+  raid: 'Settlements with empty areas next to them, likelier with each; none while you hold a wonder that stops raids',
+  flood: 'Settlements on or next to rivers and floodplains; on a floodplain counts double',
+  earthquake: 'Settlements on or next to volcanic areas; on one counts triple',
+  drought: 'Settlements in or next to the desert; in it counts double',
+};
+
+export function calamityEffect(id: string): string {
+  return CALAMITY_EFFECTS[id as (typeof CALAMITY_RULES)[number]] ?? '';
+}
+
 export interface Exposure {
   weight: number;
   reasons: string[];

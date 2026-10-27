@@ -1,8 +1,8 @@
-import type { Era, EraId, Gate } from '../content/types';
+import type { Advance, Era, EraId, Gate } from '../content/types';
 import { tierPoints } from './calamities';
 import type { Content } from './content';
 import { emit } from './context';
-import { cultureBonus } from './effects';
+import { cultureBonus, heldWonders } from './effects';
 import { activeWork } from './resources';
 import { wondersScore } from './wonders';
 import type { Context, GameState, PlayerId, PlayerState, Score, Settlement } from './types';
@@ -31,7 +31,7 @@ export function eraOf(content: Content, id: EraId): Era {
 }
 
 // Points rules for an era: its own, or the latest earlier era's.
-function pointsOf(content: Content, id: EraId): NonNullable<Era['points']> {
+export function eraPoints(content: Content, id: EraId): NonNullable<Era['points']> {
   const order = eraOf(content, id).order;
   return erasInOrder(content).filter((e) => e.order <= order && e.points).pop()!.points!;
 }
@@ -65,6 +65,14 @@ export function knowledgeParts(state: GameState, content: Content, id: PlayerId)
     parts.set(advance.era, part);
   }
   return erasInOrder(content).flatMap((e) => (parts.has(e.id) ? [parts.get(e.id)!] : []));
+}
+
+// Knowledge points an advance scores Developed and Mastered; baseline advances score none, and an
+// advance with no adoption stage is never Mastered.
+export function advancePoints(content: Content, advance: Advance): { developed: number; mastered: number | null } | null {
+  if (advance.baseline) return null;
+  const values = eraPoints(content, advance.era);
+  return { developed: values.developed, mastered: advance.adoption ? values.mastered : null };
 }
 
 export function knowledgePoints(state: GameState, content: Content, id: PlayerId): number {
@@ -117,7 +125,15 @@ export function artists(state: GameState, id: PlayerId): number {
 
 // Culture points for every CULTURE_PROGRESS Artists progress in the civilization's current era.
 export function culturePerAward(state: GameState, content: Content, id: PlayerId): number {
-  return pointsOf(content, player(state, id).era).culture;
+  return eraPoints(content, player(state, id).era).culture;
+}
+
+// Culture progress a turn by source: Artists, then each held wonder that adds culture (by id).
+export function cultureSources(state: GameState, id: PlayerId): { source: string; amount: number }[] {
+  const wonders = heldWonders(state, id)
+    .map((w) => ({ source: w.wonder, amount: w.effects.reduce((sum, e) => sum + (e.type === 'culture' ? e.amount : 0), 0) }))
+    .filter((w) => w.amount > 0);
+  return [{ source: ARTISTS, amount: artists(state, id) }, ...wonders];
 }
 
 // Resources phase: each Artists unit adds 1 progress; every CULTURE_PROGRESS is a culture award.

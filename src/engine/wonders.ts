@@ -239,6 +239,34 @@ function work(ctx: Context, build: Build, wonder: Wonder): boolean {
   return build.worked >= wonder.turns;
 }
 
+// What this turn's resolution will do with the build, from the goods, manpower, and treasury now
+// (calamities are not predicted): null if it will be worked, else why it will stall. A build
+// started this turn is not worked yet.
+export function forecastWork(state: GameState, map: GameMap, content: Content, build: Build): { worked: boolean; reason: string | null } {
+  if (build.outbuilt !== undefined || build.started === state.turn) return { worked: false, reason: null };
+  const wonder = wonderRule(content, build.wonder)!;
+  for (const g of wonder.goods) {
+    const have = spare(state, map, content, build.player, g.resource);
+    if (have < g.count) return { worked: false, reason: `short of ${goodName(content, g.resource)} (${have} of ${g.count})` };
+  }
+  const labour = build.labour?.turn === state.turn ? Math.min(build.labour.units, wonder.manpower) : 0;
+  const currency = (wonder.manpower - labour) * CURRENCY_PER_MANPOWER;
+  const treasury = playerOf(state, build.player).treasury;
+  if (treasury < currency) return { worked: false, reason: `short of manpower (${labour} of ${wonder.manpower}) and currency to cover it (${treasury} of ${currency})` };
+  return { worked: true, reason: null };
+}
+
+// Currency the player's builds will take this turn for missing manpower, if they are worked.
+export function wonderCurrency(state: GameState, map: GameMap, content: Content, player: PlayerId): number {
+  return state.builds
+    .filter((b) => b.player === player && forecastWork(state, map, content, b).worked)
+    .reduce((sum, b) => {
+      const wonder = wonderRule(content, b.wonder)!;
+      const labour = b.labour?.turn === state.turn ? Math.min(b.labour.units, wonder.manpower) : 0;
+      return sum + (wonder.manpower - labour) * CURRENCY_PER_MANPOWER;
+    }, 0);
+}
+
 // Resolution step 12. Progress left from a race lost last turn and not moved becomes culture.
 // Builds are worked in player order, each player's in content order; the first to finish a wonder
 // gets it, and its other builders are outbuilt.
@@ -277,6 +305,10 @@ export interface WonderView {
   closed: string | null;
   // The player's settlements and why each cannot take it now (null: it can).
   sites: { area: AreaId; problem: string | null }[];
+  // For the player's build in progress: whether this turn's work will be paid, and the turn it
+  // finishes if every turn from now is paid (a build started this turn is first worked next turn).
+  forecast: { worked: boolean; reason: string | null } | null;
+  finish: number | null;
 }
 
 // Everything the Wonders screen shows, for one player.
@@ -286,14 +318,18 @@ export function wonderViews(state: GameState, map: GameMap, content: Content, pl
     const holder = record && !record.ruined ? (settlementAt(state, record.area)?.player ?? null) : null;
     const shut = closed(state, content, player, wonder);
     const own = state.settlements.filter((s) => s.player === player);
+    const build = buildOf(state, player, wonder.id);
+    const mine = build && build.outbuilt === undefined ? build : undefined;
     return {
       wonder,
       points: wonderPoints(content, wonder),
       completed: record ? { builder: record.builder, area: record.area, turn: record.turn, holder } : null,
       builders: state.builds.filter((b) => b.wonder === wonder.id && b.outbuilt === undefined).map((b) => b.player),
-      mine: buildOf(state, player, wonder.id) ?? null,
+      mine: build ?? null,
       closed: shut,
       sites: shut ? [] : own.map((s) => ({ area: s.area, problem: badSite(state, player, s.area) ?? unpayable(state, map, content, wonder, s) })),
+      forecast: mine ? forecastWork(state, map, content, mine) : null,
+      finish: mine ? state.turn + wonder.turns - mine.worked - (mine.started === state.turn ? 0 : 1) : null,
     };
   });
 }

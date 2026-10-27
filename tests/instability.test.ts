@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapFor, settlementAt, type AreaId, type Context, type GameEvent, type GameMap, type Session, type Settlement, type SettlementTier } from '../src/engine';
+import { instabilityForecast, mapFor, settlementAt, type AreaId, type Context, type GameEvent, type GameMap, type Session, type Settlement, type SettlementTier } from '../src/engine';
 import { resolveConflict } from '../src/engine/conflict';
 import { resolveDiscovery } from '../src/engine/discovery';
 import { landDistances, resolveInstability, runBureaucracy, threshold, updateCapitals } from '../src/engine/instability';
@@ -310,5 +310,17 @@ describe('rapid change (v0.25)', () => {
     resolveDiscovery(ctx);
     expect(ctx.state.players[0]!.instability).toBe(2);
     expect(eventsOfType(ctx.events, 'instabilityChanged')).toContainEqual({ type: 'instabilityChanged', player: 'p1', area: null, amount: 2, source: 'rapidChange' });
+  });
+});
+
+describe('instability forecast (v0.29)', () => {
+  it('adds overextension, then spare Bureaucracy and calm come off the civ-wide meter', () => {
+    const { game, map } = scene();
+    const areas = map.areas.filter((a) => a.kind === 'land').map((a) => a.id).slice(0, 8);
+    areas.forEach((a, i) => settle(game, a, 'village', i === 0 ? { instability: 1, work: [{ resource: 'bureaucracy', count: 1 }] } : {}));
+    game.state.players[0]!.capital = areas[0]!;
+    game.state.players[0]!.instability = 3;
+    // 3 + 2 overextension; the capital's 2 units calm its own 1 first, so 1 comes off civ-wide.
+    expect(instabilityForecast(game.state, 'p1')).toEqual({ civ: 3, overextension: 2, bureaucracy: 1, calm: 0, next: 4 });
   });
 });

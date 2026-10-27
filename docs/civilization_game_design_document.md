@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.28  
+**Version:** 0.29  
 **Date:** October 26, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -90,6 +90,67 @@ After resolution the player sees what happened, in one of three modes chosen in 
 | **Detailed** | The same page, listing every event: also goods gathered, tax, price changes, each instability change, moves, and growth |
 
 Each line about a place jumps to it on the map when clicked. The **Chronicle** lists every turn since the game started or was loaded, newest first, with its notable results; clicking a turn opens its Detailed page. Reports cover the player's own civilization and events that involve it.
+
+### Screens and information panels (v0.29)
+
+Every system has one home screen (Phase 4 step 9). Panels serve three needs, and a number is shown, flagged, or explained only for one of them; where a number came from (such as the treasury's history) is not shown for its own sake:
+
+| Need | Question | Example |
+|---|---|---|
+| **State** | Where do I stand? | Score 23, 2nd of 5 |
+| **Attention** | What needs me this turn? | 2 manpower idle in Ur |
+| **Rules** | What does it cost, and what does it give? | Stonehenge: 1 stone and 2 manpower a turn for 8 turns; +2 learning a turn |
+
+**Top bar** (on every screen): era and turn; loose tokens of the cap; settlements by tier; treasury; score with rank ("23 (2nd)"); progress to the next era's gate ("Bronze 4/5 settlement, 9/12 knowledge"); the endgame countdown once begun; and an **attention count** ("3 to address") that opens the list of items needing the player this turn.
+
+**Attention items** are what will be lost, wasted, or risked if the player ends the turn now; each opens the screen or area where it is fixed. Zero means nothing goes wrong by ending the turn. Opportunities (a village site ready, a wonder or advance available) and an empty study queue are not attention items; they belong on their own screens.
+
+| Item | Example |
+|---|---|
+| Idle manpower | "Ur: 1 manpower idle" |
+| Support short at the next check | "Kish will drop to a village: 1 support short" |
+| Near collapse (within 2 of the threshold) | "Lagash: instability 7 of 8" |
+| A wonder that cannot be paid this turn | "Göbekli Tepe will stall: short of stone (0 of 1)" |
+| A wonder race lost: choose | "Stonehenge lost to Rival 2: move 3 turns or take culture" |
+| A planned founding or upgrade that will fail | "Village at Hills will not be built: 2 tokens short" |
+| Tokens over the cap or an area limit | "3 tokens over the cap will be removed" |
+| A buy order the treasury cannot fill | "Buy 3 stone: treasury covers 1" |
+| A planned move that leads to a fight | "Your 4 tokens enter a fight at River" |
+| A calamity marked to buy off that the treasury cannot pay (only when marked) | "Famine marked to buy off: treasury 6 of 10" |
+
+The top bar holds eight screens:
+
+| Screen | Holds |
+|---|---|
+| **Map** | The board, area details, and planning |
+| **Civilization** | Settlements, support, manpower, and calamity risks |
+| **Economy** | The market (prices, orders), the treasury and its sources, goods held and the durable stock |
+| **Knowledge** | Advances and the study queue |
+| **Society** | Wonders and builds, culture and Artists, instability |
+| **Rivals** | Standings, conflicts, the endgame, wonders built |
+| **Chronicle** | Past turn reports |
+| **Rules** | The rules reference |
+
+**Panel contents** (decided card by card; v0.29):
+
+| Screen · card | Shows |
+|---|---|
+| Civilization · Settlements | Each tier with its count; a locked tier names what unlocks it ("Town: locked (Chiefdom)"); a tier table in the card: built from, support, manpower, tax, collapse threshold, points. Settlement points are not shown here |
+| Map · Side panel | The selected area's details (name or terrain, features, limit, resources, terrain goods, everyone's tokens); for a settlement, its instability (with threshold reason and last turn's changes), support of need (red when short), its wonder ("Building Stonehenge 3/8 · will be worked"), and manpower chips with one-line job rules; moves left; Found or Upgrade with the preview; planned settlements. Idle manpower and unrest leave the panel for the attention list; a planned fight shows in the attention list and, when its area is selected, in the panel |
+| Civilization · Population | Loose tokens of the cap; growth next turn as one line ("+8 next turn (6 area, 2 urban)"); room left below the cap; a rule note on how growth works. The token value of settlements is not shown |
+| Civilization · Support | Support of need this turn; from food; free tokens; village sites (a count); shortfall warnings (also attention items); a rule note on how support works |
+| Civilization · Manpower | Total; production split by good ("6: grain 3, fish 2, stone 1"); Bureaucracy, High Learning, Artists, Wonders; unassigned (highlighted above 0, and an attention item); a job table in the card: what one unit of each job gives |
+| Civilization · Calamities | Chance this turn, with a rule note (1% per tier point, +5% per quiet turn, falls back when one strikes); buy-off marks, each with the calamity's one-line effect; medium and high risks; the full calamity table (effect, likelihood, softened by, buy-off cost) on the Rules screen, linked from the card |
+| Civilization · Settlements table | Per settlement: name, tier, capital, terrain and features, terrain goods ("stone can be worked here"), and its wonder ("Building Stonehenge 3/8", or the completed wonder); work chips; support of need (red when short); manpower assigned of total (red when idle); instability of threshold (red within 2); top calamity risk (hover lists all). No urban growth column |
+| Economy · Treasury | Treasury; tax a turn; spending a turn (buy orders at current prices, currency covering wonder manpower); expected next turn (treasury + tax + sales − spending; red below 0, since orders fill first and a wonder then stalls); a rule note on what currency is for. Where the treasury came from is not shown |
+| Economy · Goods and market | One table, a row per good, grouped food, luxuries, other: good and kind (durable marked; legend below); gathered a turn by the standing assignments (where); held now (the part kept from earlier turns: durable stock, stored grain); needed this turn (wonder goods by good; food and luxuries by kind, since any of the kind serves: food for support tokens cannot cover and for wonders, luxuries for settlements with instability; red when held falls short, for a kind only once one of its goods can be gathered); price and next turn's; the standing order with its controls (shown with market access). Market membership, reach, and a market rule note above it |
+| Knowledge · Advance card | Stage; the next step as a bar with turns at this turn's rate; what drives it (the inputs, as the rule for speeding it up); **the cost of every step** (Known, Developed, Mastered adoption, each with what adds to it; reached steps ticked); what it gives by stage; **the wonders it opens** (with any other advance needed); **its knowledge points** (Developed, Mastered); plausibility conditions before Known; the Study button |
+| Knowledge · Header and queue | Learning a turn by source ("3 a turn (High Learning 1, Stonehenge 2)"); a rule line on what learning does; the study queue with each entry's learning this turn; learning the queue cannot use. Knowledge points are not shown here (the top bar has gate progress) |
+| Society · Instability | Civ-wide meter; change next turn as one line with its parts (overextension, Bureaucracy, calm from advances and wonders); capital with its threshold rule; near-collapse settlements (also attention items); luxuries in stock; a raises/lowers table in the card |
+| Society · Culture | Culture points; progress to the next award with turns at this turn's rate and its sources (Artists, Newgrange); points per award in this era (and the next); a rule note on where culture comes from |
+| Society · Wonders | A card per wonder: name, points, effect; opened by (advances ticked when Developed); cost a turn (goods, manpower or 10 currency each); total cost; turns of work; rivals building it (who, not how far); for the player's build, progress, last turn's result, this turn's forecast ("Will be worked" or "Will stall: short of stone (0 of 1)") and the finish turn if every turn is paid; the start control (sites that cannot pay say why); completed: builder, site, holder, ruins |
+| Rivals | Conflicts; endgame (final era, what completes it, countdown) with a rule note on the countdown and ties; wonders built or being built; standings (rank, civilization, era, next gate, settlements, tokens, knowledge, settlement, wonders, culture, score, toward you) with a rule note on how score is made. Market membership stays on the Economy screen |
+| Rules | One scrolling page with a contents list down the side; rule notes and links on other screens open their section. Sections: turn (phases, resolution steps); map and tokens; settlements (tier table); goods; manpower (job table); market; advances (era, domain, costs by step, drivers, effects); wonders; instability (raises/lowers, thresholds, collapse); calamities (effect, likelihood, softened by, buy-off); conflict; eras and victory (gates, points, countdown, score). Every number comes from the data files or engine constants, never typed into the page |
 
 ## 4. Map, population, and movement — Decided
 
@@ -249,7 +310,7 @@ Each tier keeps the abilities of the tiers below it. Higher tiers justify their 
 | Metropolis | 4 | Build great wonders; extends market range; raises the civilization's administrative capacity (reduces overextension) |
 
 - Base manpower is raised by advance bonuses (§6).
-- Tax per settlement climbs with tier: village 0, town 2, city 3, metropolis 4 (v0.20, §6).
+- Tax per settlement climbs with tier: village 0, town 1, city 2, metropolis 3 (v0.29; v0.20 had 2, 3, 4; §6).
 - Every tier earns settlement points toward era gates and score: village 1, town 2, city 3, metropolis 4 (v0.26, §14).
 - **Historical figures can emerge in any settlement**, with odds that scale with tier.
 
@@ -312,7 +373,7 @@ Manpower is a settlement's labor. Every unit is spent each turn on exactly one a
 ### Currency
 
 - A single generic currency, held in each civilization's **treasury**.
-- **Tax** (v0.20). Towns and larger pay a fixed tax each turn in the resources phase (phase 1): **village 0, town 2, city 3, metropolis 4**. Villages pay nothing, so a civilization collects no tax until its first town (Chiefdom), as only cities paid tax in the original; chiefs collected tribute, villages did not. Before then, currency comes only from selling on the market (Barter, §7). Example: 2 villages and 1 town collect 2 a turn.
+- **Tax** (v0.20). Towns and larger pay a fixed tax each turn in the resources phase (phase 1): **village 0, town 1, city 2, metropolis 3** (v0.29; first set at 2, 3, 4). Villages pay nothing, so a civilization collects no tax until its first town (Chiefdom), as only cities paid tax in the original; chiefs collected tribute, villages did not. Before then, currency comes only from selling on the market (Barter, §7). Example: 2 villages and 1 town collect 2 a turn.
 - **Tax is free** in the Stone Age: no token, instability, or manpower cost. A later advance (Coinage, as in the original, where it let a player set 1–3 per city) adds a **tax rate lever**: lighter or heavier tax, with heavier tax raising local instability. Designed with that era's advances.
 - **The treasury keeps** (v0.20) from turn to turn with no cap or decay, unlike goods (§6, Goods last one turn). It is lost only to spoils when a settlement is captured (§11) and to calamities that take currency (Piracy, Market crash; §12).
 - **Uses** (v0.20): **buying on the market** (§7), **building wonders** (§9), and (v0.22) **buying off calamities** (10 each: Famine with Barter, Superstition, Civil disorder, Barbarian raid; §12). Nothing else: currency does not buy calm (calm comes from Bureaucracy, luxuries, advances, institutions, and wonders), does not buy learning or advances (unlike the original's treasury, which bought civilization cards), and cannot fund specialists.
@@ -858,7 +919,7 @@ No balance changes until the Stone Age is complete (development plan §4, Tuning
 
 - [ ] Settlement conversion costs and support requirements
 - [ ] Starting limit range and resource options per terrain; terrain mix on procedural maps; food odds per terrain and feature
-- [ ] Tier exclusive abilities and tax per tier (the town tier especially; first values village 0, town 2, city 3, metropolis 4, v0.20)
+- [ ] Tier exclusive abilities and tax per tier (the town tier especially; first values village 0, town 2, city 3, metropolis 4, v0.20; now 0, 1, 2, 3, v0.29)
 - [ ] Base manpower per tier; stability, discovery, and culture yields per specialist
 - [ ] Market starting prices and price-change rate (first values v0.21: food 5, luxury 10; 10% per unit; bounds half to triple; base reach 2)
 - [ ] Conflict state duration
@@ -884,6 +945,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.29 (October 26, 2026):** Screens and information panels designed (§3; Phase 4 step 9). Eight screens by theme: Map, Civilization (settlements, support, manpower, calamity risks), Economy (the market, the treasury and its sources, goods and the durable stock; replaces the Market screen), Knowledge, Society (wonders, culture and Artists, instability; replaces the Wonders screen), Rivals, Chronicle, Rules (the rules reference). Panels serve three needs: state, attention, and rules; sources are not shown for their own sake. Top bar: era and turn, tokens of the cap, settlements, treasury, score with rank, next-era gate progress, the endgame countdown, and an attention count that opens the list. Attention items: idle manpower, support short at the next check, near collapse (within 2), a wonder that cannot be paid, a lost wonder race to resolve, a failing planned conversion, tokens over the cap or an area limit, a buy order the treasury cannot fill, a planned move into a fight; not opportunities or an empty study queue. Civilization · Population: tokens of the cap, one growth line (area and urban), room below the cap, a growth rule note; settlement token value dropped. Civilization · Settlements: counts by tier, the unlock named for locked tiers, and a tier table in the card; settlement points not shown. Tax lowered to town 1, city 2, metropolis 3 (§6; was 2, 3, 4). Civilization · Support: as before, plus a support rule note; village sites as a count only. Civilization · Manpower: production split by good and a job table in the card. Civilization · Calamities: chance with a rule note (the settlement and quiet-turn parts dropped), buy-off marks with each calamity's effect, risks; the calamity table on the Rules screen. A marked buy-off the treasury cannot pay is an attention item. Civilization · Settlements table: terrain goods and the settlement's wonder added; urban growth column dropped; instability stays per row. Economy · Treasury: treasury, tax, spending, expected next turn, and a currency rule note. Economy · Goods and market: one table of goods with gathered, held, needed, price, and order. Knowledge · Advance card: adds every step's cost, the wonders it opens, and its knowledge points. Knowledge · Header and queue: learning by source and a rule line. Society · Instability: meter, next turn's change with its parts, capital rule, near collapse, luxuries in stock, and a raises/lowers table. Society · Culture: points, progress with sources and turns, points per award, a rule note. Society · Wonders: adds ticked advances, total cost, this turn's forecast, and the finish turn. Rivals: as before, plus rule notes on the endgame and on score. Map · Side panel: adds the settlement's support and wonder; idle, unrest, and fight lists move to the attention list (a fight also shows in the panel for its selected area). Rules: one scrolling page with a contents list, generated from the data files and engine constants.
 - **0.28 (October 26, 2026):** Wonders designed (§9, Decided). Each wonder exists once in the world: the first to complete it gets it; other builders choose to move their progress to another wonder they can build (the same share of completion, rounded down) or convert it to culture points (the wonder's points times the share of turns done, rounded down). Each wonder gives victory points and one themed effect, with no general calm; its victory points are flat per era (placeholder Stone Age 5) (replacing "institutions and wonders reduce instability"). Göbekli Tepe: −1 civ-wide instability a turn. Çatalhöyük: +1 manpower in its settlement. Walls of Jericho: raids cannot strike its owner. Newgrange: +2 culture progress a turn. Stonehenge: +2 learning a turn. Cost: a location chosen at the start; each turn of work needs the wonder's goods (from anywhere in the civilization, after support; never currency; short goods are bought on the market) (themed; any food good counts as food; new good **stone**, worked in hills or mountains areas, §6; timber waits for the Bronze Age) plus its manpower at that location, or 10 currency per manpower unit in its place for a Stone Age wonder (mixing allowed); a turn missing either stalls and spends nothing; construction may begin only when the first turn can be paid. Durable goods: stone, copper, and cloth keep from turn to turn with no cap (all other goods still last one turn). Stored luxuries (copper, cloth) calm only settlements with instability above 0 (1 each) and are otherwise kept. A capture takes the same share of the defender's durable stock as of its treasury (§11). Losing a completed wonder's settlement: the builder keeps its points; the effect passes to whoever holds the settlement and ends if it collapses; a wonder in progress loses all its progress if its settlement is captured or collapses. Interim AI: starts the first wonder it can afford that no rival is building, at its largest settlement, and converts to culture on losing a race. Who is building each wonder is public (not progress); starts and completions appear in the turn report. Stone Age wonders: Göbekli Tepe (Ritual), Çatalhöyük (Pottery), Walls of Jericho (Palisades), Newgrange and Stonehenge (Masonry and Ritual). Great wonders (formerly a metropolis) are moved to an open question for the Bronze Age (§17). Built (Phase 4 step 8): wonders are first worked the turn after they are started; one wonder in progress per settlement; unclaimed progress from a lost race becomes culture after the next allocation; same-turn completion goes to the earlier player for now (§17). Placeholder wonder costs reduced to 1 stone and/or 1 food a turn and 1–2 manpower (Walls of Jericho and Stonehenge 2).
 - **0.27 (October 26, 2026):** Wonders (§9): named wonders require a village instead of a city; great wonders still require a metropolis. Wonders are designed with each era, before its AI approaches and balance pass. Cities lose their only exclusive ability (§5, §16). §16: the weak-AI tension is resolved in part by AI approaches before balance. Historical figures (§13) begin in the Bronze Age; the Stone Age has none.
 - **0.26 (October 26, 2026):** Era progression reworked (§14). The turn-by-turn AST track, sprinting, and the track length setup option are removed: a civilization enters the next era as soon as it meets the gate. Gates count settlement points (now every tier: village 1, town 2, city 3, metropolis 4) and knowledge points (Developed 1, Mastered 3; advances with no adoption stage 1; baseline advances 0). Bronze gate: 5 settlement + 12 knowledge. Scoring (§15): knowledge points + settlement points + wonders + culture points; era reached and culture figures are no longer scored (figures generate culture points). Knowledge points climb with era (for example Bronze Developed 3, Mastered 5). Artists (§6): 1 culture progress per unit a turn, 5 progress per culture point in the Stone Age, more per unit in later eras in step with knowledge points. Artists give no stability until the Bronze Age. No regression: an era once entered is kept, and the gate is checked only on entry. Endgame trigger (§15): meeting the gate of the era after the final era; the Modern era has a closing gate in the same form. Endgame countdown: 5 turns.

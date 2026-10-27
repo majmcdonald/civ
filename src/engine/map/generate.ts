@@ -20,8 +20,12 @@ const MAX_ATTEMPTS = 25;
 
 const LAND_SHARE: Record<MapType, number> = { inlandSea: 0.58, continents: 0.45, singleLandmass: 0.78 };
 
-// Starting limit range per terrain (tuning, §17).
-const LIMITS: Record<Terrain, [number, number]> = {
+// Starting limit range per terrain (tuning, §17); a river adds RIVER_LIMIT, a floodplain holds at
+// least FLOODPLAIN_LIMIT, and no area starts above MAX_LIMIT.
+export const RIVER_LIMIT = 1;
+export const FLOODPLAIN_LIMIT = 4;
+export const MAX_LIMIT = 5;
+export const LIMITS: Record<Terrain, [number, number]> = {
   plains: [3, 5],
   forest: [2, 4],
   hills: [2, 3],
@@ -434,9 +438,9 @@ function tryGenerate(options: MapOptions, attempt: number): GameMap | null {
   for (const area of landAreas) {
     const [min, max] = LIMITS[area.terrain!];
     let limit = min + Math.floor(rand() * (max - min + 1));
-    if (area.features.includes('river')) limit += 1;
-    if (area.features.includes('floodplain')) limit = Math.max(limit, 4);
-    area.limit = Math.min(limit, 5);
+    if (area.features.includes('river')) limit += RIVER_LIMIT;
+    if (area.features.includes('floodplain')) limit = Math.max(limit, FLOODPLAIN_LIMIT);
+    area.limit = Math.min(limit, MAX_LIMIT);
   }
 
   const starts = placeStarts(areas, landAreas, civilizations, MIN_START_SPACING[room], rand);

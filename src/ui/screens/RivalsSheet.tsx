@@ -1,8 +1,9 @@
-import type { Endgame, EraView, GameMap, Score } from '../../engine';
+import { COUNTDOWN, TIERS, type Endgame, type EraView, type GameMap, type Score } from '../../engine';
 import type { MapPieces } from '../art/pieces';
 
-// Rivals and standings (design doc §9, §11, §14, §15): each civilization's era and progress to its
-// next gate, its points, the endgame countdown, and who is building or has built each wonder.
+// Rivals and standings (design doc §3, §9, §11, §14, §15): each civilization's era and progress to
+// its next gate, its points, the endgame countdown, and who is building or has built each wonder,
+// with rule notes on the endgame and on how score is made.
 
 interface Civ {
   name: string;
@@ -60,9 +61,13 @@ interface RivalsSheetProps {
   turn: number;
   // Each wonder: who completed it, or who is building it (not how far; design doc §9).
   wonders: { name: string; completed: string | null; builders: string[] }[];
+  // Points by era, up to the final era (design doc §14).
+  points: { era: string; developed: number; mastered: number; culture: number; wonder: number }[];
 }
 
-export function RivalsSheet({ map, pieces, civs, human, views, ids, finalEra, finalGate, endgame, over, turn, wonders }: RivalsSheetProps) {
+const list = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : (items[0] ?? ''));
+
+export function RivalsSheet({ map, pieces, civs, human, views, ids, finalEra, finalGate, endgame, over, turn, wonders, points }: RivalsSheetProps) {
   const fighting = conflicts(map, pieces);
   const name = (player: string) => civs[ids.indexOf(player)]?.name ?? player;
 
@@ -111,6 +116,9 @@ export function RivalsSheet({ map, pieces, civs, human, views, ids, finalEra, fi
               <dt title="5 turns from the turn a civilization completes the final era; the highest score then wins (§15)">Countdown</dt>
               <dd>{countdownText(endgame, over, turn, name)}</dd>
             </dl>
+            <p className="civ-rule">
+              The first civilization to complete the final era starts a {COUNTDOWN}-turn countdown. Everyone keeps playing and scoring; when it ends, the highest score wins. Equal highest scores share the victory.
+            </p>
           </section>
           <section className="civ-card">
             <h2>Wonders</h2>
@@ -135,8 +143,8 @@ export function RivalsSheet({ map, pieces, civs, human, views, ids, finalEra, fi
                 <th title="Settlement and knowledge points toward the next era's gate (§14)">Next gate</th>
                 <th title="Towns and villages (§5)">Settlements</th>
                 <th title="Loose tokens on the map (§4)">Tokens</th>
-                <th title="Knowledge points: Stone Age advances score 1 Developed, 3 Mastered (§14)">Knowledge</th>
-                <th title="Settlement points: village 1, town 2, city 3, metropolis 4 (§14)">Settlement</th>
+                <th title="Knowledge points from Developed and Mastered advances">Knowledge</th>
+                <th title="Settlement points by tier">Settlement</th>
                 <th title="Victory points from the wonders it built (§9)">Wonders</th>
                 <th title="Culture points from Artists and lost wonder races (§6, §9)">Culture</th>
                 <th title="Knowledge + settlement + wonders + culture points (§15)">Score</th>
@@ -175,8 +183,11 @@ export function RivalsSheet({ map, pieces, civs, human, views, ids, finalEra, fi
               })}
             </tbody>
           </table>
+          <p className="civ-rule rivals-rule">
+            Score is knowledge + settlement + wonders + culture points. Knowledge: each Developed advance scores its era's value, more once Mastered ({points.map((p) => `${p.era} ${p.developed}, Mastered ${p.mastered}`).join('; ')}); baseline advances score nothing. Settlement: {list(TIERS.map((t, i) => `${t.name.toLowerCase()} ${i + 1}`))}. Wonders:{' '}
+            {list(points.filter((p) => p.wonder > 0).map((p) => `${p.wonder} for each ${p.era} wonder built`))}, kept by the builder even if the site is lost. Culture: from Artists and lost wonder races. The era reached scores nothing itself.
+          </p>
         </section>
-
       </div>
     </div>
   );

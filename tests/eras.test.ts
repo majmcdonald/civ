@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { eras } from '../src/content/eras';
 import type { Advance, ContentBundle } from '../src/content/types';
-import { ARTISTS, COUNTDOWN, eraView, knowledgePoints, loadContent, mapFor, scoreOf, scores, settlementPoints, type AreaId, type Content, type Context, type Session, type SettlementTier } from '../src/engine';
+import { advancePoints, ARTISTS, COUNTDOWN, eraView, knowledgePoints, loadContent, mapFor, scoreOf, scores, settlementPoints, type AreaId, type Content, type Context, type Session, type SettlementTier } from '../src/engine';
 import { resolveEras, runArtists } from '../src/engine/eras';
 import { endPhaseAll, eventsOfType, expectRejected, newGame, play, standIn, testContent } from './harness';
 
@@ -60,6 +60,10 @@ describe('points (v0.26)', () => {
     reach(game, 'plain', true);
     expect(knowledgePoints(game.state, content, 'p1')).toBe(1 + 3 + 1);
     expect(eraView(game.state, content, 'p1').knowledge).toEqual([{ era: 'stone', developed: 2, mastered: 1, points: 5 }]);
+    const advance = (id: string) => content.advances.find((x) => x.id === id)!;
+    expect(advancePoints(content, advance('a1'))).toEqual({ developed: 1, mastered: 3 });
+    expect(advancePoints(content, advance('plain'))).toEqual({ developed: 1, mastered: null });
+    expect(advancePoints(content, advance('agriculture'))).toBeNull();
   });
 
   it('adds knowledge, settlement, and culture points into the score', () => {
