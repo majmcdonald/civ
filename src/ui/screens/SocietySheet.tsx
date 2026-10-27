@@ -298,7 +298,11 @@ function WonderCard({ view, content, developed, turn, me, last, place, who, canO
               {view.forecast.worked ? 'will be worked' : view.forecast.reason ? `will stall, ${view.forecast.reason}` : 'first worked next turn'}
             </p>
           )}
-          {view.finish !== null && <p className="civ-note">{view.finish === turn ? 'Finishes this turn if it is paid.' : `Finishes turn ${view.finish} if every turn is paid.`}</p>}
+          {view.finish !== null && (
+            <p className="civ-note">
+              {view.forecast?.reason ? `Finishes turn ${view.finish + 1} if paid from next turn.` : view.finish === turn ? 'Finishes this turn.' : `Finishes turn ${view.finish} if every turn is paid.`}
+            </p>
+          )}
         </>
       ) : view.closed ? (
         <p className="civ-note">{view.closed}</p>

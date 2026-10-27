@@ -238,16 +238,51 @@ describe('completing a wonder (v0.28)', () => {
     const turn = game.state.turn;
     settlementAt(game.state, mine!)!.work = [{ resource: WONDER, count: 1 }];
     game.state.builds.push({ wonder: 'huts', player: 'p1', area: mine!, worked: 1, started: 0, labour: { turn, units: 1 } });
-    game.state.builds.push({ wonder: 'huts', player: 'ai1', area: theirs!, worked: 1, started: 0, labour: { turn, units: 1 } });
+    game.state.builds.push({ wonder: 'huts', player: 'ai1', area: theirs!, worked: 0, started: 0, labour: { turn, units: 1 } });
     give(game, 'grain', 1);
     const ctx = ctxOf(game, content);
     resolveWonders(ctx);
     expect(game.state.wonders).toEqual([{ wonder: 'huts', builder: 'p1', area: mine!, turn, effects: [{ type: 'manpower', amount: 1 }] }]);
-    expect(game.state.builds).toEqual([{ wonder: 'huts', player: 'ai1', area: theirs!, worked: 1, started: 0, outbuilt: turn }]);
+    expect(game.state.builds).toEqual([{ wonder: 'huts', player: 'ai1', area: theirs!, worked: 0, started: 0, outbuilt: turn }]);
     expect(settlementAt(game.state, mine!)!.work).toEqual([]);
-    expect(eventsOfType(ctx.events, 'wonderOutbuilt')).toEqual([{ type: 'wonderOutbuilt', player: 'ai1', wonder: 'huts', worked: 1, by: 'p1' }]);
+    expect(eventsOfType(ctx.events, 'wonderOutbuilt')).toEqual([{ type: 'wonderOutbuilt', player: 'ai1', wonder: 'huts', worked: 0, by: 'p1' }]);
     expect(scoreOf(game.state, content, 'p1').wonders).toBe(5);
     expect(wonderViews(game.state, mapFor(game.setup), content, 'ai1').find((v) => v.wonder.id === 'huts')!.closed).toBe('Already completed');
+  });
+
+  it('on a shared last turn, goes to the build started last; if it cannot pay, the next may finish (v0.30)', () => {
+    const race = (paid: boolean) => {
+      const { game, content } = scene();
+      const [mine] = settle(game, ['town']);
+      const [theirs] = settle(game, ['town'], 'ai1');
+      const turn = game.state.turn;
+      game.state.builds.push({ wonder: 'huts', player: 'p1', area: mine!, worked: 1, started: turn - 2, labour: { turn, units: 1 } });
+      game.state.builds.push({ wonder: 'huts', player: 'ai1', area: theirs!, worked: 1, started: turn - 1, labour: { turn, units: 1 } });
+      give(game, 'grain', 1);
+      if (paid) give(game, 'grain', 1, null, 'ai1');
+      const ctx = ctxOf(game, content);
+      resolveWonders(ctx);
+      expect(eventsOfType(ctx.events, 'randomDraw')).toEqual([]);
+      return game.state.wonders[0]!.builder;
+    };
+    expect(race(true)).toBe('ai1');
+    expect(race(false)).toBe('p1');
+  });
+
+  it('breaks a tie between builds started the same turn with one seeded draw (v0.30)', () => {
+    const { game, content } = scene();
+    const [mine] = settle(game, ['town']);
+    const [theirs] = settle(game, ['town'], 'ai1');
+    const turn = game.state.turn;
+    game.state.builds.push({ wonder: 'huts', player: 'p1', area: mine!, worked: 1, started: turn - 1, labour: { turn, units: 1 } });
+    game.state.builds.push({ wonder: 'huts', player: 'ai1', area: theirs!, worked: 1, started: turn - 1, labour: { turn, units: 1 } });
+    give(game, 'grain', 1);
+    give(game, 'grain', 1, null, 'ai1');
+    const ctx = ctxOf(game, content);
+    resolveWonders(ctx);
+    const draws = eventsOfType(ctx.events, 'randomDraw');
+    expect(draws.map((d) => d.label)).toEqual(['wonder tie huts']);
+    expect(game.state.wonders[0]!.builder).toBe(draws[0]!.value < 0.5 ? 'p1' : 'ai1');
   });
 
   it('moves lost progress at the same share, or turns it into culture, both rounded down', () => {

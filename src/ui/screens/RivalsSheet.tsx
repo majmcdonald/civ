@@ -141,7 +141,7 @@ export function RivalsSheet({ map, pieces, civs, human, views, ids, finalEra, fi
                 <th>Civilization</th>
                 <th title="A civilization enters the next era as soon as it meets that era's gate of settlement and knowledge points; an era is never lost (§14)">Era</th>
                 <th title="Settlement and knowledge points toward the next era's gate (§14)">Next gate</th>
-                <th title="Towns and villages (§5)">Settlements</th>
+                <th title="Towns / villages">Towns / villages</th>
                 <th title="Loose tokens on the map (§4)">Tokens</th>
                 <th title="Knowledge points from Developed and Mastered advances">Knowledge</th>
                 <th title="Settlement points by tier">Settlement</th>

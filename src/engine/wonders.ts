@@ -1,6 +1,7 @@
 import type { Wonder } from '../content/types';
 import { FOOD, type Content } from './content';
 import { emit } from './context';
+import { randomInt } from './rng';
 import { reached } from './discovery';
 import { heldWonders } from './effects';
 import { eraOf } from './eras';
@@ -267,15 +268,36 @@ export function wonderCurrency(state: GameState, map: GameMap, content: Content,
     }, 0);
 }
 
+// Two or more builds on their last turn of the same wonder (design doc §9, Same-turn completion,
+// v0.30): the one started last is worked first, and builds started the same turn are put in order
+// by seeded draws. If it cannot be paid, the next may still finish.
+function contested(ctx: Context): Build[] {
+  const { state, content } = ctx;
+  const last = state.builds.filter((b) => b.outbuilt === undefined && b.started !== state.turn && b.worked === wonderRule(content, b.wonder)!.turns - 1);
+  return content.wonders.flatMap((w) => {
+    const racing = last.filter((b) => b.wonder === w.id).sort((a, b) => b.started - a.started);
+    if (racing.length < 2) return [];
+    const ordered: Build[] = [];
+    while (racing.length > 0) {
+      const tied = racing.filter((b) => b.started === racing[0]!.started);
+      const pick = tied.length > 1 ? tied[randomInt(ctx, `wonder tie ${w.id}`, 0, tied.length - 1)]! : tied[0]!;
+      ordered.push(pick);
+      racing.splice(racing.indexOf(pick), 1);
+    }
+    return ordered;
+  });
+}
+
 // Resolution step 12. Progress left from a race lost last turn and not moved becomes culture.
-// Builds are worked in player order, each player's in content order; the first to finish a wonder
-// gets it, and its other builders are outbuilt.
+// Contested last turns are worked first (above); then builds in player order, each player's in
+// content order. The first to finish a wonder gets it, and its other builders are outbuilt.
 export function resolveWonders(ctx: Context): void {
   const { state, content } = ctx;
   for (const b of state.builds.filter((x) => x.outbuilt !== undefined && x.outbuilt < state.turn)) convert(ctx, b);
   const players = state.players.map((p) => p.id);
   const rank = (b: Build) => players.indexOf(b.player) * content.wonders.length + content.wonders.findIndex((w) => w.id === b.wonder);
-  for (const build of [...state.builds].sort((a, b) => rank(a) - rank(b))) {
+  const first = contested(ctx);
+  for (const build of [...first, ...state.builds.filter((b) => !first.includes(b)).sort((a, b) => rank(a) - rank(b))]) {
     if (build.outbuilt !== undefined || build.started === state.turn || !state.builds.includes(build)) continue;
     const wonder = wonderRule(content, build.wonder)!;
     if (!work(ctx, build, wonder)) continue;

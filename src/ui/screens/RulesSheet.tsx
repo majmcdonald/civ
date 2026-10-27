@@ -305,7 +305,7 @@ export function RulesSheet({ content, section = null }: RulesSheetProps) {
             <>
               <p>
                 Each wonder exists once in the world. It is started at one of your settlements once its advances are Developed, and only if its first turn could be paid; it is first worked the next turn. Every turn of work takes its goods from anywhere in your civilization, after support, and its manpower at its settlement; {CURRENCY_PER_MANPOWER}{' '}
-                currency covers each missing unit. A turn that cannot be paid stalls and spends nothing. Its effect follows whoever holds the site; its points stay with the builder. If a rival finishes it first, your turns move to another wonder at the same share, or become culture.
+                currency covers each missing unit. A turn that cannot be paid stalls and spends nothing. Its effect follows whoever holds the site; its points stay with the builder. If two finish it on the same turn, the build started last gets it; builds started the same turn are decided by a random draw. If a rival finishes it first, your turns move to another wonder at the same share, or become culture.
               </p>
               <Table
                 head={['Wonder', 'Opened by', 'A turn', 'Turns', 'Effect', 'Points']}

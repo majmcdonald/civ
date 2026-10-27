@@ -218,13 +218,21 @@ function calamityEffects(content: Content, id: string): string[] {
   });
 }
 
+// A Mastered effect that adds to one of the Developed effects reads as the total of both, e.g.
+// Pottery's grain store "up to 2 (with Developed)".
+function masteredText(effect: Effect, developed: Effect[], names: Names): string {
+  const same = developed.find((d) => d.type === effect.type && 'amount' in d && 'amount' in effect && JSON.stringify({ ...d, amount: 0 }) === JSON.stringify({ ...effect, amount: 0 }));
+  if (!same || !('amount' in same) || !('amount' in effect)) return describeEffect(effect, names);
+  return `${describeEffect({ ...effect, amount: same.amount + effect.amount } as Effect, names)} (with Developed)`;
+}
+
 // What an advance gives, by stage: goods it reveals or opens, its effects, and its calamity rules.
 export function advanceEffects(advance: Advance, content: Content, names: Names): string[] {
   return [
     ...content.resources.filter((r) => (r.revealedBy ?? r.requires) === advance.id && !r.from).map((r) => `Known: reveals ${r.name.toLowerCase()}`),
     ...content.resources.filter((r) => r.requires === advance.id).map((r) => `Developed: ${r.name.toLowerCase()} can be ${r.from ? `made from ${either(r.from.map((f) => names.resource(f).toLowerCase()))} areas` : 'gathered'}${r.luxury ? ' (luxury: calms instability)' : ''}`),
     ...advance.effects.map((e) => `Developed: ${describeEffect(e, names)}`),
-    ...(advance.mastered ?? []).map((e) => `Mastered: ${describeEffect(e, names)}`),
+    ...(advance.mastered ?? []).map((e) => `Mastered: ${masteredText(e, advance.effects, names)}`),
     ...calamityEffects(content, advance.id),
   ];
 }
