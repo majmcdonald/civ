@@ -176,7 +176,7 @@ export function AreaCount({ total, limit, leaving = 0, progress = 0 }: { total: 
   );
 }
 
-// A resource marker for an area (design doc §6): a sheaf of grain or a fish, on a small disc.
+// A resource marker for an area (design doc §6): a sheaf of grain, a fish, a cow or a copper nugget, on a small disc.
 export function ResourceIcon({ resource }: { resource: string }) {
   return (
     <g>
@@ -187,10 +187,15 @@ export function ResourceIcon({ resource }: { resource: string }) {
           <path d="M1.1,0 L2.6,-1.1 L2.6,1.1 Z" />
         </g>
       ) : resource === 'livestock' ? (
-        <g fill="#7a5530" stroke="none">
-          <ellipse cx={-0.2} cy={0} rx={1.9} ry={1.05} />
-          <circle cx={1.9} cy={-0.7} r={0.7} />
-          <path d="M-1.6,0.6 v1.5 M-0.6,0.8 v1.3 M0.6,0.8 v1.3 M1.4,0.6 v1.5" stroke="#7a5530" strokeWidth={0.45} />
+        <g fill="#6b4524">
+          <path d="M-2.25,-0.75 Q-2.75,0 -2.55,1.05" fill="none" stroke="#6b4524" strokeWidth={0.22} strokeLinecap="round" />
+          <path d="M-2.55,0.9 q-0.3,0.35 -0.05,0.7 q0.3,-0.3 0.05,-0.7Z" />
+          <path d="M-2.3,-0.6 Q-2.3,-1.15 -1.7,-1.1 Q-0.4,-0.9 0.9,-1.15 L1.55,-1.3 Q2.0,-1.45 2.3,-1.1 L2.85,-0.45 Q3.05,-0.1 2.7,0.05 L2.3,0.05 Q1.9,-0.1 1.6,0.2 Q1.4,0.6 1.25,0.8 Q0,1.05 -1.4,0.85 Q-2.3,0.75 -2.3,-0.6Z" />
+          <path d="M-2.05,0.5 L-1.45,0.6 L-1.55,2.2 L-1.95,2.2Z M-1.25,0.7 L-0.75,0.75 L-0.95,2.1 L-1.3,2.1Z M0.35,0.75 L0.85,0.75 L0.75,2.1 L0.4,2.1Z M0.9,0.6 L1.45,0.55 L1.35,2.2 L0.95,2.2Z" />
+          <path d="M1.75,-1.2 L1.05,-1.55 Q1.5,-1.75 1.95,-1.35Z" />
+          <path d="M2.05,-1.35 Q2.0,-1.85 2.45,-2.05" fill="none" stroke="#e9dcb8" strokeWidth={0.26} strokeLinecap="round" />
+          <path d="M-1.4,-0.75 Q-0.6,-0.95 -0.2,-0.5 Q-0.3,0.05 -0.9,0.05 Q-1.6,0 -1.4,-0.75Z" fill="#fbf4e2" />
+          <circle cx={2.25} cy={-0.85} r={0.12} fill="#fbf4e2" />
         </g>
       ) : resource === 'copper' ? (
         <g fill="#c06a36" stroke="#7a3c18" strokeWidth={0.4} strokeLinejoin="round">
@@ -210,27 +215,23 @@ export function ResourceIcon({ resource }: { resource: string }) {
   );
 }
 
-// A settlement's name on a small banner, centered under the piece.
-// A settlement's name below its piece; a capital gets a gold star to the left of it, or alone
-// when unnamed.
-export function SettlementLabel({ name, capital = false }: { name?: string; capital?: boolean }) {
-  const width = name ? 6 + name.length * 2.9 : 0;
+// A settlement's name on a small banner, centered under the piece; a capital's banner carries a
+// gold star before the name.
+export function SettlementLabel({ name, capital = false }: { name: string; capital?: boolean }) {
+  const star = capital ? 6 : 0;
+  const width = 6 + name.length * 2.9 + star;
   return (
     <g>
-      {name && (
-        <>
-          <rect x={-width / 2} y={0} width={width} height={7} rx={1} fill="#fbf4e2" stroke={INK} strokeWidth={0.5} opacity={0.92} />
-          <text y={5.1} fontSize={5.2} fontFamily="var(--font-display)" fontWeight={700} fill={INK} textAnchor="middle">
-            {name}
-          </text>
-        </>
-      )}
+      <rect x={-width / 2} y={0} width={width} height={7} rx={1} fill="#fbf4e2" stroke={capital ? '#5a4210' : INK} strokeWidth={capital ? 0.7 : 0.5} opacity={0.92} />
       {capital && (
-        <g transform={`translate(${name ? -width / 2 - 5 : 0} 3.5) scale(1.4)`}>
+        <g transform={`translate(${-width / 2 + 4.2} 3.6)`}>
           <title>Capital</title>
           <path d="M0,-3 L0.9,-0.9 L3,-0.9 L1.3,0.4 L1.9,2.6 L0,1.3 L-1.9,2.6 L-1.3,0.4 L-3,-0.9 L-0.9,-0.9Z" fill="#e2b33c" stroke="#5a4210" strokeWidth={0.5} strokeLinejoin="round" />
         </g>
       )}
+      <text x={star / 2} y={5.1} fontSize={5.2} fontFamily="var(--font-display)" fontWeight={700} fill={INK} textAnchor="middle">
+        {name}
+      </text>
     </g>
   );
 }

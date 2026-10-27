@@ -11,7 +11,7 @@
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1rem;
   padding: 0.45rem 1rem;
   background: var(--parchment);
   border-bottom: 1px solid var(--parchment-edge);
@@ -87,16 +87,16 @@
   display: flex;
   flex: 1;
   justify-content: center;
-  gap: 0.15rem;
+  gap: 0;
 }
 
 .game-tabs button {
   background: none;
   border: 1px solid transparent;
   border-radius: 2px;
-  padding: 0.3rem 0.55rem;
+  padding: 0.3rem 0.4rem;
   font-family: var(--font-display);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   cursor: pointer;
@@ -116,7 +116,7 @@
 .game-stats {
   display: flex;
   align-items: center;
-  gap: 1.1rem;
+  gap: 0.8rem;
   margin: 0;
 }
 
@@ -125,6 +125,7 @@
 }
 
 .game-stats dt {
+  white-space: nowrap;
   font-size: 0.7rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -135,6 +136,11 @@
   margin: 0;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.game-stats > div.warn dd {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .game-menu {
@@ -151,6 +157,84 @@
 .game-menu:hover {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+/* Attention (design doc §3, v0.29) */
+.game-attention {
+  background: none;
+  border: 1px solid var(--parchment-edge);
+  padding: 0.3rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.game-attention.warn {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.game-attention:hover {
+  color: var(--accent);
+}
+
+.game-attention-list {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 6rem;
+  z-index: 20;
+  width: 26rem;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 0.8rem 1rem;
+  background: var(--parchment);
+  border: 1px solid var(--parchment-edge);
+  box-shadow: 0 6px 24px rgba(10, 6, 2, 0.45);
+}
+
+.game-attention-list h2 {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.game-attention-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.game-attention-list li button {
+  width: 100%;
+  padding: 0.35rem 0;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: none;
+  border-bottom: 1px dotted var(--ink-faint);
+  cursor: pointer;
+}
+
+.game-attention-list li button:hover {
+  color: var(--accent);
+}
+
+.game-attention-close {
+  margin-top: 0.6rem;
+  padding: 0.2rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  background: none;
+  border: 1px solid var(--parchment-edge);
+  cursor: pointer;
 }
 
 .game-body {
@@ -258,8 +342,15 @@
   color: var(--ink-faint);
 }
 
-@media (max-width: 1250px) {
+/* Narrower windows drop settlements, then tokens; both are on the Civilization screen. */
+@media (max-width: 1360px) {
   .game-stats > div:nth-child(2) {
+    display: none;
+  }
+}
+
+@media (max-width: 1200px) {
+  .game-stats > div:nth-child(1) {
     display: none;
   }
 }
@@ -318,6 +409,7 @@
 }
 
 .civ-card {
+  min-width: 0;
   padding: 0.9rem 1rem 1rem;
   background: rgba(255, 250, 236, 0.45);
   border: 1px solid var(--parchment-edge);
@@ -581,6 +673,30 @@
   font-variant-numeric: tabular-nums;
 }
 
+.civ-resource.closed {
+  opacity: 0.55;
+}
+
+.civ-resource button {
+  padding: 0 0.15rem;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  color: inherit;
+  cursor: pointer;
+}
+
+.civ-resource button:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.civ-resource button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 /* Rivals and standings */
 
 .rivals-diamond {
@@ -593,114 +709,35 @@
   flex: none;
 }
 
-.rivals-track-wrap {
-  margin-bottom: 1.6rem;
-  overflow-x: auto;
-}
-
-.rivals-track {
-  display: grid;
-  row-gap: 0.2rem;
-  align-items: stretch;
-}
-
-.rivals-era {
-  padding: 0 0 0.25rem 0.3rem;
-  border-left: 2px solid var(--ink-soft);
-  font-family: var(--font-display);
-  font-size: 0.68rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rivals-name {
-  display: flex;
-  align-items: center;
-  padding-right: 0.6rem;
-  font-size: 0.95rem;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.rivals-row.you > .rivals-name {
-  font-weight: 700;
-}
-
-.rivals-space {
-  position: relative;
-  height: 1.5rem;
-  margin-right: 1px;
-  background: rgba(255, 250, 236, 0.55);
-  border: 1px solid rgba(59, 42, 26, 0.18);
-}
-
-.rivals-space.gate {
-  border-left: 2px solid var(--ink-soft);
-  background: rgba(201, 176, 133, 0.45);
-}
-
-.rivals-space.final {
-  background: rgba(138, 47, 31, 0.18);
-  border-color: var(--accent);
-}
-
-.rivals-row.you > .rivals-space {
-  border-top-color: var(--ink-soft);
-  border-bottom-color: var(--ink-soft);
-}
-
-.rivals-marker {
-  position: absolute;
-  inset: 50% auto auto 50%;
-  width: 0.8rem;
-  height: 0.8rem;
-  border: 1px solid var(--ink);
-  box-shadow: 0 1px 3px rgba(10, 6, 2, 0.4);
-  transform: translate(-50%, -50%) rotate(45deg);
-}
-
-.rivals-legend {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0.6rem 0 0;
+.rivals-gate {
+  min-width: 9rem;
   font-size: 0.85rem;
-  color: var(--ink-soft);
 }
 
-.rivals-key {
-  display: inline-block;
-  width: 0.9rem;
-  height: 0.9rem;
-  border: 1px solid rgba(59, 42, 26, 0.18);
-}
-
-.rivals-key.gate {
-  border-left: 2px solid var(--ink-soft);
-  background: rgba(201, 176, 133, 0.45);
-}
-
-.rivals-key.final {
-  margin-left: 0.8rem;
-  background: rgba(138, 47, 31, 0.18);
-  border-color: var(--accent);
+.rivals-table th {
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
 }
 
 .rivals-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 17rem;
+  display: flex;
+  flex-direction: column;
   gap: 1.4rem;
-  align-items: start;
 }
 
 .rivals-side {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   gap: 1rem;
+  align-items: start;
+}
+
+.rivals-side .civ-card:last-child {
+  grid-column: span 2;
+}
+
+.rivals-era {
+  white-space: nowrap;
 }
 
 .rivals-table td:nth-child(2),
@@ -719,6 +756,7 @@
 }
 
 .rivals-civ {
+  white-space: nowrap;
   display: flex;
   align-items: center;
 }
@@ -854,19 +892,45 @@
   opacity: 0.75;
 }
 
-.game-plan-stability {
+.game-plan-instability {
   display: flex;
   flex-direction: column;
   align-items: center;
   margin-bottom: 0.2rem;
 }
 
-.game-plan-stability strong {
+.game-plan-instability strong {
   color: var(--ink);
 }
 
-.game-plan-stability.warn strong {
+.game-plan-instability.warn strong {
   color: #a3301c;
+}
+
+.game-plan-support,
+.game-plan-wonder,
+.game-plan-fight {
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.game-plan-support.warn,
+.game-plan-wonder.warn,
+.game-plan-fight {
+  color: #a3301c;
+  font-weight: 600;
+}
+
+.game-plan-work-row small {
+  min-width: 15rem;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  opacity: 0.85;
+}
+
+.game-plan-work-row > span:first-child {
+  min-width: 6.5rem;
+  text-align: right;
 }
 
 .game-plan-unrest {
@@ -1027,56 +1091,98 @@
 }
 
 /* Knowledge (design doc §8) */
-.kn-focus {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
+.kn-queue {
   margin-bottom: 1.2rem;
-}
-
-.kn-focus > span {
-  font-family: var(--font-display);
-  font-size: 0.8rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  margin-right: 0.3rem;
-}
-
-.kn-focus button {
-  font: inherit;
-  font-size: 0.9rem;
-  padding: 0.2rem 0.7rem;
+  padding: 0.6rem 0.8rem;
   background: rgba(255, 250, 236, 0.45);
+  border: 1px solid var(--parchment-edge);
+}
+
+.kn-queue h2 {
+  margin: 0 0 0.4rem;
+}
+
+.kn-queue ol {
+  margin: 0;
+  padding-left: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.kn-queue li {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.kn-queue li > span {
+  flex: 1;
+}
+
+.kn-queue small {
+  color: var(--ink-soft);
+}
+
+.kn-queue button,
+.kn-study button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.05rem 0.45rem;
+  background: rgba(255, 250, 236, 0.6);
   border: 1px solid var(--parchment-edge);
   color: var(--ink);
   cursor: pointer;
 }
 
-.kn-focus button.selected {
-  background: var(--ink);
-  color: var(--parchment);
+.kn-queue button:hover:not(:disabled),
+.kn-study button:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
-.kn-focus button:disabled {
+.kn-queue button:disabled,
+.kn-study button:disabled {
   cursor: default;
-  opacity: 0.6;
+  opacity: 0.45;
 }
 
-.kn-focus small {
-  color: var(--ink-soft);
+.kn-study {
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
+  color: #8a6418;
+}
+
+.kn-card.kn-queued {
+  border-color: #c9962e;
+}
+
+.kn-meter {
+  display: flex;
+}
+
+.kn-done,
+.kn-usage,
+.kn-learning {
+  height: 100%;
+}
+
+.kn-done {
+  background: #4f7f9a;
+}
+
+.kn-usage {
+  background: rgba(79, 127, 154, 0.45);
+}
+
+.kn-learning {
+  background: #c9962e;
 }
 
 .kn-domains {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: 1rem;
-}
-
-.kn-domain.kn-focused h2 {
-  color: var(--ink);
-  border-bottom-color: var(--ink);
 }
 
 .kn-list {
@@ -1140,4 +1246,649 @@
 
 .kn-effects li {
   font-style: italic;
+}
+
+.civ-rule.kn-rule {
+  margin: -0.6rem 0 0.9rem;
+  max-width: 60rem;
+}
+
+.kn-steps {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0.25rem 0 0;
+  border-top: 1px dotted var(--ink-faint);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.kn-steps b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.kn-steps li.reached {
+  color: #2f6f35;
+}
+
+.kn-opens,
+.kn-points {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+}
+
+.kn-opens {
+  font-weight: 600;
+}
+
+.kn-points {
+  color: var(--ink-soft);
+}
+
+.game-name-dialog {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translate(-50%, -50%);
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 20rem;
+  padding: 1rem 1.2rem;
+  background: var(--parchment);
+  border: 1px solid var(--parchment-edge);
+  box-shadow: 0 6px 24px rgba(10, 6, 2, 0.45);
+}
+
+.game-name-dialog h2 {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.05rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.game-name-row,
+.game-name-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.game-name-actions {
+  justify-content: center;
+}
+
+.game-name-dialog input,
+.game-name-dialog button {
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: #f7eed8;
+  border: 1px solid var(--parchment-edge);
+  padding: 0.25rem 0.5rem;
+}
+
+.game-name-dialog input {
+  flex: 1;
+  min-width: 0;
+}
+
+.game-name-dialog button {
+  cursor: pointer;
+}
+
+.game-name-dialog button:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.game-name-dialog button[type='submit'] {
+  color: var(--accent);
+}
+
+.civ-focused td {
+  background: rgba(226, 179, 60, 0.22);
+}
+
+.civ-focused td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.mk-members {
+  margin: 0 0 0.8rem;
+  color: var(--ink-soft);
+  cursor: help;
+}
+
+.mk-table td:last-child {
+  width: auto;
+  text-align: left;
+}
+
+.mk-kind {
+  color: var(--ink-soft);
+}
+
+.mk-up {
+  color: var(--accent);
+}
+
+.mk-down {
+  color: #4f7f9a;
+}
+
+.mk-order {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.mk-standing {
+  font-weight: 700;
+}
+
+.mk-edit {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.mk-edit select,
+.mk-edit input,
+.mk-edit button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.05rem 0.3rem;
+  background: rgba(255, 250, 236, 0.6);
+  border: 1px solid var(--parchment-edge);
+  color: var(--ink);
+}
+
+.mk-edit input {
+  width: 4.2rem;
+}
+
+.mk-edit button {
+  cursor: pointer;
+}
+
+.mk-edit button:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.mk-edit button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.mk-trades {
+  margin-top: 1.2rem;
+}
+
+.mk-trades ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.civ-buyoff {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  font-size: 0.85rem;
+  cursor: help;
+}
+
+.civ-buyoff label {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.report-backdrop {
+  z-index: 5;
+}
+
+.report-group {
+  margin-bottom: 1.1rem;
+}
+
+.report-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-group li {
+  padding: 0.15rem 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.report-group li.notable {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.report-group li button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline dotted var(--ink-faint);
+  text-underline-offset: 0.2em;
+}
+
+.report-group li button:hover {
+  color: var(--accent);
+}
+
+.report-close,
+.final-actions button,
+.chronicle-turns button {
+  font: inherit;
+  background: rgba(255, 250, 236, 0.6);
+  border: 1px solid var(--parchment-edge);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.report-close {
+  margin-top: 0.6rem;
+  padding: 0.3rem 1.2rem;
+}
+
+.final-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.final-actions button {
+  padding: 0.3rem 1.2rem;
+}
+
+.report-close:hover,
+.final-actions button:hover,
+.chronicle-turns button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.chronicle-turns {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chronicle-turns li {
+  margin-bottom: 0.35rem;
+}
+
+.chronicle-turns button {
+  display: grid;
+  grid-template-columns: 5rem 1fr auto;
+  gap: 0.8rem;
+  align-items: baseline;
+  width: 100%;
+  padding: 0.35rem 0.7rem;
+  text-align: left;
+}
+
+.chronicle-turns small {
+  color: var(--ink-soft);
+}
+
+.game-menu-report select {
+  font: inherit;
+}
+
+/* Wonders (design doc §9) */
+.rivals-wonder {
+  display: contents;
+}
+
+.wonder-cards {
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+}
+
+.wonder-card.done {
+  opacity: 0.75;
+}
+
+.wonder-effect {
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+}
+
+.wonder-place {
+  padding: 0;
+  font: inherit;
+  font-style: normal;
+  color: inherit;
+  background: none;
+  border: none;
+  border-bottom: 1px dotted var(--ink-soft);
+  cursor: pointer;
+}
+
+.wonder-place:hover {
+  color: var(--accent);
+}
+
+.wonder-start {
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+
+.wonder-start select {
+  max-width: 100%;
+}
+
+.wonder-lost {
+  margin-bottom: 1rem;
+  border-color: var(--accent);
+}
+
+/* Rule notes and reference tables in cards (design doc §3, v0.29) */
+.civ-rule {
+  margin: 0.6rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+
+.civ-card-wide {
+  grid-column: span 2;
+}
+
+.civ-tiers,
+.civ-jobs {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.civ-tiers th {
+  padding: 0.15rem 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-align: right;
+}
+
+.civ-tiers td {
+  padding: 0.2rem 0.25rem;
+  border-top: 1px dotted var(--ink-faint);
+  text-align: right;
+}
+
+.civ-tiers th:first-child,
+.civ-tiers td:first-child,
+.civ-tiers td:nth-child(2) {
+  text-align: left;
+}
+
+.civ-tiers tr.locked td {
+  color: var(--ink-soft);
+  opacity: 0.6;
+}
+
+.civ-jobs td {
+  padding: 0.18rem 0.3rem 0.18rem 0;
+  border-top: 1px dotted var(--ink-faint);
+  vertical-align: top;
+}
+
+.civ-jobs td:first-child {
+  white-space: nowrap;
+}
+
+.civ-jobs td:last-child {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.civ-jobs tr.warn td {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.civ-link {
+  padding: 0;
+  margin-top: 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: none;
+  border-bottom: 1px dotted var(--ink-soft);
+  cursor: pointer;
+}
+
+.civ-link:hover {
+  color: var(--accent);
+}
+
+.civ-sites .civ-link {
+  margin-top: 0;
+}
+
+.civ-buyoff small {
+  display: block;
+  margin: 0 0 0.3rem 1.5rem;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.civ-tier-count small {
+  display: block;
+  font-size: 0.75rem;
+}
+
+/* Economy screen (design doc §3, v0.29) */
+.ec-part {
+  padding-left: 0.8rem;
+  font-size: 0.85rem;
+}
+
+.ec-short {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.ec-where {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.ec-goods tr.ec-kind td {
+  padding-top: 0.7rem;
+  font-weight: 700;
+  border-bottom: 1px solid var(--parchment-edge);
+}
+
+.ec-goods tr.ec-kind td.ec-kind-name,
+.ec-goods tr.ec-kind td[colspan] {
+  font-family: var(--font-display);
+}
+
+.ec-goods tr.ec-kind .mk-kind {
+  font-family: var(--font-body);
+  font-weight: 400;
+  text-transform: none;
+}
+
+.ec-goods td.ec-good {
+  padding-left: 1rem;
+}
+
+.ec-goods tr.ec-closed td {
+  opacity: 0.55;
+}
+
+.ec-legend {
+  max-width: 60rem;
+}
+
+/* Society screen (design doc §3, v0.29) */
+.so-rules {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.4rem 1.2rem;
+  margin-top: 0.7rem;
+}
+
+.so-rules th {
+  padding: 0.15rem 0;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--ink-soft);
+}
+
+.so-section {
+  margin-top: 0.4rem;
+}
+
+.so-stock {
+  margin-left: 0.6rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.so-req + .so-req::before {
+  content: ' · ';
+  color: var(--ink-soft);
+}
+
+.so-req.met {
+  color: #2f6f35;
+}
+
+.rivals-rule {
+  max-width: 60rem;
+}
+
+/* Rules screen (design doc §3, v0.29) */
+.rules-columns {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 1.6rem;
+  align-items: start;
+}
+
+.rules-contents {
+  position: sticky;
+  top: 0;
+}
+
+.rules-contents ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rules-contents button {
+  padding: 0.2rem 0;
+  font: inherit;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.rules-contents button:hover {
+  color: var(--accent);
+}
+
+.rules-section {
+  margin-bottom: 1.8rem;
+  scroll-margin-top: 1rem;
+}
+
+.rules-section p {
+  max-width: 62rem;
+  line-height: 1.45;
+}
+
+.rules-section h3 {
+  margin: 1rem 0 0.4rem;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+}
+
+.rules-table {
+  margin: 0.4rem 0 0.6rem;
+  font-size: 0.86rem;
+}
+
+.rules-table td,
+.rules-table th {
+  vertical-align: top;
+}
+
+.rules-table td:nth-child(n + 2),
+.rules-table th:nth-child(n + 2) {
+  text-align: left;
+}
+
+.rules-table td:last-child {
+  width: auto;
+}
+
+.rules-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 900px) {
+  .rules-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rules-contents {
+    position: static;
+  }
+}
+
+.title-rules {
+  position: fixed;
+  z-index: 30;
+}
+
+.title-rules .game-sheet {
+  position: relative;
+}
+
+.title-rules-close {
+  position: sticky;
+  top: 0.8rem;
+  float: right;
+  margin: 0.8rem 0.8rem 0 0;
+  padding: 0.3rem 0.8rem;
+  font: inherit;
+  background: var(--parchment);
+  border: 1px solid var(--parchment-edge);
+  color: var(--ink);
+  cursor: pointer;
 }

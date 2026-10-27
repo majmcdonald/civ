@@ -1,10 +1,10 @@
 import type { Content } from './content';
 import { emit } from './context';
 import { settlementBonus, strength } from './effects';
-import type { AreaId, GameMap } from './map/types';
+import type { AreaId, GameMap, ResourceId } from './map/types';
 import { adjust, tokensAt } from './population';
-import { resetWork } from './resources';
-import { projectTurn, settlementAt, TIERS, tierRules } from './settlements';
+import { goodsHeld, resetWork } from './resources';
+import { projectTurn, settlementAt, TIERS, tierRules, type TierRules } from './settlements';
 import type { Context, GameEvent, GameState, PlayerId, Settlement, TokenCount } from './types';
 
 // Conflict (design doc §11). Each token has a strength (1 plus advance bonuses); a side's power is
@@ -50,6 +50,14 @@ function fight(sides: Side[], done: () => boolean): void {
 
 const aliveCount = (sides: Side[]) => sides.filter((s) => s.count > 0).length;
 
+// Counts one conflict this turn for each civilization taking part (Archery adoption, design doc §8).
+function noteFight(state: GameState, players: PlayerId[]): void {
+  for (const id of new Set(players)) {
+    const p = state.players.find((x) => x.id === id)!;
+    p.fought = { turn: state.turn, count: p.fought?.turn === state.turn ? p.fought.count + 1 : 1 };
+  }
+}
+
 // Resolution step 2, in area order, from positions after movement.
 export function resolveConflict(ctx: Context): void {
   const areas = [...new Set(ctx.state.stacks.map((s) => s.area))].sort((a, b) => a - b);
@@ -68,6 +76,7 @@ function fightOverLimit(ctx: Context, area: AreaId): void {
   const limit = map.areas[area]!.limit;
   const total = () => sides.reduce((sum, s) => sum + s.count, 0);
   if (sides.length < 2 || total() <= limit) return;
+  noteFight(state, sides.map((s) => s.player));
   const before = sides.map((s) => s.count);
   fight(sides, () => total() <= limit || aliveCount(sides) <= 1);
   const losses = sides.map((s, i) => ({ player: s.player, count: before[i]! - s.count }));
@@ -89,6 +98,7 @@ function attackSettlement(ctx: Context, settlement: Settlement): void {
   const attackers: TokenCount[] = state.stacks.filter((s) => s.area === area && s.player !== settlement.player).map((s) => ({ player: s.player, count: s.count }));
   if (attackers.length === 0) return;
   settlement.attacked = state.turn;
+  noteFight(state, [settlement.player, ...attackers.map((a) => a.player)]);
   const losses: TokenCount[] = [];
   const attackStrength = (player: PlayerId) => strength(state, player, settlement.player);
   const repelled = attackers.filter((a) => a.count * attackStrength(a.player) < rules.attack + bonus);
@@ -97,7 +107,7 @@ function attackSettlement(ctx: Context, settlement: Settlement): void {
     losses.push({ ...a });
   }
   const fighters: Side[] = attackers.filter((a) => !repelled.includes(a)).map((a) => ({ ...a, strength: attackStrength(a.player) }));
-  const event = { type: 'settlementAttacked' as const, area, defender: settlement.player, tier: settlement.tier, attackers, repelled: repelled.map((a) => a.player), losses, capturedBy: null as PlayerId | null, survivors: 0 };
+  const event: Extract<GameEvent, { type: 'settlementAttacked' }> = { type: 'settlementAttacked', area, defender: settlement.player, tier: settlement.tier, attackers, repelled: repelled.map((a) => a.player), losses, capturedBy: null, survivors: 0, spoils: 0 };
   if (fighters.length === 0) {
     emit(ctx, event);
     return;
@@ -124,6 +134,9 @@ function attackSettlement(ctx: Context, settlement: Settlement): void {
   if (winner && defense.count === 0) {
     event.capturedBy = winner.player;
     event.survivors = winner.count;
+    event.spoils = takeSpoils(state, settlement.player, winner.player, rules);
+    const goods = takeStock(ctx, settlement.player, winner.player, rules);
+    if (goods.length > 0) event.goods = goods;
     const below = TIERS[TIERS.indexOf(rules) - 1];
     if (below) {
       settlement.tier = below.id;
@@ -138,6 +151,39 @@ function attackSettlement(ctx: Context, settlement: Settlement): void {
     }
   }
   emit(ctx, event);
+}
+
+// The capturer takes a share of the defender's treasury by the tier lost, rounded down (design doc
+// §11, Spoils).
+function takeSpoils(state: GameState, from: PlayerId, to: PlayerId, rules: TierRules): number {
+  const loser = state.players.find((p) => p.id === from)!;
+  const amount = Math.floor(loser.treasury * rules.spoils);
+  loser.treasury -= amount;
+  state.players.find((p) => p.id === to)!.treasury += amount;
+  return amount;
+}
+
+// The same share of each durable good in the defender's stock goes to the capturer's (design doc
+// §11, v0.28).
+function takeStock(ctx: Context, from: PlayerId, to: PlayerId, rules: TierRules): { resource: ResourceId; count: number }[] {
+  const { state, content } = ctx;
+  const taken: { resource: ResourceId; count: number }[] = [];
+  for (const r of content.resources.filter((x) => x.durable)) {
+    const count = Math.floor(goodsHeld(state, from, r.id) * rules.spoils);
+    if (count === 0) continue;
+    let left = count;
+    for (const g of state.goods.filter((x) => x.player === from && x.resource === r.id).sort((x, y) => (x.area ?? Infinity) - (y.area ?? Infinity))) {
+      const n = Math.min(left, g.count);
+      g.count -= n;
+      left -= n;
+    }
+    const pool = state.goods.find((g) => g.player === to && g.area === null && g.resource === r.id);
+    if (pool) pool.count += count;
+    else state.goods.push({ area: null, player: to, resource: r.id, count });
+    taken.push({ resource: r.id, count });
+  }
+  state.goods = state.goods.filter((g) => g.count > 0);
+  return taken;
 }
 
 export type ConflictEvent = Extract<GameEvent, { type: 'conflict' | 'settlementAttacked' }>;

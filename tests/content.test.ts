@@ -5,11 +5,13 @@ import { loadContent } from '../src/engine';
 
 const base: ContentBundle = {
   eras: [
-    { id: 'stone', name: 'Stone Age', order: 0 },
+    { id: 'stone', name: 'Stone Age', order: 0, points: { developed: 1, mastered: 3, culture: 1 } },
     { id: 'bronze', name: 'Bronze Age', order: 1 },
   ],
   advances: [],
   resources: [],
+  calamities: [],
+  wonders: [],
 };
 
 function errorsFor(bundle: ContentBundle, hooks = {}): string[] {
@@ -40,7 +42,7 @@ describe('content loading', () => {
           mastered: [{ type: 'gatherBonus', resource: 'wool', amount: 1 }],
         },
       ],
-      resources: [{ id: 'cloth', name: 'Cloth', food: false, requires: 'a', revealedBy: 'b', from: ['flax'] }],
+      resources: [{ id: 'cloth', name: 'Cloth', food: false, price: 10, requires: 'a', revealedBy: 'b', from: ['flax'] }],
     };
     expect(errorsFor(bundle)).toEqual(
       expect.arrayContaining([
@@ -86,7 +88,7 @@ describe('content loading', () => {
   });
 
   it('reports duplicate resources and resources requiring unknown advances', () => {
-    const grain = { id: 'grain', name: 'Grain', food: true, requires: 'agriculture' };
+    const grain = { id: 'grain', name: 'Grain', food: true, price: 5, requires: 'agriculture' };
     expect(errorsFor({ ...base, resources: [grain, grain] })).toEqual([
       'Resource "grain" requires unknown advance "agriculture"',
       'Duplicate resource id "grain"',
@@ -106,7 +108,7 @@ describe('content loading', () => {
           domain: 'land',
           plausible: [{ type: 'knows', advance: 'missing', stage: 'known' }, { type: 'presence', where: { resource: 'gold' } }],
           known: { cost: 0, inputs: [{ per: 'turn', amount: -1 }] },
-          adoption: { inputs: [{ per: 'worker', amount: 1, resource: 'gold' }], fall: -2 },
+          adoption: { inputs: [{ per: 'worker', amount: 1, resource: 'gold' }] },
           effects: [],
         },
       ],
@@ -118,7 +120,6 @@ describe('content loading', () => {
       'Advance "a": input amount must be positive (got -1)',
       'Advance "a": needs developed rules (or baseline)',
       'Advance "a": unknown resource "gold"',
-      'Advance "a": adoption fall must be 0 or more (got -2)',
     ]);
   });
 

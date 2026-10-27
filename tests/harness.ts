@@ -26,9 +26,11 @@ export const standIn: ContentBundle = {
     { id: 'fishing', name: 'Fishing', era: 'stone', domain: 'land', baseline: true, effects: [] },
   ],
   resources: [
-    { id: 'grain', name: 'Grain', food: true, requires: 'agriculture' },
-    { id: 'fish', name: 'Fish', food: true, requires: 'fishing' },
+    { id: 'grain', name: 'Grain', food: true, price: 5, requires: 'agriculture' },
+    { id: 'fish', name: 'Fish', food: true, price: 5, requires: 'fishing' },
   ],
+  calamities: [],
+  wonders: [],
 };
 
 export function testContent(bundle: ContentBundle = standIn, hooks?: HookRegistry): Content {
@@ -42,7 +44,7 @@ export function testSetup(overrides: Partial<GameSetup> = {}): GameSetup {
     seed: 12345,
     players: [
       { id: 'p1', name: 'Player', kind: 'human' },
-      { id: 'ai1', name: 'Rival', kind: 'ai' },
+      { id: 'ai1', name: 'Rival', kind: 'ai', approach: 'balanced' },
     ],
     finalEra: 'iron',
     map: { type: 'inlandSea', room: 'standard' },

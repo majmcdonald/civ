@@ -2,6 +2,7 @@ import type { Content } from './content';
 import { emit } from './context';
 import { calm, capitalReach, riverLeg, transportNeighbors } from './effects';
 import type { AreaId, GameMap } from './map/types';
+import { activeWork, isDurable } from './resources';
 import { dropTier, tierRules, TIERS } from './settlements';
 import type { Context, GameEvent, GameState, PlayerId, Settlement } from './types';
 
@@ -13,7 +14,13 @@ import type { Context, GameEvent, GameState, PlayerId, Settlement } from './type
 // Settlements a civilization holds before overextension raises its civ-wide meter.
 export const OVEREXTENSION_FREE = 6;
 export const LOST_SUPPORT = 2;
+// Local instability from fighting (design doc §10, v0.25): friendly tokens lost in or next to the
+// settlement, or the settlement itself attacked (the larger, not both).
 export const NEARBY_CONFLICT = 1;
+export const ATTACKED = 3;
+// Advance steps (Known, Developed, Mastered) a civilization reaches in one turn without unrest;
+// each one beyond adds 1 civ-wide (design doc §10, Rapid change, v0.25).
+export const RAPID_CHANGE_FREE = 2;
 // The assignment that lowers instability: 1 per unit per turn (design doc §6, Manpower).
 export const BUREAUCRACY = 'bureaucracy';
 
@@ -22,11 +29,11 @@ export const CAPITAL_BUREAUCRACY = 1;
 // Distance lowers the threshold by 1 for every 2 land moves beyond 2 from the capital, by at most
 // 4 (the 9+ band, also used for settlements the capital cannot reach by land), and never below
 // half the tier's base.
-const DISTANCE_FREE = 2;
-const DISTANCE_STEP = 2;
-const DISTANCE_MAX_PENALTY = 4;
+export const DISTANCE_FREE = 2;
+export const DISTANCE_STEP = 2;
+export const DISTANCE_MAX_PENALTY = 4;
 
-export type InstabilitySource = 'overextension' | 'losses' | 'lostSupport' | 'conflict' | 'bureaucracy' | 'calm' | 'luxury' | 'noSettlements';
+export type InstabilitySource = 'overextension' | 'losses' | 'lostSupport' | 'conflict' | 'bureaucracy' | 'calm' | 'luxury' | 'noSettlements' | 'calamity' | 'rapidChange';
 
 export function capitalOf(state: GameState, player: PlayerId): AreaId | null {
   return state.players.find((p) => p.id === player)?.capital ?? null;
@@ -110,13 +117,42 @@ export function overextension(state: GameState, player: PlayerId): number {
   return Math.max(0, state.settlements.filter((s) => s.player === player).length - OVEREXTENSION_FREE);
 }
 
-function addLocal(ctx: Context, settlement: Settlement, amount: number, source: InstabilitySource): void {
+// The civ-wide meter after this turn's resolution and next turn's resources phase, from the sources
+// known now (design doc §3, Society · Instability): overextension added at the check, then the
+// Bureaucracy not needed by its own settlement's meter, then calm (Ritual, Göbekli Tepe). Fights,
+// losses, and calamities are not known in advance.
+export interface InstabilityForecast {
+  civ: number;
+  overextension: number;
+  bureaucracy: number;
+  calm: number;
+  next: number;
+}
+
+export function instabilityForecast(state: GameState, player: PlayerId): InstabilityForecast {
+  const civ = civInstability(state, player);
+  const over = overextension(state, player);
+  const spare = state.settlements
+    .filter((s) => s.player === player)
+    .reduce((sum, s) => {
+      const units = ((s.work ?? []).find((w) => w.resource === BUREAUCRACY)?.count ?? 0) + (capitalOf(state, player) === s.area ? CAPITAL_BUREAUCRACY : 0);
+      return sum + Math.max(0, units - localInstability(s));
+    }, 0);
+  let meter = civ + over;
+  const bureaucracy = Math.min(spare, meter);
+  meter -= bureaucracy;
+  const calmed = state.settlements.some((s) => s.player === player) ? Math.min(calm(state, player), meter) : 0;
+  meter -= calmed;
+  return { civ, overextension: over, bureaucracy, calm: calmed, next: meter };
+}
+
+export function addLocal(ctx: Context, settlement: Settlement, amount: number, source: InstabilitySource): void {
   if (amount === 0) return;
   settlement.instability = localInstability(settlement) + amount;
   emit(ctx, { type: 'instabilityChanged', player: settlement.player, area: settlement.area, amount, source });
 }
 
-function addCiv(ctx: Context, player: PlayerId, amount: number, source: InstabilitySource): void {
+export function addCiv(ctx: Context, player: PlayerId, amount: number, source: InstabilitySource): void {
   if (amount === 0) return;
   const p = ctx.state.players.find((x) => x.id === player)!;
   p.instability += amount;
@@ -125,7 +161,7 @@ function addCiv(ctx: Context, player: PlayerId, amount: number, source: Instabil
 
 // Bureaucracy working in a settlement: its assigned units, plus the capital's free one.
 export function bureaucracyAt(state: GameState, settlement: Settlement): number {
-  const assigned = (settlement.work ?? []).find((w) => w.resource === BUREAUCRACY)?.count ?? 0;
+  const assigned = activeWork(state, settlement).find((w) => w.resource === BUREAUCRACY)?.count ?? 0;
   return assigned + (capitalOf(state, settlement.player) === settlement.area ? CAPITAL_BUREAUCRACY : 0);
 }
 
@@ -153,21 +189,36 @@ export function runBureaucracy(ctx: Context): void {
 
 // Luxury goods left after the market calm the people (design doc §6, Luxury goods): each calms 1
 // on the settlement nearest its collapse threshold (lower areas first on ties), at most 1 per
-// settlement; the rest come off the civ-wide meter.
+// settlement. Durable luxuries (copper, cloth; v0.28) calm only settlements with instability and
+// are otherwise kept in the stock; other luxuries left over come off the civ-wide meter.
 function useLuxuries(ctx: Context, content: Content, thresholds: Map<PlayerId, Map<AreaId, number>>): void {
   const { state } = ctx;
+  const luxury = (r: string) => content.resources.some((x) => x.id === r && x.luxury);
   for (const p of state.players) {
-    let left = state.goods.reduce((sum, g) => (g.player === p.id && content.resources.some((r) => r.id === g.resource && r.luxury) ? sum + g.count : sum), 0);
-    if (left === 0) continue;
+    const mine = state.goods.filter((g) => g.player === p.id && luxury(g.resource));
+    let perishable = mine.filter((g) => !isDurable(content, g.resource)).reduce((sum, g) => sum + g.count, 0);
+    let lasting = mine.filter((g) => isDurable(content, g.resource)).reduce((sum, g) => sum + g.count, 0);
+    if (perishable + lasting === 0) continue;
     const margin = (s: Settlement) => thresholds.get(p.id)!.get(s.area)! - totalInstability(state, s);
     const own = state.settlements.filter((s) => s.player === p.id).sort((a, b) => margin(a) - margin(b) || a.area - b.area);
+    let used = 0;
     for (const s of own) {
-      if (left === 0) break;
-      calmAt(ctx, s, 1, 'luxury');
-      left -= 1;
+      if (perishable > 0) {
+        calmAt(ctx, s, 1, 'luxury');
+        perishable -= 1;
+      } else if (lasting > 0 && totalInstability(state, s) > 0) {
+        calmAt(ctx, s, 1, 'luxury');
+        lasting -= 1;
+        used += 1;
+      }
     }
-    if (left > 0) addCiv(ctx, p.id, -Math.min(left, p.instability), 'luxury');
-    state.goods = state.goods.filter((g) => g.player !== p.id || !content.resources.some((r) => r.id === g.resource && r.luxury));
+    if (perishable > 0) addCiv(ctx, p.id, -Math.min(perishable, p.instability), 'luxury');
+    for (const g of mine.filter((x) => isDurable(content, x.resource)).sort((x, y) => (x.area ?? Infinity) - (y.area ?? Infinity) || content.resources.findIndex((r) => r.id === x.resource) - content.resources.findIndex((r) => r.id === y.resource))) {
+      const n = Math.min(used, g.count);
+      g.count -= n;
+      used -= n;
+    }
+    state.goods = state.goods.filter((g) => g.count > 0 && (g.player !== p.id || !luxury(g.resource) || isDurable(content, g.resource)));
   }
 }
 
@@ -182,13 +233,9 @@ function eventsBySteps(ctx: Context): { step: string; event: GameEvent }[] {
   return out;
 }
 
-// Players whose tokens or settlement fought, by area.
-function fights(events: GameEvent[]): { area: AreaId; players: PlayerId[] }[] {
-  return events.flatMap((e) => {
-    if (e.type === 'conflict') return [{ area: e.area, players: e.losses.map((l) => l.player) }];
-    if (e.type === 'settlementAttacked') return [{ area: e.area, players: [e.defender, ...e.attackers.map((a) => a.player)] }];
-    return [];
-  });
+// Players who lost tokens in a fight, by area.
+function losses(events: GameEvent[]): { area: AreaId; players: PlayerId[] }[] {
+  return events.flatMap((e) => (e.type === 'conflict' || e.type === 'settlementAttacked' ? [{ area: e.area, players: e.losses.filter((l) => l.count > 0).map((l) => l.player) }] : []));
 }
 
 // Resolution step 7: this turn's sources are added, then every settlement at or over its
@@ -217,10 +264,12 @@ export function resolveInstability(ctx: Context): void {
     const s = state.settlements.find((x) => x.area === d.area && x.player === d.player);
     if (s) addLocal(ctx, s, LOST_SUPPORT, 'lostSupport');
   }
-  const fought = fights(events.map((e) => e.event));
+  const lostTokens = losses(events.map((e) => e.event));
+  const attacked = events.flatMap(({ event: e }) => (e.type === 'settlementAttacked' ? [`${e.area}:${e.defender}`] : []));
   for (const s of state.settlements) {
     const near = (area: AreaId) => area === s.area || map.areas[s.area]!.neighbors.includes(area);
-    if (fought.some((f) => f.players.includes(s.player) && near(f.area))) addLocal(ctx, s, NEARBY_CONFLICT, 'conflict');
+    if (attacked.includes(`${s.area}:${s.player}`)) addLocal(ctx, s, ATTACKED, 'conflict');
+    else if (lostTokens.some((f) => f.players.includes(s.player) && near(f.area))) addLocal(ctx, s, NEARBY_CONFLICT, 'conflict');
   }
 
   // Thresholds are fixed from the capitals at the start of the check.

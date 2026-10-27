@@ -9,7 +9,7 @@ import type { AreaId, Feature, GameMap, MapArea, MapOptions, MapType, Point, Riv
 export const LAND_AREAS_PER_CIVILIZATION = 64;
 export const MAX_CIVILIZATIONS = 15;
 // Land areas per civilization relative to standard (design doc §2, Room to expand).
-export const ROOM_FACTOR: Record<RoomToExpand, number> = { crowded: 0.5, standard: 1, spacious: 2 };
+export const ROOM_FACTOR: Record<RoomToExpand, number> = { veryCrowded: 0.25, crowded: 0.5, standard: 1, spacious: 2 };
 // Grid cells on a standard five-civilization map; noise frequency scales from it so terrain
 // patches keep their size in areas as maps grow.
 const REFERENCE_CELLS = 2760;
@@ -20,8 +20,12 @@ const MAX_ATTEMPTS = 25;
 
 const LAND_SHARE: Record<MapType, number> = { inlandSea: 0.58, continents: 0.45, singleLandmass: 0.78 };
 
-// Starting limit range per terrain (tuning, §17).
-const LIMITS: Record<Terrain, [number, number]> = {
+// Starting limit range per terrain (tuning, §17); a river adds RIVER_LIMIT, a floodplain holds at
+// least FLOODPLAIN_LIMIT, and no area starts above MAX_LIMIT.
+export const RIVER_LIMIT = 1;
+export const FLOODPLAIN_LIMIT = 4;
+export const MAX_LIMIT = 5;
+export const LIMITS: Record<Terrain, [number, number]> = {
   plains: [3, 5],
   forest: [2, 4],
   hills: [2, 3],
@@ -34,7 +38,9 @@ const START_REACH = 3;
 const START_MAX_POOR_SHARE = 0.3;
 const START_QUALITY_SHARE = 0.85;
 const START_TRIALS = 60;
-const MIN_START_SPACING = 4;
+// Fewest moves between two starts; very crowded maps allow closer starts so 2–15 civilizations fit
+// and fighting starts early (design doc §2, Room to expand).
+const MIN_START_SPACING: Record<RoomToExpand, number> = { veryCrowded: 3, crowded: 4, standard: 4, spacious: 4 };
 
 type Random = () => number;
 
@@ -432,12 +438,12 @@ function tryGenerate(options: MapOptions, attempt: number): GameMap | null {
   for (const area of landAreas) {
     const [min, max] = LIMITS[area.terrain!];
     let limit = min + Math.floor(rand() * (max - min + 1));
-    if (area.features.includes('river')) limit += 1;
-    if (area.features.includes('floodplain')) limit = Math.max(limit, 4);
-    area.limit = Math.min(limit, 5);
+    if (area.features.includes('river')) limit += RIVER_LIMIT;
+    if (area.features.includes('floodplain')) limit = Math.max(limit, FLOODPLAIN_LIMIT);
+    area.limit = Math.min(limit, MAX_LIMIT);
   }
 
-  const starts = placeStarts(areas, landAreas, civilizations, rand);
+  const starts = placeStarts(areas, landAreas, civilizations, MIN_START_SPACING[room], rand);
   if (!starts) return null;
   placeFood(areas, landAreas, starts, makeRandom(seed ^ 0x5eedf00d));
   placeGoods(landAreas, makeRandom(seed ^ 0x2c0ffee5));
@@ -650,7 +656,7 @@ export function startQuality(map: Pick<GameMap, 'areas'>, start: AreaId): StartQ
   return { totalLimit: nearby.reduce((sum, a) => sum + a.limit, 0), poorShare: poor / nearby.length };
 }
 
-function placeStarts(areas: MapArea[], landAreas: MapArea[], civilizations: number, rand: Random): AreaId[] | null {
+function placeStarts(areas: MapArea[], landAreas: MapArea[], civilizations: number, minSpacing: number, rand: Random): AreaId[] | null {
   const candidates = landAreas
     .filter((a) => (a.terrain === 'plains' || a.terrain === 'forest' || a.terrain === 'hills') && a.limit >= 3 && !a.features.includes('volcanic'))
     .map((a) => ({ area: a, quality: startQuality({ areas }, a.id) }))
@@ -693,7 +699,7 @@ function placeStarts(areas: MapArea[], landAreas: MapArea[], civilizations: numb
     if (chosen.length < civilizations) continue;
     let spacing = Infinity;
     for (const a of chosen) for (const b of chosen) if (a !== b) spacing = Math.min(spacing, distances(a)[b]!);
-    if (spacing < MIN_START_SPACING) continue;
+    if (spacing < minSpacing) continue;
     // Spacing weighted by balance: the smallest nearest-land share over the largest.
     const share = new Array<number>(chosen.length).fill(0);
     for (const area of landAreas) {

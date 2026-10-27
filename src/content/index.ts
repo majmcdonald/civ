@@ -2,7 +2,7 @@ import { eras } from './eras';
 import type { ContentBundle } from './types';
 
 // The Stone Age advances (design doc §8, Stone Age advances and Reviewed advances). Costs and
-// amounts are placeholders until the tuning pass (development plan §3, Phase 4 step 9).
+// amounts are placeholders until the balance pass (development plan §3, Phase 4 step 12).
 export const content: ContentBundle = {
   eras,
   advances: [
@@ -27,13 +27,13 @@ export const content: ContentBundle = {
       plausible: [{ type: 'presence', where: { resource: 'fish' } }],
       known: { cost: 3, inputs: [{ per: 'area', amount: 1, where: { resource: 'fish' } }] },
       developed: {
-        cost: 8,
+        cost: 16,
         inputs: [
           { per: 'area', amount: 1, where: { resource: 'fish' } },
           { per: 'settlement', amount: 1, where: { resource: 'fish' } },
         ],
       },
-      adoption: { inputs: [{ per: 'settlement', amount: 15, gathering: ['fish'] }], fall: 10 },
+      adoption: { inputs: [{ per: 'settlement', amount: 15, gathering: ['fish'] }] },
       effects: [],
       mastered: [{ type: 'gatherBonus', resource: 'fish', amount: 1 }],
     },
@@ -44,8 +44,10 @@ export const content: ContentBundle = {
       domain: 'war',
       plausible: [{ type: 'presence', where: { terrain: 'forest' } }],
       known: { cost: 4, inputs: [{ per: 'area', amount: 1, where: { terrain: 'forest' } }] },
-      developed: { cost: 8, inputs: [{ per: 'area', amount: 1, where: { terrain: 'forest' } }] },
+      developed: { cost: 16, inputs: [{ per: 'area', amount: 1, where: { terrain: 'forest' } }] },
+      adoption: { inputs: [{ per: 'fought', amount: 20 }] },
       effects: [{ type: 'strength', amount: 0.25, counteredBy: 'palisades' }],
+      mastered: [{ type: 'strength', amount: 0.25, counteredBy: 'palisades' }],
     },
     {
       id: 'agriculture',
@@ -58,13 +60,13 @@ export const content: ContentBundle = {
       ],
       known: { cost: 5, inputs: [{ per: 'area', amount: 1, where: { resource: 'grain' } }] },
       developed: {
-        cost: 12,
+        cost: 24,
         inputs: [
           { per: 'area', amount: 1, where: { resource: 'grain' } },
           { per: 'settlement', amount: 1, where: { resource: 'grain' } },
         ],
       },
-      adoption: { inputs: [{ per: 'settlement', amount: 10, gathering: ['grain'] }], fall: 10 },
+      adoption: { inputs: [{ per: 'settlement', amount: 10, gathering: ['grain'] }] },
       effects: [],
       mastered: [
         { type: 'gatherBonus', resource: 'grain', amount: 1 },
@@ -89,14 +91,14 @@ export const content: ContentBundle = {
         ],
       },
       developed: {
-        cost: 8,
+        cost: 16,
         inputs: [
           { per: 'settlement', amount: 1 },
           { per: 'instability', amount: 1 },
           { per: 'struck', amount: 3, calamity: 'superstition' },
         ],
       },
-      adoption: { inputs: [{ per: 'settlement', amount: 5 }], fall: 10 },
+      adoption: { inputs: [{ per: 'settlement', amount: 5 }] },
       effects: [{ type: 'calm', amount: 1 }],
       mastered: [{ type: 'calm', amount: 1 }],
     },
@@ -108,7 +110,7 @@ export const content: ContentBundle = {
       plausible: [{ type: 'presence', where: { feature: 'river' } }],
       known: { cost: 6, inputs: [{ per: 'area', amount: 1, where: { feature: 'river' } }] },
       developed: {
-        cost: 10,
+        cost: 20,
         inputs: [
           { per: 'area', amount: 1, where: { feature: 'river' } },
           { per: 'settlement', amount: 1, where: { feature: 'river' } },
@@ -126,8 +128,8 @@ export const content: ContentBundle = {
         { type: 'settlements', min: 1 },
       ],
       known: { cost: 5, inputs: [{ per: 'settlement', amount: 1, tier: 'village' }] },
-      developed: { cost: 6, inputs: [{ per: 'settlement', amount: 1, gathering: 'food' }] },
-      adoption: { inputs: [{ per: 'settlement', amount: 5, gathering: ['grain'] }], fall: 10 },
+      developed: { cost: 12, inputs: [{ per: 'settlement', amount: 1, gathering: 'food' }] },
+      adoption: { inputs: [{ per: 'settlement', amount: 5, gathering: ['grain'] }] },
       effects: [{ type: 'store', resource: 'grain', amount: 1 }],
       mastered: [{ type: 'store', resource: 'grain', amount: 1 }],
     },
@@ -148,7 +150,7 @@ export const content: ContentBundle = {
         ],
       },
       developed: {
-        cost: 24,
+        cost: 48,
         inputs: [
           { per: 'settlement', amount: 1 },
           { per: 'worker', amount: 1, resource: 'bureaucracy' },
@@ -167,13 +169,13 @@ export const content: ContentBundle = {
       ],
       known: { cost: 14, inputs: [{ per: 'area', amount: 1, where: { terrain: ['plains', 'hills'] } }] },
       developed: {
-        cost: 12,
+        cost: 24,
         inputs: [
           { per: 'area', amount: 1, where: { resource: 'livestock' } },
           { per: 'settlement', amount: 1, where: { resource: 'livestock' } },
         ],
       },
-      adoption: { inputs: [{ per: 'settlement', amount: 15, gathering: ['livestock'] }], fall: 10 },
+      adoption: { inputs: [{ per: 'settlement', amount: 15, gathering: ['livestock'] }] },
       effects: [],
       mastered: [{ type: 'gatherBonus', resource: 'livestock', amount: 1 }],
     },
@@ -187,8 +189,8 @@ export const content: ContentBundle = {
         { type: 'presence', where: { terrain: ['hills', 'mountains'] } },
       ],
       known: { cost: 12, inputs: [{ per: 'area', amount: 1, where: { terrain: ['hills', 'mountains'] } }] },
-      developed: { cost: 10, inputs: [{ per: 'settlement', amount: 1, where: { terrain: ['hills', 'mountains'] } }] },
-      adoption: { inputs: [{ per: 'settlement', amount: 15, tier: 'town' }], fall: 10 },
+      developed: { cost: 20, inputs: [{ per: 'settlement', amount: 1, where: { terrain: ['hills', 'mountains'] } }] },
+      adoption: { inputs: [{ per: 'settlement', amount: 15, tier: 'town' }] },
       effects: [{ type: 'settlementDefense', amount: 1, minTier: 'town' }],
       mastered: [{ type: 'settlementDefense', amount: 1, minTier: 'town' }],
     },
@@ -209,13 +211,13 @@ export const content: ContentBundle = {
         ],
       },
       developed: {
-        cost: 12,
+        cost: 24,
         inputs: [
           { per: 'settlement', amount: 1, gathering: 'any' },
           { per: 'rival', amount: 1 },
         ],
       },
-      adoption: { inputs: [{ per: 'traded', amount: 10 }], fall: 10 },
+      adoption: { inputs: [{ per: 'traded', amount: 10 }] },
       effects: [{ type: 'marketAccess' }],
       mastered: [{ type: 'marketReach', amount: 1 }],
     },
@@ -236,7 +238,7 @@ export const content: ContentBundle = {
         ],
       },
       developed: {
-        cost: 14,
+        cost: 28,
         inputs: [
           { per: 'settlement', amount: 1, contact: true },
           { per: 'attacked', amount: 3 },
@@ -251,8 +253,8 @@ export const content: ContentBundle = {
       domain: 'crafts',
       plausible: [{ type: 'knows', advance: 'agriculture', stage: 'known' }],
       known: { cost: 8, inputs: [{ per: 'settlement', amount: 1, where: { resource: ['grain', 'livestock'] } }] },
-      developed: { cost: 16, inputs: [{ per: 'settlement', amount: 1, where: { resource: ['grain', 'livestock'] } }] },
-      adoption: { inputs: [{ per: 'settlement', amount: 15, gathering: ['cloth'] }], fall: 10 },
+      developed: { cost: 32, inputs: [{ per: 'settlement', amount: 1, where: { resource: ['grain', 'livestock'] } }] },
+      adoption: { inputs: [{ per: 'settlement', amount: 15, gathering: ['cloth'] }] },
       effects: [{ type: 'raiseTokenCap', amount: 5 }],
       mastered: [{ type: 'gatherBonus', resource: 'cloth', amount: 1 }],
     },
@@ -272,13 +274,12 @@ export const content: ContentBundle = {
           { per: 'worker', amount: 1, resource: 'bureaucracy' },
         ],
       },
-      developed: { cost: 24, inputs: [{ per: 'settlement', amount: 1, beyond: 2 }] },
+      developed: { cost: 48, inputs: [{ per: 'settlement', amount: 1, beyond: 2 }] },
       adoption: {
         inputs: [
           { per: 'worker', amount: 5, resource: 'bureaucracy' },
           { per: 'settlement', amount: 5, tier: 'town' },
         ],
-        fall: 10,
       },
       effects: [{ type: 'capitalReach', amount: 2 }],
       mastered: [{ type: 'capitalReach', amount: 2 }],
@@ -294,7 +295,7 @@ export const content: ContentBundle = {
       ],
       known: { cost: 14, inputs: [{ per: 'area', amount: 1, where: { terrain: ['hills', 'mountains'] } }] },
       developed: {
-        cost: 14,
+        cost: 28,
         inputs: [
           { per: 'area', amount: 1, where: { resource: 'copper' } },
           { per: 'settlement', amount: 1, where: { resource: 'copper' } },
@@ -306,10 +307,87 @@ export const content: ContentBundle = {
   // Design doc §6: every food good starts at 1 food per manpower; goods differ through advances.
   // Foraging shows grain and fish from turn 1; gathering them needs Agriculture and Fishing.
   resources: [
-    { id: 'grain', name: 'Grain', food: true, requires: 'agriculture', revealedBy: 'foraging' },
-    { id: 'fish', name: 'Fish', food: true, requires: 'fishing', revealedBy: 'foraging' },
-    { id: 'livestock', name: 'Livestock', food: true, requires: 'herding' },
-    { id: 'copper', name: 'Copper', food: false, luxury: true, requires: 'copperWorking' },
-    { id: 'cloth', name: 'Cloth', food: false, luxury: true, requires: 'weaving', from: ['grain', 'livestock'] },
+    { id: 'grain', name: 'Grain', food: true, price: 5, requires: 'agriculture', revealedBy: 'foraging' },
+    { id: 'fish', name: 'Fish', food: true, price: 5, requires: 'fishing', revealedBy: 'foraging' },
+    { id: 'livestock', name: 'Livestock', food: true, price: 5, requires: 'herding' },
+    { id: 'copper', name: 'Copper', food: false, price: 10, luxury: true, durable: true, requires: 'copperWorking' },
+    { id: 'cloth', name: 'Cloth', food: false, price: 10, luxury: true, durable: true, requires: 'weaving', from: ['grain', 'livestock'] },
+    // Worked in hills and mountains from the start; builds wonders (design doc §6, §9, v0.28).
+    { id: 'stone', name: 'Stone', food: false, price: 5, durable: true, requires: 'stoneTools', terrain: ['hills', 'mountains'] },
+  ],
+  // Stone Age calamities (design doc §12, v0.22); weights and effects are engine rules.
+  calamities: [
+    { id: 'famine', name: 'Famine', softenedBy: [{ advance: 'pottery' }, { advance: 'pottery', stage: 'mastered' }], buyOff: { cost: 10, requires: 'barter' } },
+    { id: 'superstition', name: 'Superstition', softenedBy: [{ advance: 'ritual' }, { advance: 'ritual', stage: 'mastered' }], buyOff: { cost: 10 }, grants: { advance: 'ritual', learning: 1 } },
+    { id: 'civilDisorder', name: 'Civil disorder', softenedBy: [{ advance: 'tallies' }, { advance: 'tallies', stage: 'mastered' }], buyOff: { cost: 10 } },
+    { id: 'epidemic', name: 'Epidemic', spreads: true },
+    {
+      id: 'raid',
+      name: 'Barbarian raid',
+      softenedBy: [{ advance: 'archery' }, { advance: 'palisades' }, { advance: 'masonry', minTier: 'town' }],
+      shelter: ['palisades', 'masonry'],
+      buyOff: { cost: 10 },
+    },
+    { id: 'flood', name: 'Flood' },
+    { id: 'earthquake', name: 'Earthquake', shelter: ['masonry'] },
+    { id: 'drought', name: 'Drought', softenedBy: [{ advance: 'pottery' }] },
+  ],
+  // Stone Age wonders (design doc §9, v0.28); costs are placeholders until the balance pass.
+  wonders: [
+    {
+      id: 'gobekliTepe',
+      name: 'Göbekli Tepe',
+      era: 'stone',
+      requires: ['ritual'],
+      turns: 5,
+      manpower: 1,
+      goods: [{ resource: 'stone', count: 1 }, { resource: 'food', count: 1 }],
+      effects: [{ type: 'calm', amount: 1 }],
+      summary: '−1 civ-wide instability every turn',
+    },
+    {
+      id: 'catalhoyuk',
+      name: 'Çatalhöyük',
+      era: 'stone',
+      requires: ['pottery'],
+      turns: 5,
+      manpower: 1,
+      goods: [{ resource: 'food', count: 1 }],
+      effects: [{ type: 'manpower', amount: 1 }],
+      summary: '+1 manpower in its settlement',
+    },
+    {
+      id: 'wallsOfJericho',
+      name: 'Walls of Jericho',
+      era: 'stone',
+      requires: ['palisades'],
+      turns: 6,
+      manpower: 1,
+      goods: [{ resource: 'stone', count: 1 }],
+      effects: [{ type: 'raidImmunity' }],
+      summary: "Barbarian raids cannot strike the owner's settlements",
+    },
+    {
+      id: 'newgrange',
+      name: 'Newgrange',
+      era: 'stone',
+      requires: ['masonry', 'ritual'],
+      turns: 6,
+      manpower: 1,
+      goods: [{ resource: 'stone', count: 1 }, { resource: 'food', count: 1 }],
+      effects: [{ type: 'culture', amount: 2 }],
+      summary: '+2 culture progress a turn',
+    },
+    {
+      id: 'stonehenge',
+      name: 'Stonehenge',
+      era: 'stone',
+      requires: ['masonry', 'ritual'],
+      turns: 8,
+      manpower: 1,
+      goods: [{ resource: 'stone', count: 1 }],
+      effects: [{ type: 'learning', amount: 2 }],
+      summary: '+2 learning a turn, down the study queue',
+    },
   ],
 };

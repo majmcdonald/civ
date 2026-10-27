@@ -1,15 +1,21 @@
 import type { Content } from './content';
 import { clone, emit } from './context';
-import { grantStartingKnowledge, setFocus, validateFocus } from './discovery';
+import { grantStartingKnowledge, setStudy, validateStudy } from './discovery';
+import { erasInOrder } from './eras';
+import { setOrder, validateOrder } from './market';
+import { setBuyOff, validateBuyOff } from './calamities';
 import { runResolution, runResourcesPhase } from './phases';
 import { BASE_MOVEMENT, setMoveOrder, STARTING_TOKEN_CAP, validateMoveOrder } from './population';
 import { setWork, validateWork } from './resources';
 import { nameSettlement, setConversionOrder, TIERS, validateConversionOrder, validateName } from './settlements';
-import { createRng } from './rng';
+import { createRng, stepRng } from './rng';
 import { mapFor, validateMap } from './world';
+import { redirectWonder, startWonder, validateRedirect, validateStart } from './wonders';
 import {
+  AI_APPROACHES,
   PHASES,
   PLAYER_PHASES,
+  type AiApproach,
   type ApplyResult,
   type Command,
   type Context,
@@ -18,7 +24,7 @@ import {
   type Phase,
 } from './types';
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 18;
 
 interface CommandHandler<C extends Command> {
   validate(ctx: Pick<Context, 'state' | 'map' | 'content'>, command: C): string | null;
@@ -32,6 +38,7 @@ const handlers: CommandHandlers = {
     validate({ state }, command) {
       const player = state.players.find((p) => p.id === command.player);
       if (!player) return `Unknown player "${command.player}"`;
+      if (state.over) return 'The game is over';
       if (!PLAYER_PHASES.includes(state.phase)) return `Phase "${state.phase}" takes no player input`;
       if (player.endedPhase) return `Player "${command.player}" already ended phase "${state.phase}"`;
       return null;
@@ -79,12 +86,44 @@ const handlers: CommandHandlers = {
       setWork(ctx, command);
     },
   },
-  setFocus: {
+  setStudy: {
     validate(ctx, command) {
-      return validateFocus(ctx, command);
+      return validateStudy(ctx, command);
     },
     execute(ctx, command) {
-      setFocus(ctx, command);
+      setStudy(ctx, command);
+    },
+  },
+  setOrder: {
+    validate(ctx, command) {
+      return validateOrder(ctx, command);
+    },
+    execute(ctx, command) {
+      setOrder(ctx, command);
+    },
+  },
+  setBuyOff: {
+    validate(ctx, command) {
+      return validateBuyOff(ctx, command);
+    },
+    execute(ctx, command) {
+      setBuyOff(ctx, command);
+    },
+  },
+  startWonder: {
+    validate(ctx, command) {
+      return validateStart(ctx, command);
+    },
+    execute(ctx, command) {
+      startWonder(ctx, command);
+    },
+  },
+  redirectWonder: {
+    validate(ctx, command) {
+      return validateRedirect(ctx, command);
+    },
+    execute(ctx, command) {
+      redirectWonder(ctx, command);
     },
   },
 };
@@ -96,6 +135,7 @@ export function validateSetup(setup: GameSetup, content: Content): string | null
   if (setup.players.filter((p) => p.kind === 'human').length > 1) return 'Version 1 allows at most one human player';
   if (!content.eras.some((e) => e.id === setup.finalEra)) return `Unknown final era "${setup.finalEra}"`;
   if ((setup.unlockedTiers ?? []).some((t) => !TIERS.some((rule) => rule.id === t))) return 'Unlocked tiers must be known tiers';
+  if (setup.players.some((p) => p.approach !== undefined && p.approach !== 'random' && (p.kind !== 'ai' || !AI_APPROACHES.includes(p.approach)))) return 'Approaches are for AI players and must be known';
   // Also checks the player count against the civilizations a map supports (2–15).
   return validateMap(setup);
 }
@@ -105,13 +145,14 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
   if (problem) return { ok: false, reason: problem };
 
   const map = mapFor(setup);
+  const firstEra = erasInOrder(content)[0]!.id;
   const state: GameState = {
     schemaVersion: SCHEMA_VERSION,
     setup: clone(setup),
     rng: createRng(setup.seed),
     turn: 1,
     phase: 'resources',
-    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, capital: null, tiers: [...(setup.unlockedTiers ?? [])], effects: [], advances: [], focus: null })),
+    players: setup.players.map((p) => ({ id: p.id, name: p.name, kind: p.kind, endedPhase: false, tokenCap: STARTING_TOKEN_CAP, movement: BASE_MOVEMENT, instability: 0, treasury: 0, prices: {}, orders: [], quiet: 0, buyOff: [], capital: null, tiers: [...(setup.unlockedTiers ?? [])], effects: [], advances: [], study: [], era: firstEra, culture: 0, cultureProgress: 0 })),
     // Each civilization starts with one token in its starting area (design doc §4).
     stacks: setup.players
       .map((p, i) => ({ area: map.starts[i]!, player: p.id, count: 1 }))
@@ -120,14 +161,47 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
     settlements: [],
     conversions: [],
     goods: [],
+    dry: [],
+    builds: [],
+    wonders: [],
+    endgame: null,
+    over: false,
   };
   const ctx: Context = { state, content, map, events: [], refugees: [] };
   emit(ctx, { type: 'gameStarted', seed: setup.seed, players: setup.players.map((p) => p.id) });
+  assignApproaches(ctx);
   grantStartingKnowledge(ctx);
   emit(ctx, { type: 'turnStarted', turn: 1 });
   emit(ctx, { type: 'phaseStarted', phase: 'resources' });
   runUntilPlayerInput(ctx);
   return { ok: true, state: ctx.state, events: ctx.events };
+}
+
+// AI approaches (design doc §2, v0.32): a set approach is kept; Random draws one from the seed,
+// without repeats until every approach has been used once (set ones count as used). The draws use
+// their own stream from the seed, so the game's main sequence is the same with any approaches.
+const APPROACH_STREAM = 0x5eed;
+
+function assignApproaches(ctx: Context): void {
+  const { state } = ctx;
+  let rng = createRng(state.setup.seed ^ APPROACH_STREAM);
+  const draw = (label: string, n: number) => {
+    const [value, next] = stepRng(rng);
+    rng = next;
+    emit(ctx, { type: 'randomDraw', label, value });
+    return Math.floor(value * n);
+  };
+  let pool: AiApproach[] = AI_APPROACHES.filter((a) => !state.setup.players.some((p) => p.approach === a));
+  for (const [i, p] of state.setup.players.entries()) {
+    if (p.kind !== 'ai') continue;
+    if (p.approach !== undefined && p.approach !== 'random') {
+      state.players[i]!.approach = p.approach;
+      continue;
+    }
+    if (pool.length === 0) pool = [...AI_APPROACHES];
+    const [pick] = pool.splice(draw(`approach ${p.id}`, pool.length), 1);
+    state.players[i]!.approach = pick!;
+  }
 }
 
 // The single entry point for the player, the AI, tests, and replays. Never mutates `state`.
@@ -165,6 +239,8 @@ function runUntilPlayerInput(ctx: Context): void {
   while (!PLAYER_PHASES.includes(ctx.state.phase)) {
     if (ctx.state.phase === 'resources') runResourcesPhase(ctx);
     else runResolution(ctx);
+    // The game ends with the resolution of the countdown's last turn (design doc §15).
+    if (ctx.state.over) return;
     advancePhase(ctx);
   }
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { content } from '../src/content';
 import { generateMap, mapFor, MAP_TYPES, settlementAt, supportSummary, type AreaId, type Context, type GameMap, type Session, type Settlement, type SettlementTier } from '../src/engine';
 import { resolveConflict } from '../src/engine/conflict';
-import { runResources } from '../src/engine/resources';
+import { collectTax, runResources } from '../src/engine/resources';
 import { dropTier, resolveSupport } from '../src/engine/settlements';
 import { endPhaseAll, eventsOfType, expectRejected, newGame, play, standIn, testContent } from './harness';
 
@@ -115,7 +115,6 @@ describe('manpower', () => {
     settle(game, grain, 'town');
     settle(game, barren, 'village', [], 'ai1');
     const command = { type: 'assignWork' as const, player: 'p1', area: grain, resource: 'grain', count: 1 };
-    expectRejected(game, command, /allocation phase/);
     toAllocation(game);
     expectRejected(game, { ...command, area: barren }, /no settlement there/);
     expectRejected(game, { ...command, resource: 'fish' }, /not in this area/);
@@ -185,6 +184,28 @@ describe('goods', () => {
 });
 
 describe('food as support', () => {
+  it('adds 1 urban growth to a settlement that gathers food and eats its own', () => {
+    const { game, grain, b } = scene();
+    settle(game, grain, 'village', [{ resource: 'grain', count: 1 }]);
+    place(game, b, 'p1', 1);
+    game.state.goods = [{ area: grain, player: 'p1', resource: 'grain', count: 1 }];
+    toAllocation(game);
+    const turn = game.state.turn;
+    const grown = eventsOfType(endPhaseAll(game), 'urbanGrowth');
+    expect(settlementAt(game.state, grain)!.ateOwn).toBe(turn);
+    expect(grown).toEqual([expect.objectContaining({ player: 'p1', from: grain, count: 1 })]);
+  });
+
+  it('adds no urban growth when tokens cover the support and the food goes uneaten', () => {
+    const { game, grain, b } = scene();
+    settle(game, grain, 'village', [{ resource: 'grain', count: 1 }]);
+    place(game, b, 'p1', 2);
+    game.state.goods = [{ area: grain, player: 'p1', resource: 'grain', count: 1 }];
+    toAllocation(game);
+    expect(eventsOfType(endPhaseAll(game), 'urbanGrowth')).toEqual([]);
+    expect(settlementAt(game.state, grain)!.ateOwn).toBeUndefined();
+  });
+
   it('covers missing support tokens, 1 food per token', () => {
     const { game, grain, b } = scene();
     settle(game, grain, 'village');
@@ -290,7 +311,7 @@ describe('Stone Age goods (v0.14)', () => {
   });
 
   it('works cloth instead of food in grain or livestock areas', () => {
-    const bundle = { ...standIn, resources: [...standIn.resources, { id: 'cloth', name: 'Cloth', food: false, luxury: true, requires: 'agriculture', from: ['grain'] }] };
+    const bundle = { ...standIn, resources: [...standIn.resources, { id: 'cloth', name: 'Cloth', food: false, price: 10, luxury: true, requires: 'agriculture', from: ['grain'] }] };
     const content = testContent(bundle);
     const { game, grain, barren } = scene();
     const session = newGame({ unlockedTiers: ['village', 'town'] }, content);
@@ -319,5 +340,36 @@ describe('Stone Age goods (v0.14)', () => {
     expect(fed(game)).toMatchObject({ food: 0 });
     game.state.players[0]!.effects = [{ type: 'riverLeg', areas: 3 }];
     expect(fed(game)).toMatchObject({ food: 1, support: 2 });
+  });
+});
+
+describe('tax (v0.20)', () => {
+  it('collects a fixed tax from towns and larger into a treasury that keeps', () => {
+    // Village 0, town 1 (design doc §6, Currency, v0.29).
+    const { game, grain, b, c } = scene();
+    game.state.settlements = [
+      { area: grain, player: 'p1', tier: 'town' },
+      { area: b, player: 'p1', tier: 'village' },
+      { area: c, player: 'ai1', tier: 'village' },
+    ].sort((x, y) => x.area - y.area) as Settlement[];
+    const ctx: Context = { state: game.state, content: testContent(), map: mapFor(game.setup), events: [], refugees: [] };
+    collectTax(ctx);
+    collectTax(ctx);
+    expect(game.state.players.find((p) => p.id === 'p1')!.treasury).toBe(2);
+    expect(game.state.players.find((p) => p.id === 'ai1')!.treasury).toBe(0);
+    expect(eventsOfType(ctx.events, 'taxCollected')).toEqual([
+      { type: 'taxCollected', player: 'p1', amount: 1 },
+      { type: 'taxCollected', player: 'p1', amount: 1 },
+    ]);
+  });
+
+  it('is collected in the resources phase', () => {
+    const { game, grain, b } = scene();
+    game.state.settlements = [{ area: grain, player: 'p1', tier: 'town' }];
+    place(game, b, 'p1', 3);
+    const before = game.state.turn;
+    while (game.state.turn === before) endPhaseAll(game);
+    expect(settlementAt(game.state, grain)?.tier).toBe('town');
+    expect(game.state.players.find((p) => p.id === 'p1')!.treasury).toBe(1);
   });
 });

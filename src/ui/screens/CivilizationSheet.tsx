@@ -1,35 +1,63 @@
-import { useState } from 'react';
-import { GROWTH_PER_TOKEN, type AreaId, type GameMap, type SupportSummary } from '../../engine';
+import { useEffect, useRef, useState } from 'react';
+import { GROWTH_PER_TOKEN, TIERS, type AreaId, type CalamityView, type Counter, type GameMap, type SupportSummary, type SettlementTier as Tier } from '../../engine';
 import type { MapPieces, SettlementTier } from '../art/pieces';
 
-// Civilization overview (design doc §4, §5, §6, §10). Values come from the pieces on the map; the
-// tier numbers are the doc's starting values until the engine owns them.
+// The Civilization screen (design doc §3, Screens and information panels, v0.29): population,
+// settlements, support, manpower, calamity risks, and a row per settlement. Instability lives on
+// the Society screen; each settlement's meter stays in its row.
 
-const TIERS = [
-  { id: 'village', name: 'Village', value: 6, support: 2, manpower: 1, growth: 0 },
-  { id: 'town', name: 'Town', value: 12, support: 3, manpower: 2, growth: 1 },
-  { id: 'city', name: 'City', value: 20, support: 4, manpower: 3, growth: 2 },
-  { id: 'metropolis', name: 'Metropolis', value: 30, support: 6, manpower: 4, growth: 3 },
-] as const;
-type TierId = (typeof TIERS)[number]['id'];
-const TIER = Object.fromEntries(TIERS.map((t) => [t.id, t])) as Record<TierId, (typeof TIERS)[number]>;
-const UNLOCKED: readonly TierId[] = ['village', 'town'] satisfies SettlementTier[];
-
-const ASSIGNMENTS = ['Production', 'Bureaucracy', 'High Learning', 'Artists', 'Wonders'] as const;
+const TIER = Object.fromEntries(TIERS.map((t) => [t.id, t])) as Record<Tier, (typeof TIERS)[number]>;
 
 interface SettlementRow {
   area: AreaId;
   tier: SettlementTier;
   place: string;
-  resources: string[];
   work: { resource: string; count: number }[];
   instability: number;
   threshold: number;
   capital: boolean;
 }
 
+export interface WorkOption {
+  total: number;
+  free: number;
+  rows: { resource: string; count: number; usable: boolean }[];
+}
+
+const JOB_NAMES: Record<string, string> = { bureaucracy: 'Bureaucracy', highLearning: 'High Learning', artists: 'Artists', wonder: 'Wonder' };
+const SPECIALISTS = ['bureaucracy', 'highLearning', 'artists', 'wonder'];
+
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// A settlement's jobs as chips; dark ones have manpower on them. In allocation each has − and +.
+function WorkChips({ area, option, canAssign, rule, onWork }: { area: AreaId; option: WorkOption; canAssign: boolean; rule: (resource: string) => string; onWork: (area: AreaId, resource: string, count: number) => void }) {
+  const rows = canAssign ? option.rows : option.rows.filter((r) => r.count > 0 || !SPECIALISTS.includes(r.resource));
+  return (
+    <span className="civ-resources">
+      {rows.length === 0 && '—'}
+      {rows.map((r) => {
+        const name = JOB_NAMES[r.resource] ?? capitalize(r.resource);
+        return (
+          <span key={r.resource} className={`civ-resource ${r.count > 0 ? 'worked' : ''} ${r.usable ? '' : 'closed'}`} title={r.usable ? rule(r.resource) : 'Your civilization cannot gather this yet'}>
+            {canAssign && (
+              <button type="button" aria-label={`Less ${name}`} disabled={r.count === 0} onClick={() => onWork(area, r.resource, r.count - 1)}>
+                −
+              </button>
+            )}
+            {name}
+            {(canAssign || r.count > 0) && <b>{r.count}</b>}
+            {canAssign && (
+              <button type="button" aria-label={`More ${name}`} disabled={!r.usable || option.free === 0} onClick={() => onWork(area, r.resource, r.count + 1)}>
+                +
+              </button>
+            )}
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
 function summarize(map: GameMap, pieces: MapPieces, civ: number, cap: number) {
@@ -47,22 +75,16 @@ function summarize(map: GameMap, pieces: MapPieces, civ: number, cap: number) {
   }
   growth = Math.min(growth, Math.max(0, cap - loose));
 
-  const settlements = pieces.settlements
+  const rows: SettlementRow[] = pieces.settlements
     .filter((s) => s.civ === civ)
-    .sort((a, b) => TIER[b.tier].value - TIER[a.tier].value || a.area - b.area);
-  const rows: SettlementRow[] = settlements.map((s) => {
-    const area = map.areas[s.area]!;
-    const features = area.features.length > 0 ? `, ${area.features.join(', ')}` : '';
-    return { area: s.area, tier: s.tier, place: `${capitalize(area.terrain!)}${features}`, resources: area.resources, work: s.work ?? [], instability: s.instability ?? 0, threshold: s.threshold ?? 8, capital: Boolean(s.capital) };
-  });
-
-  const settled = rows.reduce((sum, r) => sum + TIER[r.tier].value, 0);
-  const manpower = rows.reduce((sum, r) => sum + TIER[r.tier].manpower, 0);
-  const unitsOn = (r: SettlementRow, bureaucracy: boolean) => r.work.reduce((n, w) => ((w.resource === 'bureaucracy') === bureaucracy ? n + w.count : n), 0);
-  const working = rows.reduce((sum, r) => sum + unitsOn(r, false), 0);
-  const bureaucracy = rows.reduce((sum, r) => sum + unitsOn(r, true), 0);
-  const urban = rows.reduce((sum, r) => sum + TIER[r.tier].growth, 0);
-  return { loose, growth, rows, settled, manpower, working, bureaucracy, urban };
+    .sort((a, b) => TIER[b.tier].value - TIER[a.tier].value || a.area - b.area)
+    .map((s) => {
+      const area = map.areas[s.area]!;
+      const features = area.features.length > 0 ? `, ${area.features.join(', ')}` : '';
+      return { area: s.area, tier: s.tier, place: `${capitalize(area.terrain!)}${features}`, work: s.work ?? [], instability: s.instability ?? 0, threshold: s.threshold ?? 8, capital: Boolean(s.capital) };
+    });
+  const urban = rows.reduce((sum, r) => sum + TIER[r.tier].urbanGrowth, 0);
+  return { loose, growth, rows, urban };
 }
 
 function Meter({ value, max, tone = 'ink' }: { value: number; max: number; tone?: 'ink' | 'warn' }) {
@@ -126,32 +148,71 @@ interface CivilizationSheetProps {
   turn: number;
   cap: number;
   names: ReadonlyMap<AreaId, string>;
+  // Settlement tiers the civilization can build, and what unlocks each locked one.
+  unlocked: readonly Tier[];
+  // The advance that unlocks a tier, or null if a later era's does.
+  unlockedBy: (tier: Tier) => string | null;
   // Support at this turn's check, with the player's planned moves and settlements (engine).
   support: SupportSummary;
   // Whether moves or settlements are planned this turn, so the numbers include them.
   planned: boolean;
-  // The civ-wide instability meter and overextension (engine, design doc §10).
-  stability: { civ: number; overextension: number; free: number; capital: AreaId | null };
+  // The civ-wide instability meter, added to each settlement's own (design doc §10).
+  civInstability: number;
+  // A settlement's manpower jobs (design doc §6): its revealed goods and the specialist jobs.
+  work: (area: AreaId) => WorkOption | null;
+  // One line on what a unit of each job gives.
+  jobRule: (resource: string) => string;
+  goodName: (resource: string) => string;
+  // Goods worked from a settlement's terrain, and its wonder, for its row.
+  siteNotes: (area: AreaId) => string[];
+  // Manpower is assigned in the allocation phase.
+  canAssign: boolean;
+  onWork: (area: AreaId, resource: string, count: number) => void;
+  // A settlement to highlight and scroll to, e.g. one double-clicked on the map.
+  focus?: AreaId | null;
   onRename: (area: AreaId, name: string) => void;
   onShow: (area: AreaId) => void;
+  // Calamity chance, risks, and buy-off marks (engine, design doc §12), and each one's effect.
+  calamities: CalamityView;
+  calamityEffect: (calamity: string) => string;
+  treasury: number;
+  onBuyOff: (calamities: string[]) => void;
+  onRules: () => void;
 }
 
-export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, cap, names, support, planned, stability, onRename, onShow }: CivilizationSheetProps) {
-  const { loose, growth, rows, settled, manpower, working, bureaucracy, urban } = summarize(map, pieces, civ, cap);
-  const gap = (r: SettlementRow) => r.threshold - r.instability - stability.civ;
-  // The capital's free Bureaucracy unit counts with the assigned ones.
-  const calming = bureaucracy + (stability.capital === null ? 0 : 1);
-  const atRisk = rows.filter((r) => gap(r) <= 2);
-  const closest = [...rows].sort((a, b) => gap(a) - gap(b))[0];
-  const counts = (tier: TierId) => rows.filter((r) => r.tier === tier).length;
+export function CivilizationSheet(props: CivilizationSheetProps) {
+  const { map, pieces, civ, color, name, era, turn, cap, names, unlocked, unlockedBy, support, planned, civInstability, work, jobRule, goodName, siteNotes, canAssign, onWork, focus = null, onRename, onShow, calamities, calamityEffect, treasury, onBuyOff, onRules } = props;
+  const focused = useRef<HTMLTableRowElement>(null);
+  useEffect(() => focused.current?.scrollIntoView({ block: 'center' }), [focus]);
+  const { loose, growth, rows, urban } = summarize(map, pieces, civ, cap);
+  const gap = (r: SettlementRow) => r.threshold - r.instability - civInstability;
+  const counts = (tier: Tier) => rows.filter((r) => r.tier === tier).length;
   const supportOf = (area: AreaId) => support.settlements.find((s) => s.area === area)?.support ?? 0;
   const foodOf = (area: AreaId) => support.settlements.find((s) => s.area === area)?.food ?? 0;
   const fed = support.settlements.reduce((sum, s) => sum + s.food, 0);
+  const urbanNext = urban + support.settlements.filter((s) => s.ateOwn).length;
   const short = support.settlements.filter((s) => s.support < s.needed);
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  const risksOf = (area: AreaId) => calamities.settlements.find((s) => s.area === area)?.risks ?? [];
+  const exposed = calamities.settlements.flatMap((s) => s.risks.filter((r) => r.level !== 'low').map((r) => ({ area: s.area, ...r })));
+  const marked = calamities.buyOff.filter((b) => b.marked).map((b) => b.calamity);
   const label = (area: AreaId) => {
     const s = support.settlements.find((x) => x.area === area)!;
-    return `${names.get(area) ?? 'Unnamed'} – ${TIER[s.tier as TierId].name}`;
+    return `${names.get(area) ?? 'Unnamed'} – ${TIER[s.tier].name}`;
   };
+
+  // Manpower by job, from each settlement's work options (engine manpower, wonders included).
+  const options = rows.map((r) => work(r.area)).filter((o): o is WorkOption => o !== null);
+  const manpower = options.reduce((sum, o) => sum + o.total, 0);
+  const on = (job: string) => rows.reduce((sum, r) => sum + r.work.reduce((n, w) => (w.resource === job ? n + w.count : n), 0), 0);
+  const produced = new Map<string, number>();
+  for (const r of rows) for (const w of r.work) if (!SPECIALISTS.includes(w.resource) && w.count > 0) produced.set(w.resource, (produced.get(w.resource) ?? 0) + w.count);
+  const production = [...produced.values()].reduce((a, b) => a + b, 0);
+  const unassigned = options.reduce((sum, o) => sum + o.free, 0);
+  const jobs = [
+    { job: 'production', name: 'Production', units: production, detail: [...produced].map(([g, n]) => `${goodName(g)} ${n}`).join(', ') },
+    ...SPECIALISTS.map((job) => ({ job, name: JOB_NAMES[job]!, units: on(job), detail: '' })),
+  ];
 
   return (
     <div className="civ-sheet">
@@ -172,33 +233,64 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
           </div>
           <Meter value={loose} max={cap} tone={loose >= cap ? 'warn' : 'ink'} />
           <dl className="civ-facts">
-            <dt title="Area growth: 0.5 per token, carried over until it makes a whole token, within area limits and the cap (§4)">Growth next turn</dt>
-            <dd>+{growth}</dd>
-            <dt title="Urban growth from towns and larger (§5)">Urban growth</dt>
-            <dd>+{urban}</dd>
-            <dt title="Token value of all settlements; outside the cap (§5)">In settlements</dt>
-            <dd>{settled}</dd>
+            <dt>Next turn</dt>
+            <dd>
+              +{growth + urbanNext} ({growth} area, {urbanNext} urban)
+            </dd>
+            <dt>Below the cap</dt>
+            <dd>{Math.max(0, cap - loose)}</dd>
           </dl>
+          <p className="civ-rule">Each loose token adds ½ a token a turn, within its area's limit and the cap. Towns and larger add urban growth by tier, plus 1 for a settlement that eats its own food.</p>
         </section>
 
-        <section className="civ-card">
+        <section className="civ-card civ-card-wide">
           <h2>Settlements</h2>
-          <ul className="civ-pyramid">
-            {[...TIERS].reverse().map((t) => {
-              const locked = !UNLOCKED.includes(t.id);
-              return (
-                <li key={t.id} className={locked ? 'locked' : ''} title={locked ? 'Unlocked by a later advance (§5)' : `Built from ${t.id === 'village' ? '6 tokens' : `the tier below + ${t.value - TIERS[TIERS.indexOf(t) - 1]!.value} tokens`}`}>
-                  <span className="civ-pyramid-name">{t.name}</span>
-                  <span className="civ-pyramid-count">{locked ? 'Locked' : counts(t.id)}</span>
-                </li>
-              );
-            })}
-          </ul>
+          <table className="civ-tiers">
+            <thead>
+              <tr>
+                <th>Tier</th>
+                <th title="Your settlements of this tier">Yours</th>
+                <th title="Tokens to found a village, and tokens added to upgrade to each larger tier">Built from</th>
+                <th title="Loose tokens (or food) it needs in adjacent unsettled areas">Support</th>
+                <th>Manpower</th>
+                <th title="Currency a turn">Tax</th>
+                <th title="Instability (local plus civ-wide) at which it collapses one tier, before distance from the capital">Collapses</th>
+                <th title="Settlement points toward the era gates and the score">Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              {TIERS.map((t, i) => {
+                const locked = !unlocked.includes(t.id);
+                return (
+                  <tr key={t.id} className={locked ? 'locked' : ''}>
+                    <td>{t.name}</td>
+                    <td className="civ-tier-count">
+                      {!locked ? (
+                        counts(t.id)
+                      ) : unlockedBy(t.id) ? (
+                        <>
+                          Locked<small>{unlockedBy(t.id)}</small>
+                        </>
+                      ) : (
+                        'Later era'
+                      )}
+                    </td>
+                    <td>{i === 0 ? t.value : `+${t.value - TIERS[i - 1]!.value}`}</td>
+                    <td>{t.support}</td>
+                    <td>{t.manpower}</td>
+                    <td>{t.tax}</td>
+                    <td>{t.threshold}</td>
+                    <td>{i + 1}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </section>
 
         <section className="civ-card">
           <h2 title={planned ? 'At the end of this turn, with your planned moves and settlements' : 'At the end of this turn'}>Support{planned && <span className="civ-planned"> · with plans</span>}</h2>
-          <div className="civ-big" title="Support your settlements get from tokens and food, against what they need: village 2, town 3 (§5, §6)">
+          <div className="civ-big">
             {support.supplied}
             <span> / {support.needed} needed</span>
           </div>
@@ -206,7 +298,7 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
           <dl className="civ-facts">
             {fed > 0 && (
               <>
-                <dt title="Support covered by food gathered this turn, 1 food per missing token (§6)">From food</dt>
+                <dt>From food</dt>
                 <dd>{fed}</dd>
               </>
             )}
@@ -215,7 +307,7 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
             <dt title="Unsettled areas with at least 8 free tokens in or next to them: 6 to found a village and 2 to support it">Village sites</dt>
             <dd>{support.villageSites.length}</dd>
           </dl>
-          {short.length > 0 ? (
+          {short.length > 0 && (
             <ul className="civ-warnings">
               {short.map((s) => (
                 <li key={s.area}>
@@ -223,56 +315,70 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className="civ-note">
-              {support.settlements.length > 0 ? 'All settlements supported' : support.villageSites.length > 0 ? 'Enough free tokens to found a village' : 'A village needs 8 tokens in or next to one area'}
-            </p>
           )}
+          <p className="civ-rule">Each settlement needs loose tokens in adjacent unsettled areas (village 2, town 3). Food stands in, 1 per missing token, from its own area or one step away, then food bought on the market.</p>
         </section>
 
         <section className="civ-card">
           <h2>Manpower</h2>
-          <div className="civ-big" title="Village 1, town 2, plus advance bonuses (§6)">{manpower}</div>
-          <ul className="civ-assign">
-            {[...ASSIGNMENTS, 'Unassigned'].map((a, i) => {
-              const units = i === 0 ? working : a === 'Bureaucracy' ? bureaucracy : a === 'Unassigned' ? manpower - working - bureaucracy : 0;
-              return (
-                <li key={a}>
-                  <span>{a}</span>
-                  <Meter value={units} max={Math.max(1, manpower)} />
-                  <span className="civ-num">{units}</span>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="civ-big" title="Village 1, town 2, plus wonders that add manpower (§6, §9)">{manpower}</div>
+          <table className="civ-jobs">
+            <tbody>
+              {jobs.map((j) => (
+                <tr key={j.job}>
+                  <td>{j.name}</td>
+                  <td className="civ-num">{j.units}</td>
+                  <td>{j.job === 'production' ? j.detail || 'Gathers 1 of a good a turn' : jobRule(j.job)}</td>
+                </tr>
+              ))}
+              <tr className={unassigned > 0 ? 'warn' : ''}>
+                <td>Unassigned</td>
+                <td className="civ-num">{unassigned}</td>
+                <td>{unassigned > 0 ? 'Produces nothing' : ''}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="civ-rule">Production gathers 1 of a good a turn. Changes made in allocation take effect next turn.</p>
         </section>
 
         <section className="civ-card">
-          <h2>Stability</h2>
-          <div className="civ-big" title="Adds to every settlement's local meter; it falls only through Bureaucracy (§10)">
-            {stability.civ}
-            <span> civ-wide</span>
+          <h2>Calamities</h2>
+          <div className="civ-big">
+            {pct(calamities.chance)}
+            <span> this turn</span>
           </div>
-          {closest && <Meter value={closest.instability + stability.civ} max={closest.threshold} tone={atRisk.length > 0 ? 'warn' : 'ink'} />}
-          <dl className="civ-facts">
-            <dt title={`+1 civ-wide each turn for every settlement beyond ${stability.free}`}>Overextension</dt>
-            <dd>{stability.overextension > 0 ? `+${stability.overextension} a turn` : `none (${rows.length} of ${stability.free})`}</dd>
-            <dt title="Manpower in Bureaucracy, plus the capital's free unit: each lowers its settlement's meter by 1 a turn, then the civ-wide meter">Bureaucracy</dt>
-            <dd>{calming > 0 ? `−${calming} a turn` : 'none'}</dd>
-            <dt title="Settlements far from the capital collapse sooner: −1 threshold for every 2 areas beyond 2">Capital</dt>
-            <dd>{stability.capital === null ? 'none' : (names.get(stability.capital) ?? 'Unnamed')}</dd>
-          </dl>
-          {atRisk.length > 0 ? (
+          <p className="civ-rule">1% per settlement tier point, +5% for each quiet turn in a row; it falls back when one strikes.</p>
+          <ul className="civ-buyoff" title="When a marked calamity strikes and the treasury holds the cost, it is paid and the calamity averted; the chance still falls back (§12)">
+            {calamities.buyOff.map((b) => (
+              <li key={b.calamity}>
+                <label title={b.available ? undefined : 'Needs Barter Developed: food bought in'}>
+                  <input
+                    type="checkbox"
+                    checked={b.marked}
+                    disabled={!canAssign}
+                    onChange={(e) => onBuyOff(e.target.checked ? [...marked, b.calamity] : marked.filter((c) => c !== b.calamity))}
+                  />
+                  Buy off {b.name.toLowerCase()} ({b.cost}){!b.available && ' — needs Barter'}
+                </label>
+                <small>{calamityEffect(b.calamity)}</small>
+              </li>
+            ))}
+          </ul>
+          {calamities.buyOff.some((b) => b.marked && b.available && b.cost > treasury) && <p className="civ-note warn">Treasury {treasury}: too little to buy off a marked calamity</p>}
+          {exposed.length > 0 ? (
             <ul className="civ-warnings">
-              {atRisk.map((r) => (
-                <li key={r.area}>
-                  {names.get(r.area) ?? 'Unnamed'} – {TIER[r.tier].name}: {r.instability + stability.civ} of {r.threshold} — close to collapse
+              {exposed.map((r) => (
+                <li key={`${r.area}-${r.calamity}`} title={`${r.reasons.join('; ')} · ${pct(r.share)} of strikes · ${countersText(r.counters)}`}>
+                  {names.get(r.area) ?? 'Unnamed'}: {r.name.toLowerCase()} risk {r.level}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="civ-note">{rows.length > 0 ? 'No settlement close to collapse' : 'No settlements'}</p>
+            <p className="civ-note">{rows.length > 0 ? 'No settlement at medium or high risk' : 'No settlements, no calamities'}</p>
           )}
+          <button type="button" className="civ-link" onClick={onRules}>
+            Every calamity: what it does, what makes it likely, what softens it
+          </button>
         </section>
       </div>
 
@@ -282,11 +388,11 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
           <thead>
             <tr>
               <th>Settlement</th>
-              <th title="Resources in the settlement's area; dark ones are being worked, with the manpower on each (§6). Assign manpower by selecting the settlement on the map">Resources</th>
+              <th title="Jobs for the settlement's manpower: the goods in its area and the specialist jobs; dark ones have manpower on them (§6). Assigned in the Allocation phase; changes take effect next turn">Work</th>
               <th title="Loose tokens in adjacent unsettled areas, plus food standing in for missing tokens, at the end of this turn, against the tier's need (§5, §6)">Support</th>
-              <th title="Units of labor each turn (§6)">Manpower</th>
-              <th title="Tokens added to adjacent areas each turn (§5)">Urban growth</th>
+              <th title="Manpower assigned to jobs, of the settlement's total; idle manpower produces nothing (§6)">Manpower</th>
               <th title="Local instability meter plus the civ-wide meter, against the threshold at which it collapses (§10)">Instability</th>
+              <th title="The calamity it is most exposed to; hover for every risk and its reasons (§12)">Risk</th>
             </tr>
           </thead>
           <tbody>
@@ -300,9 +406,9 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
             {rows.map((r) => {
               const t = TIER[r.tier];
               const ok = supportOf(r.area) >= t.support;
-              const workedOn = (res: string) => r.work.find((w) => w.resource === res)?.count ?? 0;
+              const option = work(r.area);
               return (
-                <tr key={r.area}>
+                <tr key={r.area} ref={r.area === focus ? focused : undefined} className={r.area === focus ? 'civ-focused' : undefined}>
                   <td>
                     <span className="civ-place">
                       <button type="button" className="civ-show" title="Show on the map" onClick={() => onShow(r.area)}>
@@ -311,32 +417,28 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
                       <span>
                         <span className="civ-title">
                           <SettlementName name={names.get(r.area)} onRename={(n) => onRename(r.area, n)} />
-                          <span className="civ-tier"> – {t.name}{r.capital && ', capital'}</span>
+                          <span className="civ-tier">
+                            {' '}
+                            – {t.name}
+                            {r.capital && ', capital'}
+                          </span>
                         </span>
-                        <small>{r.place}</small>
+                        <small>{[r.place, ...siteNotes(r.area)].join(' · ')}</small>
                       </span>
                     </span>
                   </td>
-                  <td>
-                    <span className="civ-resources">
-                      {r.resources.length === 0 && '—'}
-                      {r.resources.map((res) => (
-                        <span key={res} className={`civ-resource ${workedOn(res) > 0 ? 'worked' : ''}`}>
-                          {res}
-                          {workedOn(res) > 0 && <b>{workedOn(res)}</b>}
-                        </span>
-                      ))}
-                    </span>
-                  </td>
+                  <td>{option && <WorkChips area={r.area} option={option} canAssign={canAssign} rule={jobRule} onWork={onWork} />}</td>
                   <td className={ok ? '' : 'warn'} title={ok ? undefined : 'Drops a tier if not supported at resolution'}>
                     {supportOf(r.area)} / {t.support}
                     {foodOf(r.area) > 0 && <small title="Covered by food"> ({foodOf(r.area)} food)</small>}
                   </td>
-                  <td>{t.manpower}</td>
-                  <td>{t.growth > 0 ? `+${t.growth}` : '—'}</td>
-                  <td className={gap(r) <= 2 ? 'warn' : ''} title={`Local ${r.instability} + civ-wide ${stability.civ}; collapses at ${r.threshold}, lower far from the capital`}>
-                    {r.instability + stability.civ} / {r.threshold}
+                  <td className={option && option.free > 0 ? 'warn' : ''} title={option && option.free > 0 ? `${option.free} idle` : undefined}>
+                    {option ? `${option.total - option.free} of ${option.total}` : t.manpower}
                   </td>
+                  <td className={gap(r) <= 2 ? 'warn' : ''} title={`Local ${r.instability} + civ-wide ${civInstability}; collapses at ${r.threshold}, lower far from the capital`}>
+                    {r.instability + civInstability} / {r.threshold}
+                  </td>
+                  <RiskCell risks={risksOf(r.area)} />
                 </tr>
               );
             })}
@@ -345,4 +447,24 @@ export function CivilizationSheet({ map, pieces, civ, color, name, era, turn, ca
       </section>
     </div>
   );
+}
+
+function RiskCell({ risks }: { risks: CalamityView['settlements'][number]['risks'] }) {
+  const top = [...risks].sort((a, b) => b.weight - a.weight)[0];
+  if (!top) return <td>—</td>;
+  const title = risks.map((r) => `${r.name}: ${r.level} (${r.reasons.join('; ')}) · ${countersText(r.counters)}`).join('\n');
+  return (
+    <td className={top.level === 'high' ? 'warn' : ''} title={title}>
+      {top.name} · {top.level}
+    </td>
+  );
+}
+
+// Which advances soften a calamity here, those in force and those not yet reached (§12).
+function countersText(counters: Counter[]): string {
+  if (counters.length === 0) return 'nothing softens it yet';
+  const label = (c: Counter) => `${c.name}${c.stage === 'mastered' ? ' Mastered' : ''} ${c.effect === 'halves' ? 'halves it' : 'keeps the tier'}`;
+  const met = counters.filter((c) => c.met).map(label);
+  const not = counters.filter((c) => !c.met).map((c) => `${label(c)} (not yet ${c.stage === 'mastered' ? 'Mastered' : 'Developed'})`);
+  return [...met, ...not].join(', ');
 }

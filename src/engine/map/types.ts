@@ -4,8 +4,8 @@ export type MapType = 'inlandSea' | 'continents' | 'singleLandmass';
 export const MAP_TYPES: readonly MapType[] = ['inlandSea', 'continents', 'singleLandmass'];
 
 // Room to expand (design doc §2): land per civilization.
-export type RoomToExpand = 'crowded' | 'standard' | 'spacious';
-export const ROOM_TO_EXPAND: readonly RoomToExpand[] = ['crowded', 'standard', 'spacious'];
+export type RoomToExpand = 'veryCrowded' | 'crowded' | 'standard' | 'spacious';
+export const ROOM_TO_EXPAND: readonly RoomToExpand[] = ['veryCrowded', 'crowded', 'standard', 'spacious'];
 
 export type Terrain = 'plains' | 'forest' | 'hills' | 'mountains' | 'desert' | 'marsh';
 export const TERRAINS: readonly Terrain[] = ['plains', 'forest', 'hills', 'mountains', 'desert', 'marsh'];

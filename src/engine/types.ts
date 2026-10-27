@@ -1,4 +1,4 @@
-import type { DomainId, Effect, EraId } from '../content/types';
+import type { Effect, EraId } from '../content/types';
 import type { Content } from './content';
 import type { InstabilitySource } from './instability';
 import type { AreaId, GameMap, MapType, ResourceId, RoomToExpand } from './map/types';
@@ -8,14 +8,20 @@ import type { RngState } from './rng';
 export type PlayerId = string;
 
 // Design doc §3. Resources and Resolution run automatically; players act in Trade and Allocation.
-export type Phase = 'resources' | 'trade' | 'allocation' | 'resolution';
-export const PHASES: readonly Phase[] = ['resources', 'trade', 'allocation', 'resolution'];
-export const PLAYER_PHASES: readonly Phase[] = ['trade', 'allocation'];
+export type Phase = 'resources' | 'allocation' | 'resolution';
+export const PHASES: readonly Phase[] = ['resources', 'allocation', 'resolution'];
+export const PLAYER_PHASES: readonly Phase[] = ['allocation'];
+
+// AI approaches (design doc §2, v0.32): fixed priority patterns favouring different strategies.
+export const AI_APPROACHES = ['balanced', 'expansion', 'building', 'study', 'culture', 'aggression'] as const;
+export type AiApproach = (typeof AI_APPROACHES)[number];
 
 export interface PlayerSetup {
   id: PlayerId;
   name: string;
   kind: 'human' | 'ai';
+  // An AI player's approach; random (the default) draws one at the start of the game.
+  approach?: AiApproach | 'random';
 }
 
 // Procedural map options (design doc §2). The map uses the game seed, with one civilization per
@@ -39,8 +45,8 @@ export interface GameSetup {
   advancedStart?: boolean;
 }
 
-// One civilization's standing on one advance (design doc §8). `progress` builds toward the next
-// stage; `adoption` (0–100) applies once Developed, and 100 is Mastered.
+// One civilization's standing on one advance (design doc §8). `progress` is usage and learning
+// toward Known or Developed. `adoption` (0–100) applies once Developed, and 100 is Mastered.
 export interface AdvanceProgress {
   advance: string;
   stage: 'none' | 'known' | 'developed';
@@ -71,6 +77,20 @@ export interface PlayerState {
   movement: number;
   // Civ-wide instability meter, added to every settlement's local meter (design doc §10).
   instability: number;
+  // Currency held; it keeps from turn to turn (design doc §6, Currency).
+  treasury: number;
+  // Market prices in this player's market, unrounded; a good not listed is at its starting price
+  // (design doc §7).
+  prices: Record<ResourceId, number>;
+  // Standing market orders, at most one per good (design doc §7).
+  orders: MarketOrder[];
+  // Goods it bought or sold during `turn`'s trade phase (Barter's adoption); absent means none.
+  traded?: { turn: number; resources: ResourceId[] };
+  // Turns in a row with a settlement and no calamity: each adds to the calamity chance (design doc
+  // §12).
+  quiet: number;
+  // Calamities to buy off when they strike (design doc §12, Buying off); a standing choice.
+  buyOff: string[];
   // The capital's area: the first settlement, then the largest remaining (design doc §10).
   capital: AreaId | null;
   // Settlement tiers the civilization can build (design doc §5): the setup's plus its advances'.
@@ -80,21 +100,59 @@ export interface PlayerState {
   effects: Effect[];
   // Advances with any progress or stage, in content order (design doc §8).
   advances: AdvanceProgress[];
-  // The domain High Learning goes to; null splits it across every advance in progress.
-  focus: DomainId | null;
+  // Advances learning goes to, in order (design doc §8, study queue).
+  study: string[];
+  // Conflicts it took part in during `turn`'s resolution (design doc §8, Archery); absent means none.
+  fought?: { turn: number; count: number };
+  // The era it has entered; kept even if it falls below the gate (design doc §14).
+  era: EraId;
+  // Culture points earned, and Artists progress toward the next (design doc §6).
+  culture: number;
+  cultureProgress: number;
+  // An AI player's approach, fixed at the start of the game (design doc §2, v0.32).
+  approach?: AiApproach;
 }
 
-// Manpower on one resource of the settlement's area, or on Bureaucracy ('bureaucracy') (design doc
-// §6, Manpower). Standing orders, most recently changed last; manpower not listed is unassigned.
+// The endgame countdown (design doc §15): it began in `began`, when `by` completed the final era,
+// and the game ends with resolution of turn `ends`.
+export interface Endgame {
+  began: number;
+  ends: number;
+  by: PlayerId[];
+}
+
+// One civilization's points (design doc §15).
+export interface Score {
+  player: PlayerId;
+  knowledge: number;
+  settlement: number;
+  wonders: number;
+  culture: number;
+  total: number;
+}
+
+// Manpower on one resource of the settlement's area, or on a specialist assignment ('bureaucracy',
+// 'highLearning', 'artists', 'wonder') (design doc §6, Manpower). Standing orders, most recently changed last; manpower not listed is unassigned.
 export interface Work {
   resource: ResourceId;
   count: number;
 }
 
+// A standing market order (design doc §7): buy or sell up to `count` each turn, at no more (buy) or
+// no less (sell) than `limit`; without a limit, at the market price.
+export interface MarketOrder {
+  resource: ResourceId;
+  side: 'buy' | 'sell';
+  count: number;
+  limit?: number;
+}
+
 // Goods gathered in the resources phase, held where they were gathered; lost at the end of the
-// turn (design doc §6).
+// turn (design doc §6). Goods bought on the market have no area: they are in the civilization's
+// pool (design doc §7, Delivery). Durable goods left at the end of a turn join the pool, the
+// civilization's stock (v0.28).
 export interface Good {
-  area: AreaId;
+  area: AreaId | null;
   player: PlayerId;
   resource: ResourceId;
   count: number;
@@ -113,6 +171,43 @@ export interface Settlement {
   stored?: number;
   // The last turn it was attacked (design doc §8, Palisades).
   attacked?: number;
+  // The last turn it gathered food and ate some of its own for support: +1 urban growth (design
+  // doc §5, Urban growth).
+  ateOwn?: number;
+  // The last turn food covered any of its support (Famine's weight).
+  fed?: number;
+  // The last calamity to strike it (design doc §12).
+  struck?: { turn: number; calamity: string };
+  // Manpower idle in `turn` (Superstition, Civil disorder): the most recent assignments first.
+  idle?: { turn: number; units: number };
+  // It gathers no food through this turn (Drought).
+  drought?: number;
+}
+
+// A wonder under construction (design doc §9, v0.28) at the builder's settlement in `area`:
+// `worked` of its turns done. `labour` is the manpower on it in `turn`'s resources phase. Once a
+// rival completes it, `outbuilt` is that turn, and the builder chooses in its next allocation phase
+// to move the progress or turn it into culture points.
+export interface Build {
+  wonder: string;
+  player: PlayerId;
+  area: AreaId;
+  worked: number;
+  started: number;
+  labour?: { turn: number; units: number };
+  outbuilt?: number;
+}
+
+// A completed wonder: one in the world. Its builder keeps the points; its effects work for whoever
+// holds the settlement in `area` until that settlement is gone (`ruined`).
+export interface WonderRecord {
+  wonder: string;
+  builder: PlayerId;
+  area: AreaId;
+  turn: number;
+  // Copied from the wonder's content at completion.
+  effects: Effect[];
+  ruined?: boolean;
 }
 
 // A founding (no settlement in the area) or an upgrade to the next tier, ordered in allocation.
@@ -142,6 +237,13 @@ export interface GameState {
   settlements: Settlement[];
   conversions: ConversionOrder[];
   goods: Good[];
+  // Areas whose limit is lowered by 1 through `until` (Drought, design doc §12).
+  dry: { area: AreaId; until: number }[];
+  builds: Build[];
+  wonders: WonderRecord[];
+  endgame: Endgame | null;
+  // The countdown has run out; no further commands are accepted.
+  over: boolean;
 }
 
 export type Command =
@@ -154,8 +256,17 @@ export type Command =
   | { type: 'nameSettlement'; player: PlayerId; area: AreaId; name: string }
   // Sets how much of a settlement's manpower works one of its area's resources; 0 unassigns it.
   | { type: 'assignWork'; player: PlayerId; area: AreaId; resource: ResourceId; count: number }
-  // Points High Learning at a discovery domain; null removes the focus.
-  | { type: 'setFocus'; player: PlayerId; domain: DomainId | null };
+  // Orders the study queue; an empty queue splits learning evenly.
+  | { type: 'setStudy'; player: PlayerId; queue: string[] }
+  // Sets the standing market order for one good; a count of 0 cancels it.
+  | { type: 'setOrder'; player: PlayerId; resource: ResourceId; side: 'buy' | 'sell'; count: number; limit?: number }
+  // Sets which calamities to buy off when they strike.
+  | { type: 'setBuyOff'; player: PlayerId; calamities: string[] }
+  // Starts building a wonder at one of the player's settlements.
+  | { type: 'startWonder'; player: PlayerId; wonder: string; area: AreaId }
+  // After losing a race for `wonder`: moves the progress to another wonder at `area`, or with no
+  // `to`, turns it into culture points.
+  | { type: 'redirectWonder'; player: PlayerId; wonder: string; to?: { wonder: string; area: AreaId } };
 
 // Tokens taken from one area by a conversion.
 export interface TokenSource {
@@ -185,11 +296,36 @@ export type GameEvent =
   | { type: 'settlementDropped'; player: PlayerId; area: AreaId; tier: SettlementTier | null; refugees: number; lost: number }
   | { type: 'goodsProduced'; player: PlayerId; area: AreaId; resource: ResourceId; count: number }
   | { type: 'foodSupport'; player: PlayerId; area: AreaId; count: number }
+  | { type: 'taxCollected'; player: PlayerId; amount: number }
+  // A market price moved: `imbalance` units bought minus sold in that player's market.
+  | { type: 'priceChanged'; player: PlayerId; resource: ResourceId; from: number; to: number; imbalance: number }
+  | { type: 'marketTrade'; player: PlayerId; resource: ResourceId; side: 'buy' | 'sell'; count: number; price: number }
+  // A calamity struck (or was bought off): `tokens` lost, `dropped` if the settlement lost a tier;
+  // `from` is the civilization an epidemic spread from.
+  | { type: 'calamity'; player: PlayerId; calamity: string; area: AreaId; averted: boolean; paid: number; tokens: number; dropped: boolean; from?: PlayerId }
   | { type: 'instabilityChanged'; player: PlayerId; area: AreaId | null; amount: number; source: InstabilitySource }
   | { type: 'settlementCollapsed'; player: PlayerId; area: AreaId; tier: SettlementTier }
   | { type: 'capitalMoved'; player: PlayerId; area: AreaId | null }
   | { type: 'advanceReached'; player: PlayerId; advance: string; stage: 'known' | 'developed' | 'mastered' }
+  // Learning the study queue could not use, split evenly among advances waiting for it.
+  | { type: 'studyQueueEmpty'; player: PlayerId; learning: number }
   | { type: 'urbanGrowth'; player: PlayerId; from: AreaId; to: AreaId; count: number }
+  | { type: 'cultureGained'; player: PlayerId; points: number }
+  | { type: 'eraEntered'; player: PlayerId; era: EraId }
+  | { type: 'endgameBegan'; by: PlayerId[]; ends: number }
+  // Final scores, highest first; every civilization tied for the top is a winner.
+  | { type: 'gameEnded'; scores: Score[]; winners: PlayerId[] }
+  | { type: 'wonderStarted'; player: PlayerId; wonder: string; area: AreaId; worked: number }
+  | { type: 'wonderWorked'; player: PlayerId; wonder: string; worked: number; currency: number }
+  | { type: 'wonderStalled'; player: PlayerId; wonder: string; reason: string }
+  | { type: 'wonderCompleted'; player: PlayerId; wonder: string; area: AreaId }
+  // A rival completed it first; the builder chooses what to do with `worked` turns.
+  | { type: 'wonderOutbuilt'; player: PlayerId; wonder: string; worked: number; by: PlayerId }
+  | { type: 'wonderConverted'; player: PlayerId; wonder: string; points: number }
+  // Its settlement was captured or lost: the progress is gone.
+  | { type: 'wonderLost'; player: PlayerId; wonder: string; area: AreaId; worked: number }
+  // A completed wonder's settlement is gone: its effects end.
+  | { type: 'wonderRuined'; wonder: string; area: AreaId }
   | { type: 'conflict'; area: AreaId; losses: TokenCount[] }
   | {
       type: 'settlementAttacked';
@@ -203,6 +339,9 @@ export type GameEvent =
       losses: TokenCount[];
       capturedBy: PlayerId | null;
       survivors: number;
+      // Currency the capturer took from the defender's treasury, and durable goods from its stock.
+      spoils: number;
+      goods?: { resource: ResourceId; count: number }[];
     };
 
 export interface StampedEvent {

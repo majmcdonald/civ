@@ -45,9 +45,10 @@ function context(game: Session): Context {
 }
 
 describe('conversion orders', () => {
-  it('are only accepted in the allocation phase', () => {
+  it('are refused once the player has ended the allocation phase', () => {
     const { game, area } = scene();
-    expectRejected(game, { type: 'orderConversion', player: 'p1', area, ordered: true }, /allocation phase/);
+    play(game, { type: 'endPhase', player: 'p1' });
+    expectRejected(game, { type: 'orderConversion', player: 'p1', area, ordered: true }, /already ended/);
   });
 
   it('are recorded and cancelled', () => {
@@ -285,7 +286,7 @@ describe('support summary', () => {
     const away = landNeighbors(map, b).find((n) => n !== area && !map.areas[area]!.neighbors.includes(n))!;
     play(game, { type: 'orderMove', player: 'p1', from: b, to: away, count: 2 });
     const summary = supportSummary(game.state, map, game.content, 'p1');
-    expect(summary.settlements).toEqual([{ area, tier: 'village', support: 0, food: 0, needed: 2 }]);
+    expect(summary.settlements).toEqual([{ area, tier: 'village', support: 0, food: 0, ateOwn: false, needed: 2 }]);
   });
 
   it('counts village sites with 8 free tokens in reach', () => {

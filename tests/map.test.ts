@@ -19,6 +19,7 @@ const cases: Case[] = [
   ),
   ...MAP_TYPES.flatMap((type): Case[] => [
     [type, 2, 5, 'crowded'],
+    [type, 15, 5, 'veryCrowded'],
     [type, 10, 5, 'spacious'],
   ]),
   ['inlandSea', 15, 5, 'spacious'],
@@ -121,7 +122,7 @@ describe('map generator', () => {
       }
       for (const a of m.starts) {
         const dist = travelDistances(m, a);
-        for (const b of m.starts) if (a !== b) expect(dist[b]).toBeGreaterThanOrEqual(4);
+        for (const b of m.starts) if (a !== b) expect(dist[b]).toBeGreaterThanOrEqual(room === 'veryCrowded' ? 3 : 4);
       }
     });
 

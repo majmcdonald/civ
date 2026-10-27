@@ -24,6 +24,7 @@ export const TYPE_NAMES: Record<MapType, string> = {
 };
 
 export const ROOM_NAMES: Record<RoomToExpand, string> = {
+  veryCrowded: 'Very crowded',
   crowded: 'Crowded',
   standard: 'Standard',
   spacious: 'Spacious',

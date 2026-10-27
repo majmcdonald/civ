@@ -1,22 +1,32 @@
 import type { Advance, AreaFilter, Condition, DomainId, Effect, Gathering, Input, SettlementTier } from '../content/types';
 import type { Content } from './content';
 import { emit } from './context';
-import { capitalDistance } from './instability';
+import { heldWonders, learningBonus } from './effects';
+import { addCiv, capitalDistance, RAPID_CHANGE_FREE } from './instability';
 import type { AreaId, GameMap } from './map/types';
 import { STARTING_TOKEN_CAP } from './population';
+import { activeWork } from './resources';
 import { randomInt } from './rng';
 import type { AdvanceProgress, Command, Context, GameState, PlayerId, PlayerState, Settlement } from './types';
 
 // Discovery (design doc §8). Each advance climbs Plausible → Known → Developed → Adopted →
-// Mastered. Known and Developed each have an accumulator reached exactly when progress reaches its
-// cost; nothing is random. High Learning manpower is a pool sent to the focused domain's advances,
-// at half rate toward Developed. Known and Developed are never lost; adoption falls without its
-// drivers; partial progress pauses while conditions lapse.
+// Mastered, each step reached exactly when its progress reaches its cost; nothing is random. Usage
+// (the advance's own inputs) moves every step; learning (High Learning, sent down the study queue)
+// speeds it up but is never required. Nothing is ever lost;
+// partial progress toward Known and Developed pauses while conditions lapse.
 
 export const HIGH_LEARNING = 'highLearning';
 export const DOMAINS: readonly DomainId[] = ['land', 'crafts', 'beliefs', 'travel', 'war'];
-// High Learning counts in full toward Known and at this share toward Developed (starting value).
-export const HIGH_LEARNING_DEVELOPED = 0.5;
+// What one unit of learning adds: progress toward Known and Developed, adoption points toward
+// Mastered (design doc §8, v0.17; starting values).
+export const LEARNING_PROGRESS = 2;
+export const LEARNING_ADOPTION = 10;
+// Adoption points to Mastered (100% adopted).
+export const ADOPTION_COST = 200;
+// Shares of learning are fractions; sums within this of a cost count as reaching it.
+const EPSILON = 1e-9;
+
+const fill = (value: number, cost: number) => (cost - value < EPSILON ? cost : value);
 // Advances each civilization draws with Advanced start (design doc §2, Setup options).
 export const ADVANCED_START_DRAWS = 2;
 
@@ -134,10 +144,16 @@ export function inputCount(state: GameState, map: GameMap, content: Content, id:
       return new Set(own.flatMap((s) => (s.work ?? []).filter((w) => w.count > 0 && content.resources.some((r) => r.id === w.resource)).map((w) => w.resource))).size;
     case 'attacked':
       return own.filter((s) => s.attacked === state.turn).length;
-    // Calamities arrive in Phase 4 step 5 and the market in step 4; until then nothing counts.
+    case 'fought': {
+      const fought = player(state, id).fought;
+      return fought?.turn === state.turn ? fought.count : 0;
+    }
+    case 'traded': {
+      const traded = player(state, id).traded;
+      return traded?.turn === state.turn ? traded.resources.length : 0;
+    }
     case 'struck':
-    case 'traded':
-      return 0;
+      return own.filter((s) => s.struck?.turn === state.turn && s.struck.calamity === input.calamity).length;
   }
 }
 
@@ -146,12 +162,142 @@ export function plausible(state: GameState, map: GameMap, content: Content, id: 
 }
 
 export function highLearning(state: GameState, id: PlayerId): number {
-  return state.settlements.filter((s) => s.player === id).reduce((sum, s) => sum + ((s.work ?? []).find((w) => w.resource === HIGH_LEARNING)?.count ?? 0), 0);
+  return state.settlements.filter((s) => s.player === id).reduce((sum, s) => sum + (activeWork(state, s).find((w) => w.resource === HIGH_LEARNING)?.count ?? 0), 0);
 }
 
-// One source of an advance's progress this turn, for the Knowledge screen's breakdown.
+// Free learning toward an advance's next step, Known or Developed, while it is plausible
+// (Superstition's gift to Ritual, design doc §12). Resolved with the turn's discovery.
+export function grantLearning(ctx: Context, id: PlayerId, advanceId: string, units: number): void {
+  const { state, map, content } = ctx;
+  const advance = content.advances.find((a) => a.id === advanceId);
+  if (!advance) return;
+  const stage = stageOf(state, id, advanceId);
+  if (stage === 'developed' || !plausible(state, map, content, id, advance)) return;
+  const cost = stepCost(state, id, advance, stage);
+  if (cost === null) return;
+  const e = entry(player(state, id), advanceId, content);
+  e.progress = Math.min(cost, e.progress + units * LEARNING_PROGRESS);
+}
+
+// Learning a turn: one per High Learning unit, plus wonders that add learning (Stonehenge).
+export function learningPool(state: GameState, id: PlayerId): number {
+  return highLearning(state, id) + learningBonus(state, id);
+}
+
+// Learning a turn by source: High Learning, each held wonder that adds learning (by wonder id), and
+// any other effect.
+export function learningSources(state: GameState, id: PlayerId): { source: string; amount: number }[] {
+  const wonders = heldWonders(state, id)
+    .map((w) => ({ source: w.wonder, amount: w.effects.reduce((sum, e) => sum + (e.type === 'learning' ? e.amount : 0), 0) }))
+    .filter((w) => w.amount > 0);
+  const other = learningBonus(state, id) - wonders.reduce((sum, w) => sum + w.amount, 0);
+  return [{ source: HIGH_LEARNING, amount: highLearning(state, id) }, ...wonders, ...(other > 0 ? [{ source: 'other', amount: other }] : [])];
+}
+
+// What an advance's next step costs, in its own units: progress toward Known or Developed, or
+// adoption points toward Mastered (ADOPTION_COST is 100%). Null when there is no next step.
+function stepCost(state: GameState, id: PlayerId, advance: Advance, stage: Stage): number | null {
+  if (stage === 'none') return advance.known?.cost ?? null;
+  if (stage === 'known') return advance.developed?.cost ?? null;
+  if (!advance.adoption || advance.baseline || adoptionOf(state, id, advance.id) >= 100) return null;
+  return ADOPTION_COST;
+}
+
+// Progress so far toward the next step, in the step's units.
+function stepProgress(state: GameState, id: PlayerId, advance: Advance, stage: Stage): number {
+  if (stage === 'developed') return (adoptionOf(state, id, advance.id) * ADOPTION_COST) / 100;
+  return progressOf(state, id, advance.id)?.progress ?? 0;
+}
+
+// What one unit of learning adds toward the step.
+const perLearning = (stage: Stage) => (stage === 'developed' ? LEARNING_ADOPTION : LEARNING_PROGRESS);
+
+function usageInputs(advance: Advance, stage: Stage): Input[] {
+  if (stage === 'none') return advance.known?.inputs ?? [];
+  if (stage === 'known') return advance.developed?.inputs ?? [];
+  return advance.adoption?.inputs ?? [];
+}
+
+// Where an advance's next step stands and what usage adds to it this turn. Toward Known and
+// Developed nothing moves while the plausibility conditions lapse; adoption does not need them.
+interface Step {
+  cost: number;
+  progress: number;
+  moving: boolean;
+  usage: ProgressPart[];
+  usageRate: number;
+}
+
+function step(state: GameState, map: GameMap, content: Content, id: PlayerId, advance: Advance): Step | null {
+  const stage = stageOf(state, id, advance.id);
+  const cost = stepCost(state, id, advance, stage);
+  if (cost === null) return null;
+  const progress = stepProgress(state, id, advance, stage);
+  const moving = stage === 'developed' || plausible(state, map, content, id, advance);
+  const usage: ProgressPart[] = [];
+  if (moving && progress < cost) {
+    for (const input of usageInputs(advance, stage)) {
+      const count = inputCount(state, map, content, id, input);
+      if (count > 0) usage.push({ input, count, value: count * input.amount });
+    }
+  }
+  return { cost, progress, moving, usage, usageRate: usage.reduce((sum, x) => sum + x.value, 0) };
+}
+
+// Where this turn's learning goes: the study queue in order, then an even split of what is left
+// among every advance still short of its next step after usage; anything beyond every need is
+// unused. Learning only speeds advances up; usage alone also gets there.
+export interface LearningPlan {
+  shares: Map<string, number>;
+  pool: number;
+  queued: number;
+  split: number;
+  unused: number;
+}
+
+export function learningPlan(state: GameState, map: GameMap, content: Content, id: PlayerId): LearningPlan {
+  const p = player(state, id);
+  const need = new Map<string, number>();
+  for (const advance of content.advances) {
+    const s = step(state, map, content, id, advance);
+    if (!s || !s.moving) continue;
+    const left = (s.cost - s.progress - s.usageRate) / perLearning(stageOf(state, id, advance.id));
+    if (left > EPSILON) need.set(advance.id, left);
+  }
+  const shares = new Map<string, number>();
+  const give = (advance: string, amount: number) => {
+    shares.set(advance, (shares.get(advance) ?? 0) + amount);
+    need.set(advance, need.get(advance)! - amount);
+  };
+  const pool = learningPool(state, id);
+  let left = pool;
+  for (const advance of p.study) {
+    if (left <= 0) break;
+    const n = need.get(advance) ?? 0;
+    if (n <= EPSILON) continue;
+    const amount = Math.min(n, left);
+    give(advance, amount);
+    left -= amount;
+  }
+  const queued = pool - left;
+  // Even split, refilled while some advances need less than their share.
+  for (;;) {
+    const waiting = content.advances.map((a) => a.id).filter((a) => (need.get(a) ?? 0) > EPSILON);
+    if (left <= EPSILON || waiting.length === 0) break;
+    const share = left / waiting.length;
+    for (const a of waiting) {
+      const amount = Math.min(need.get(a)!, share);
+      give(a, amount);
+      left -= amount;
+    }
+  }
+  return { shares, pool, queued, split: pool - queued - left, unused: left };
+}
+
+// One source of an advance's progress this turn, for the Knowledge screen's breakdown. For
+// learning, `count` is the learning sent and `value` what it adds.
 export interface ProgressPart {
-  input: Input | 'highLearning';
+  input: Input | 'learning';
   count: number;
   value: number;
 }
@@ -162,67 +308,54 @@ export interface AdvanceView {
   stage: Stage;
   plausible: boolean;
   conditions: { condition: Condition; met: boolean }[];
-  // Toward the next stage (Known, then Developed); null once Developed.
-  next: 'known' | 'developed' | null;
+  // The next step and its progress, in progress toward Known and Developed and in adoption points
+  // (ADOPTION_COST is Mastered) after; null when there is none.
+  next: 'known' | 'developed' | 'mastered' | null;
   progress: number;
   cost: number;
   parts: ProgressPart[];
+  usageRate: number;
+  // Learning sent to the advance this turn, and what it adds.
+  learning: number;
+  learningRate: number;
   rate: number;
-  // Turns to the next stage at the current rate; null when nothing is moving it.
+  // Turns to the next step at the current rate; null when nothing moves it.
   turns: number | null;
   adoption: number;
-  adoptionRate: number;
-  focused: boolean;
-}
-
-function stageRules(advance: Advance, stage: Stage) {
-  if (stage === 'none') return advance.known ?? null;
-  if (stage === 'known') return advance.developed ?? null;
-  return null;
+  // Place in the study queue (1 first), or null.
+  queued: number | null;
 }
 
 // Every advance's standing and rates for a player; resolution applies exactly these rates.
 export function discoveryView(state: GameState, map: GameMap, content: Content, id: PlayerId): AdvanceView[] {
   const p = player(state, id);
-  const open = content.advances.filter((a) => {
-    const stage = stageOf(state, id, a.id);
-    return stageRules(a, stage) !== null && plausible(state, map, content, id, a);
-  });
-  const focused = p.focus !== null && open.some((a) => a.domain === p.focus) ? open.filter((a) => a.domain === p.focus) : open;
-  const share = focused.length > 0 ? highLearning(state, id) / focused.length : 0;
+  const plan = learningPlan(state, map, content, id);
   return content.advances.map((advance) => {
     const stage = stageOf(state, id, advance.id);
-    const rules = stageRules(advance, stage);
-    const isOpen = open.includes(advance);
-    const parts: ProgressPart[] = [];
-    if (rules && isOpen) {
-      for (const input of rules.inputs) {
-        const count = inputCount(state, map, content, id, input);
-        if (count > 0) parts.push({ input, count, value: count * input.amount });
-      }
-      if (focused.includes(advance) && share > 0) parts.push({ input: 'highLearning', count: share, value: share * (stage === 'none' ? 1 : HIGH_LEARNING_DEVELOPED) });
-    }
-    const rate = parts.reduce((sum, x) => sum + x.value, 0);
-    const progress = progressOf(state, id, advance.id)?.progress ?? 0;
-    const cost = rules?.cost ?? 0;
-    const adoptionRate =
-      stage === 'developed' && advance.adoption
-        ? advance.adoption.inputs.reduce((sum, input) => sum + inputCount(state, map, content, id, input) * input.amount, 0)
-        : 0;
+    const s = step(state, map, content, id, advance);
+    const learning = plan.shares.get(advance.id) ?? 0;
+    const learningRate = learning * perLearning(stage);
+    const parts = [...(s?.usage ?? [])];
+    if (learning > 0) parts.push({ input: 'learning', count: learning, value: learningRate });
+    const usageRate = s?.usageRate ?? 0;
+    const rate = usageRate + learningRate;
+    const index = p.study.indexOf(advance.id);
     return {
       advance,
       stage,
       plausible: plausible(state, map, content, id, advance),
       conditions: (advance.plausible ?? []).map((condition) => ({ condition, met: conditionMet(state, map, content, id, condition) })),
-      next: rules ? (stage === 'none' ? 'known' : 'developed') : null,
-      progress,
-      cost,
+      next: s ? (stage === 'none' ? 'known' : stage === 'known' ? 'developed' : 'mastered') : null,
+      progress: s?.progress ?? 0,
+      cost: s?.cost ?? 0,
       parts,
+      usageRate,
+      learning,
+      learningRate,
       rate,
-      turns: rules && rate > 0 ? Math.max(1, Math.ceil((cost - progress) / rate)) : null,
+      turns: !s ? null : s.progress >= s.cost ? 0 : rate > 0 ? Math.max(1, Math.ceil((s.cost - s.progress - EPSILON) / rate)) : null,
       adoption: adoptionOf(state, id, advance.id),
-      adoptionRate,
-      focused: focused.includes(advance) && p.focus !== null,
+      queued: index >= 0 ? index + 1 : null,
     };
   });
 }
@@ -241,8 +374,7 @@ function entry(p: PlayerState, advance: string, content: Content): AdvanceProgre
 const TIER_ORDER: readonly SettlementTier[] = ['village', 'town', 'city', 'metropolis'];
 
 // What advances do (design doc §8): a Developed advance's effects are in force civ-wide, and its
-// Mastered effects while adoption is 100, so they lapse if adoption falls. The token cap and the
-// unlocked tiers follow from them.
+// Mastered effects once adoption is 100. The token cap and the unlocked tiers follow from them.
 export function refreshEffects(state: GameState, content: Content, p: PlayerState): void {
   const effects: Effect[] = [];
   for (const advance of content.advances) {
@@ -294,48 +426,66 @@ export function grantStartingKnowledge(ctx: Context): void {
   for (const p of ctx.state.players) refreshEffects(ctx.state, ctx.content, p);
 }
 
-// Resolution step 10: every open advance gains this turn's progress, reaching its next stage
-// exactly at its cost (any excess is dropped); Developed advances gain or lose adoption.
+// Resolution step 10: every advance gains this turn's usage and learning toward its next step and
+// reaches it when progress reaches the cost (any excess is dropped). Nothing falls. Finished
+// advances leave the study queue.
 export function resolveDiscovery(ctx: Context): void {
   const { state, map, content } = ctx;
   for (const p of state.players) {
+    let steps = 0;
     const views = discoveryView(state, map, content, p.id);
+    const plan = learningPlan(state, map, content, p.id);
+    if (plan.pool > 0 && plan.queued === 0 && plan.split > 0) emit(ctx, { type: 'studyQueueEmpty', player: p.id, learning: plan.split });
     for (const view of views) {
       const { advance } = view;
-      if (view.next && view.rate > 0) {
-        const e = entry(p, advance.id, content);
-        e.progress += view.rate;
-        if (e.progress >= view.cost) {
-          e.stage = view.next;
-          e.progress = 0;
-          if (view.next === 'developed') {
-            if (!advance.adoption) e.adoption = 100;
-            runHooks(ctx, advance);
-          }
-          emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: view.next });
-          if (e.adoption === 100) emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: 'mastered' });
+      if (!view.next || (view.rate <= 0 && view.progress < view.cost)) continue;
+      const e = entry(p, advance.id, content);
+      const progress = fill(view.progress + view.rate, view.cost);
+      if (view.next === 'mastered') {
+        e.adoption = Math.min(100, (progress * 100) / ADOPTION_COST);
+        if (e.adoption >= 100) {
+          steps += 1;
+          emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: 'mastered' });
         }
         continue;
       }
-      if (view.stage !== 'developed' || !advance.adoption) continue;
-      const e = entry(p, advance.id, content);
-      const before = e.adoption;
-      e.adoption = view.adoptionRate > 0 ? Math.min(100, before + view.adoptionRate) : Math.max(0, before - advance.adoption.fall);
-      if (e.adoption === 100 && before < 100) emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: 'mastered' });
+      e.progress = Math.min(progress, view.cost);
+      if (e.progress < view.cost) continue;
+      e.stage = view.next;
+      e.progress = 0;
+      steps += 1;
+      if (view.next === 'developed') {
+        if (!advance.adoption) e.adoption = 100;
+        runHooks(ctx, advance);
+      }
+      emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: view.next });
+      if (e.adoption === 100) emit(ctx, { type: 'advanceReached', player: p.id, advance: advance.id, stage: 'mastered' });
     }
+    // Rapid change: a burst of new ways unsettles the people. A Developed advance with no adoption
+    // stage, Mastered at the same moment, counts once.
+    addCiv(ctx, p.id, Math.max(0, steps - RAPID_CHANGE_FREE), 'rapidChange');
+    p.study = p.study.filter((a) => stepCost(state, p.id, content.advances.find((x) => x.id === a)!, stageOf(state, p.id, a)) !== null);
     refreshEffects(state, content, p);
   }
 }
 
-export function validateFocus(ctx: Pick<Context, 'state'>, command: Extract<Command, { type: 'setFocus' }>): string | null {
+export function validateStudy(ctx: Pick<Context, 'state' | 'map' | 'content'>, command: Extract<Command, { type: 'setStudy' }>): string | null {
   const p = ctx.state.players.find((x) => x.id === command.player);
   if (!p) return `Unknown player "${command.player}"`;
-  if (ctx.state.phase !== 'allocation') return 'Discovery focus is set in the allocation phase';
+  if (ctx.state.phase !== 'allocation') return 'The study queue is set in the allocation phase';
   if (p.endedPhase) return `Player "${command.player}" already ended phase "allocation"`;
-  if (command.domain !== null && !DOMAINS.includes(command.domain)) return `Unknown domain "${command.domain}"`;
+  if (new Set(command.queue).size !== command.queue.length) return 'An advance is in the queue twice';
+  for (const id of command.queue) {
+    const advance = ctx.content.advances.find((a) => a.id === id);
+    if (!advance) return `Unknown advance "${id}"`;
+    const stage = stageOf(ctx.state, p.id, id);
+    if (advance.baseline || (stage === 'developed' && adoptionOf(ctx.state, p.id, id) >= 100)) return `${advance.name} needs no more learning`;
+    // Entries already queued stay when they stop being plausible; they are skipped until they are again.
+    if (stage !== 'developed' && !p.study.includes(id) && !plausible(ctx.state, ctx.map, ctx.content, p.id, advance)) return `${advance.name} is not plausible yet`;
+  }
   return null;
 }
 
-export function setFocus(ctx: Context, command: Extract<Command, { type: 'setFocus' }>): void {
-  player(ctx.state, command.player).focus = command.domain;
+export function setStudy(ctx: Context, command: Extract<Command, { type: 'setStudy' }>): void {
+  player(ctx.state, command.player).study = [...command.queue];
 }

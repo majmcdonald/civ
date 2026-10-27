@@ -13,10 +13,25 @@ export type EraId =
   | 'industrial'
   | 'modern';
 
+// What an era gate asks for (design doc §14): settlement points (village 1 … metropolis 4) and
+// knowledge points, checked only on entry.
+export interface Gate {
+  settlement: number;
+  knowledge: number;
+}
+
 export interface Era {
   id: EraId;
   name: string;
   order: number;
+  // Entry requirements; an era without a gate cannot be entered yet.
+  gate?: Gate;
+  // The last era's closing gate, which starts the endgame countdown (design doc §15).
+  closing?: Gate;
+  // Knowledge points per advance of this era once Developed, and once Mastered (in all; an advance
+  // with no adoption stage scores `developed`), culture points per 5 Artists progress for a
+  // civilization in this era, and victory points per wonder of this era (design doc §6, §9, §14).
+  points?: { developed: number; mastered: number; culture: number; wonder?: number };
 }
 
 export type SettlementTier = 'village' | 'town' | 'city' | 'metropolis';
@@ -49,6 +64,14 @@ export type Effect =
   | { type: 'marketAccess' }
   // Steps of market reach added (design doc §7).
   | { type: 'marketReach'; amount: number }
+  // Manpower added to the wonder's own settlement (Çatalhöyük, design doc §9).
+  | { type: 'manpower'; amount: number }
+  // Artists progress added each turn (Newgrange).
+  | { type: 'culture'; amount: number }
+  // Learning added each turn, sent down the study queue like High Learning (Stonehenge).
+  | { type: 'learning'; amount: number }
+  // Barbarian raids cannot strike the civilization's settlements (Walls of Jericho).
+  | { type: 'raidImmunity' }
   | { type: 'hook'; hook: string; params?: HookParams };
 
 // Discovery domains; a discovery focus picks one (design doc §8, Ruler levers).
@@ -99,6 +122,8 @@ export type Input =
   | { per: 'goodKind'; amount: number }
   // The civilization's settlements attacked this turn.
   | { per: 'attacked'; amount: number }
+  // Conflicts the civilization's tokens or settlements took part in this turn (design doc §11).
+  | { per: 'fought'; amount: number }
   // The civilization's settlements struck by `calamity` this turn (calamities: Phase 4 step 5).
   | { per: 'struck'; amount: number; calamity: string }
   // Kinds of goods the civilization bought or sold on the market this turn (market: step 4).
@@ -110,10 +135,10 @@ export interface StageRules {
   inputs: Input[];
 }
 
-// Adoption after Developed: percentage points a turn from `inputs`; with none, it falls by `fall`.
+// Adoption after Developed: points a turn from `inputs` toward the 200 that make Mastered (design
+// doc §8, v0.17); it never falls.
 export interface AdoptionRules {
   inputs: Input[];
-  fall: number;
 }
 
 export interface Advance {
@@ -136,19 +161,62 @@ export interface Advance {
 // A good gathered by production manpower (design doc §6). Revealed on the map once its civilization
 // knows `revealedBy` (default: `requires`), usable once `requires` is Developed; food goods can
 // stand in for support tokens. Luxury goods lower instability (design doc §6). A good with `from`
-// is not placed on the map: it is worked instead in areas holding any of those resources.
+// is not placed on the map: it is worked instead in areas holding any of those resources; a good
+// with `terrain` is worked in areas of that terrain (stone, v0.28). A `durable` good keeps from turn
+// to turn in the civilization's stock (design doc §6, v0.28). `price` is its starting market price
+// (design doc §7).
 export interface Resource {
   id: string;
   name: string;
   food: boolean;
+  price: number;
   requires: string;
   revealedBy?: string;
   luxury?: boolean;
   from?: string[];
+  terrain?: Terrain[];
+  durable?: boolean;
+}
+
+// A named wonder (design doc §9, v0.28): one in the world, built at one of the builder's
+// settlements once every `requires` advance is Developed. Each turn of work needs `goods` ('food'
+// is any food good) and `manpower` at the site, or CURRENCY_PER_MANPOWER for each unit missing.
+// `effects` work for whoever holds the site.
+export interface Wonder {
+  id: string;
+  name: string;
+  era: EraId;
+  requires: string[];
+  turns: number;
+  manpower: number;
+  goods: { resource: string; count: number }[];
+  effects: Effect[];
+  // The effect in a few words, for screens.
+  summary: string;
+}
+
+// A calamity (design doc §12). Its weights and effects are rules in the engine, keyed by `id`
+// (engine/calamities.ts); the data says what softens it and whether it can be bought off.
+export interface Calamity {
+  id: string;
+  name: string;
+  // Each entry halves the damage once the advance reaches `stage` (default Developed), for
+  // settlements of `minTier` or larger (all tiers without it).
+  softenedBy?: { advance: string; stage?: 'developed' | 'mastered'; minTier?: SettlementTier }[];
+  // Advances, any one Developed, that spare a town or larger the tier drop.
+  shelter?: string[];
+  // Paid from the treasury to avert it when the ruler has marked it; `requires` must be Developed.
+  buyOff?: { cost: number; requires?: string };
+  // Free High Learning units toward an advance's next step (Known or Developed) when struck.
+  grants?: { advance: string; learning: number };
+  // It also strikes each civilization in the victim's market.
+  spreads?: boolean;
 }
 
 export interface ContentBundle {
   eras: Era[];
   advances: Advance[];
   resources: Resource[];
+  calamities: Calamity[];
+  wonders: Wonder[];
 }

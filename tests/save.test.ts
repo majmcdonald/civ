@@ -92,6 +92,6 @@ describe('game log', () => {
     const game = newGame();
     advanceTurns(game, 1);
     const command = game.log.find((l) => l.kind === 'command');
-    expect(command).toMatchObject({ turn: 1, phase: 'trade' });
+    expect(command).toMatchObject({ turn: 1, phase: 'allocation' });
   });
 });

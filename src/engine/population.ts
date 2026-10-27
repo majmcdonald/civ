@@ -7,7 +7,7 @@ import type { Context, GameState, MoveOrder, PlayerId, Stack } from './types';
 
 export const STARTING_TOKEN_CAP = 55;
 // Growth per loose token per turn (design doc §4); resources and discoveries will boost it.
-export const GROWTH_PER_TOKEN = 0.5;
+export const GROWTH_PER_TOKEN = 0.25;
 // Areas a token moves per turn before transport advances (design doc §4).
 export const BASE_MOVEMENT = 1;
 
@@ -16,8 +16,11 @@ export function tokensAt(state: GameState, area: AreaId, player: PlayerId): numb
 }
 
 // A settled area holds no loose tokens (design doc §5), so its limit for them is 0.
+// Drought lowers an area's limit by 1 for a while (design doc §12).
 export function looseLimit(state: GameState, map: GameMap, area: AreaId): number {
-  return state.settlements.some((s) => s.area === area) ? 0 : map.areas[area]!.limit;
+  if (state.settlements.some((s) => s.area === area)) return 0;
+  const dry = state.dry.some((d) => d.area === area && d.until >= state.turn) ? 1 : 0;
+  return Math.max(0, map.areas[area]!.limit - dry);
 }
 
 export function looseTokens(state: GameState, player: PlayerId): number {

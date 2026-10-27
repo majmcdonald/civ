@@ -1,15 +1,23 @@
 import type { Effect, SettlementTier } from '../content/types';
 import { reached } from './discovery';
 import type { AreaId, GameMap } from './map/types';
-import type { GameState, PlayerId, Settlement } from './types';
+import type { GameState, PlayerId, Settlement, WonderRecord } from './types';
 
 // The effects in force from a civilization's advances (design doc §8), read from
-// `PlayerState.effects`, and the river transport they open (design doc §4, §6).
+// `PlayerState.effects`, and from the wonders whose settlements it holds (design doc §9); and the
+// river transport they open (design doc §4, §6).
 
 const TIER_ORDER: readonly SettlementTier[] = ['village', 'town', 'city', 'metropolis'];
 
+// Completed wonders whose settlement the player holds now.
+export function heldWonders(state: GameState, player: PlayerId): WonderRecord[] {
+  return state.wonders.filter((w) => !w.ruined && state.settlements.some((s) => s.area === w.area && s.player === player));
+}
+
 function effectsOf(state: GameState, player: PlayerId): readonly Effect[] {
-  return state.players.find((p) => p.id === player)?.effects ?? [];
+  const own = state.players.find((p) => p.id === player)?.effects ?? [];
+  const wonders = heldWonders(state, player).flatMap((w) => w.effects);
+  return wonders.length === 0 ? own : [...own, ...wonders];
 }
 
 function total<T extends Effect['type']>(state: GameState, player: PlayerId, type: T, keep: (e: Extract<Effect, { type: T }>) => boolean = () => true): number {
@@ -32,7 +40,28 @@ export function settlementBonus(state: GameState, settlement: Settlement): numbe
   return total(state, settlement.player, 'settlementDefense', (e) => e.minTier === undefined || rank >= TIER_ORDER.indexOf(e.minTier));
 }
 
-// Civ-wide instability removed each turn (Ritual).
+// Manpower a settlement gains from wonders at it (Çatalhöyük), while it stands.
+export function wonderManpower(state: GameState, settlement: Settlement): number {
+  return state.wonders
+    .filter((w) => !w.ruined && w.area === settlement.area)
+    .flatMap((w) => w.effects)
+    .reduce((sum, e) => sum + (e.type === 'manpower' ? e.amount : 0), 0);
+}
+
+// Artists progress and learning added each turn (Newgrange, Stonehenge).
+export function cultureBonus(state: GameState, player: PlayerId): number {
+  return total(state, player, 'culture');
+}
+
+export function learningBonus(state: GameState, player: PlayerId): number {
+  return total(state, player, 'learning');
+}
+
+export function raidImmune(state: GameState, player: PlayerId): boolean {
+  return effectsOf(state, player).some((e) => e.type === 'raidImmunity');
+}
+
+// Civ-wide instability removed each turn (Ritual, Göbekli Tepe).
 export function calm(state: GameState, player: PlayerId): number {
   return total(state, player, 'calm');
 }

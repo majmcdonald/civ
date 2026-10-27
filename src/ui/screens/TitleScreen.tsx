@@ -1,15 +1,18 @@
 import { useRef, useState } from 'react';
 import { content } from '../../content';
-import { LAND_AREAS_PER_CIVILIZATION, MAP_TYPES, MAX_CIVILIZATIONS, ROOM_FACTOR, ROOM_TO_EXPAND, openSave, type MapType, type RoomToExpand, type Session } from '../../engine';
+import { AI_APPROACHES, LAND_AREAS_PER_CIVILIZATION, MAP_TYPES, MAX_CIVILIZATIONS, ROOM_FACTOR, ROOM_TO_EXPAND, openSave, type AiApproach, type EraId, type MapType, type RoomToExpand, type Session } from '../../engine';
 import { AtlasBackground } from '../art/AtlasBackground';
 import { CompassRose } from '../art/CompassRose';
 import { deleteSave, downloadSave, listSaves, nameFromFile, readSave, writeSave, type SaveSlot } from '../saves';
 import { DEFAULT_GAME, gameContent, type NewGameOptions } from './GameScreen';
+import { RulesSheet } from './RulesSheet';
 import { ROOM_NAMES, TYPE_NAMES } from './MapScreen';
 import './TitleScreen.css';
 
 const MENU = ['New Game', 'Continue', 'Load Game', 'Rules Reference', 'Settings'] as const;
 
+const ERAS = [...content.eras].sort((a, b) => a.order - b.order);
+const APPROACH_NAMES: Record<AiApproach, string> = { balanced: 'Balanced', expansion: 'Expansion', building: 'Building', study: 'Study', culture: 'Culture', aggression: 'Aggression' };
 const OPPONENT_COUNTS = Array.from({ length: MAX_CIVILIZATIONS - 1 }, (_, i) => i + 1);
 
 // The seed is the player's choice, not engine randomness: the engine only sees the number.
@@ -36,18 +39,20 @@ interface TitleScreenProps {
   onOpen: (session: Session, message: string | null) => void;
 }
 
-// New Game opens the game setup, Continue the most recent save, and Load Game the list of saves.
-// Rules Reference and Settings are inert.
+// New Game opens the game setup, Continue the most recent save, Load Game the list of saves, and
+// Rules Reference the rules page. Settings is inert.
 export function TitleScreen({ onStart, onOpen }: TitleScreenProps) {
   const eras = [...content.eras].sort((a, b) => a.order - b.order);
   const [setup, setSetup] = useState<NewGameOptions | null>(null);
   const [loading, setLoading] = useState(false);
+  const [rules, setRules] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const latest = listSaves()[0];
   const actions: Partial<Record<(typeof MENU)[number], () => void>> = {
     'New Game': () => setSetup({ ...DEFAULT_GAME, seed: randomSeed() }),
     Continue: () => latest && setError(openSlot(latest, onOpen)),
     'Load Game': () => setLoading(true),
+    'Rules Reference': () => setRules(true),
   };
   return (
     <main className="title-screen">
@@ -98,6 +103,17 @@ export function TitleScreen({ onStart, onOpen }: TitleScreenProps) {
       </ol>
 
       <CompassRose className="title-compass" />
+
+      {rules && (
+        <div className="game-sheet-backdrop title-rules" onClick={() => setRules(false)}>
+          <article className="game-sheet filled" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="title-rules-close" onClick={() => setRules(false)}>
+              Close
+            </button>
+            <RulesSheet content={gameContent()} />
+          </article>
+        </div>
+      )}
     </main>
   );
 }
@@ -110,8 +126,9 @@ interface NewGameSetupProps {
 }
 
 // Game setup (design doc §2): opponents, map type, and room to expand, which with the number of
-// civilizations sets the map's size.
+// civilizations sets the map's size, and the final era.
 function NewGameSetup({ options, onChange, onStart, onBack }: NewGameSetupProps) {
+  const [showApproaches, setShowApproaches] = useState(false);
   const civilizations = options.opponents + 1;
   const land = (room: RoomToExpand) => Math.round(LAND_AREAS_PER_CIVILIZATION * ROOM_FACTOR[room] * civilizations);
   return (
@@ -158,6 +175,21 @@ function NewGameSetup({ options, onChange, onStart, onBack }: NewGameSetupProps)
           ))}
         </select>
       </label>
+      <label title="The game ends 5 turns after a civilization completes this era by meeting the next era's gate; the highest score wins (design doc §15)">
+        <span>Final era</span>
+        <select value={options.finalEra} onChange={(e) => onChange({ ...options, finalEra: e.target.value as EraId })}>
+          {ERAS.map((era, i) => {
+            const next = ERAS[i + 1];
+            const open = next ? Boolean(next.gate) : Boolean(era.closing);
+            return (
+              <option key={era.id} value={era.id}>
+                {era.name}
+                {open ? '' : ' (cannot end yet)'}
+              </option>
+            );
+          })}
+        </select>
+      </label>
       <label>
         <span>Seed</span>
         <span className="title-setup-seed">
@@ -167,6 +199,33 @@ function NewGameSetup({ options, onChange, onStart, onBack }: NewGameSetupProps)
           </button>
         </span>
       </label>
+      <label title="How each rival plays (design doc §2). Random draws a different approach for each rival until all have been used; the game does not show which a rival has">
+        <span>Rival approaches</span>
+        <button type="button" className="title-setup-toggle" aria-expanded={showApproaches} onClick={() => setShowApproaches(!showApproaches)}>
+          {options.approaches.slice(0, options.opponents).some((a) => a && a !== 'random') ? 'Set' : 'Random'} {showApproaches ? '▾' : '▸'}
+        </button>
+      </label>
+      {showApproaches &&
+        Array.from({ length: options.opponents }, (_, i) => (
+          <label key={i}>
+            <span>Rival {i + 1}</span>
+            <select
+              value={options.approaches[i] ?? 'random'}
+              onChange={(e) => {
+                const approaches = Array.from({ length: options.opponents }, (_, j) => options.approaches[j] ?? 'random');
+                approaches[i] = e.target.value as AiApproach | 'random';
+                onChange({ ...options, approaches });
+              }}
+            >
+              <option value="random">Random</option>
+              {AI_APPROACHES.map((a) => (
+                <option key={a} value={a}>
+                  {APPROACH_NAMES[a]}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
       <label>
         <span>Advanced start</span>
         <span className="title-setup-check">
