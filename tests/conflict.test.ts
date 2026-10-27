@@ -98,22 +98,22 @@ describe('attacking a settlement', () => {
   it('destroys attackers below the threshold and leaves the settlement unharmed', () => {
     const { game, area } = scene();
     settle(game, area, 'village');
-    place(game, area, 'p1', 6);
+    place(game, area, 'p1', 4);
     const ctx = conflict(game);
     expect(at(ctx, area, 'p1')).toBe(0);
     expect(settlementAt(ctx.state, area)).toMatchObject({ player: 'ai1', tier: 'village' });
-    expect(eventsOfType(ctx.events, 'settlementAttacked')[0]).toMatchObject({ repelled: ['p1'], capturedBy: null, losses: [{ player: 'p1', count: 6 }] });
+    expect(eventsOfType(ctx.events, 'settlementAttacked')[0]).toMatchObject({ repelled: ['p1'], capturedBy: null, losses: [{ player: 'p1', count: 4 }] });
   });
 
   it('fights the defense value and destroys a captured village, leaving survivors', () => {
-    // 9 vs 6: the village removes first each round and is gone after its sixth removal, with 4 left.
+    // 9 vs 4 (v0.33): the village removes first each round and is gone after its fourth removal, with 6 left.
     const { game, area } = scene();
     settle(game, area, 'village');
     place(game, area, 'p1', 9);
     const ctx = conflict(game);
     expect(settlementAt(ctx.state, area)).toBeUndefined();
-    expect(at(ctx, area, 'p1')).toBe(4);
-    expect(eventsOfType(ctx.events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: 'p1', survivors: 4, tier: 'village' });
+    expect(at(ctx, area, 'p1')).toBe(6);
+    expect(eventsOfType(ctx.events, 'settlementAttacked')[0]).toMatchObject({ capturedBy: 'p1', survivors: 6, tier: 'village' });
   });
 
   it('captures a town one tier lower, keeps its name, and garrisons the survivors', () => {
@@ -147,7 +147,7 @@ describe('attacking a settlement', () => {
   it('takes no spoils when the attack fails', () => {
     const { game, area } = scene();
     settle(game, area, 'village', 'ai1');
-    place(game, area, 'p1', 6);
+    place(game, area, 'p1', 4);
     game.state.players[1]!.treasury = 20;
     const ctx = conflict(game);
     expect(ctx.state.players[1]!.treasury).toBe(20);
@@ -155,15 +155,15 @@ describe('attacking a settlement', () => {
   });
 
   it('adds the defender’s tokens in the area to the defense', () => {
-    // 8 attackers meet the village threshold, but 6 + 3 reinforcements is stronger.
+    // 6 attackers meet the village threshold, but 4 + 3 reinforcements is stronger.
     const { game, area } = scene();
     settle(game, area, 'village');
-    place(game, area, 'p1', 8);
+    place(game, area, 'p1', 6);
     place(game, area, 'ai1', 3);
     const ctx = conflict(game);
     expect(settlementAt(ctx.state, area)).toMatchObject({ player: 'ai1' });
     expect(at(ctx, area, 'p1')).toBe(0);
-    // The defense loses 7; reinforcements fall first.
+    // The defense loses 5; reinforcements fall first.
     expect(at(ctx, area, 'ai1')).toBe(0);
   });
 
@@ -180,7 +180,7 @@ describe('attacking a settlement', () => {
   it('holds when the last tokens on both sides fall together', () => {
     const { game, area } = scene();
     settle(game, area, 'village');
-    place(game, area, 'p1', 7);
+    place(game, area, 'p1', 5);
     place(game, area, 'ai1', 1);
     const ctx = conflict(game);
     expect(settlementAt(ctx.state, area)).toMatchObject({ player: 'ai1', tier: 'village' });
@@ -206,7 +206,7 @@ describe('attacking a settlement', () => {
     place(game, area, 'ai2', 3);
     const ctx = conflict(game);
     expect(at(ctx, area, 'ai2')).toBe(0);
-    expect(at(ctx, area, 'ai1')).toBe(4);
+    expect(at(ctx, area, 'ai1')).toBe(6);
     expect(eventsOfType(ctx.events, 'settlementAttacked')[0]).toMatchObject({ repelled: ['ai2'], capturedBy: 'ai1' });
   });
 
@@ -244,7 +244,7 @@ describe('conflict preview', () => {
     place(game, next, 'p1', 9);
     play(game, { type: 'orderMove', player: 'p1', from: next, to: area, count: 9 });
     const [attack] = previewConflicts(game.state, mapFor(game.setup), testContent(), 'p1');
-    expect(attack).toMatchObject({ type: 'settlementAttacked', area, capturedBy: 'p1', survivors: 4 });
+    expect(attack).toMatchObject({ type: 'settlementAttacked', area, capturedBy: 'p1', survivors: 6 });
     expect(previewConflicts(game.state, mapFor(game.setup), testContent(), 'ai2')).toEqual([]);
     expect(settlementAt(game.state, area)).toBeDefined();
   });

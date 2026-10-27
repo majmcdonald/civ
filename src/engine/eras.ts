@@ -15,7 +15,7 @@ import type { Context, GameState, PlayerId, PlayerState, Score, Settlement } fro
 
 export const ARTISTS = 'artists';
 // Artists progress per culture award; the era sets how many points the award is.
-export const CULTURE_PROGRESS = 5;
+export const CULTURE_PROGRESS = 15;
 export const COUNTDOWN = 5;
 
 function player(state: GameState, id: PlayerId): PlayerState {

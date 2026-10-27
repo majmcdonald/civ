@@ -22,6 +22,7 @@ import {
   looseTokens,
   MAP_TYPES,
   manpower,
+  mapFor,
   startSession,
   submit,
   toJsonLines,
@@ -100,6 +101,11 @@ interface Totals {
   averted: number;
   // First turn any civilization's loose tokens reached its cap.
   firstAtCap: number | null;
+  // First turn two civilizations held adjacent areas (or the same one), and the share of land then
+  // settled or at its limit; the share at each sampled turn.
+  firstContact: number | null;
+  fullAtContact: number | null;
+  full: Record<number, number>;
   // Turns civilizations entered a new era, in order; the countdown's start and the game's end.
   eraTurns: number[];
   countdown: number | null;
@@ -168,7 +174,7 @@ function playGame(options: Options, seed: number, map: MapType): { samples: Samp
   const session = startSession({ seed, players, finalEra: options.final, map: { type: map, room: options.room } }, loaded.content);
   const game = `${map}/${seed}`;
   const samples: Sample[] = [];
-  const totals: Totals = { game, built: 0, collapses: 0, supportDrops: 0, captures: 0, fights: 0, bought: 0, calamities: 0, averted: 0, firstAtCap: null, eraTurns: [], countdown: null, ended: null, winnerScore: null, wondersStarted: 0, wonderStalls: 0, wondersDone: [], outbuilt: 0 };
+  const totals: Totals = { game, built: 0, collapses: 0, supportDrops: 0, captures: 0, fights: 0, bought: 0, calamities: 0, averted: 0, firstAtCap: null, firstContact: null, fullAtContact: null, full: {}, eraTurns: [], countdown: null, ended: null, winnerScore: null, wondersStarted: 0, wonderStalls: 0, wondersDone: [], outbuilt: 0 };
   let step = '';
   while (session.state.turn <= options.turns && !session.state.over) {
     const turn = session.state.turn;
@@ -188,10 +194,41 @@ function playGame(options: Options, seed: number, map: MapType): { samples: Samp
     if (session.state.turn > turn) {
       const { state } = session;
       if (totals.firstAtCap === null && state.players.some((p) => looseTokens(state, p.id) >= p.tokenCap)) totals.firstAtCap = state.turn;
+      if (totals.firstContact === null && contact(session)) {
+        totals.firstContact = state.turn;
+        totals.fullAtContact = fullShare(session);
+      }
+      if (state.turn % options.every === 0) totals.full[state.turn] = fullShare(session);
       if (state.turn % options.every === 0 && state.turn <= options.turns) samples.push(...sample(session, game));
     }
   }
   return { samples, totals, session };
+}
+
+// Whether two civilizations hold adjacent areas (or the same one), with tokens or settlements.
+function contact(session: Session): boolean {
+  const { state } = session;
+  const map = mapFor(state.setup);
+  const owners = new Map<number, Set<string>>();
+  const hold = (area: number, player: string) => owners.set(area, (owners.get(area) ?? new Set()).add(player));
+  for (const s of state.stacks) hold(s.area, s.player);
+  for (const s of state.settlements) hold(s.area, s.player);
+  for (const [area, players] of owners) {
+    if (players.size > 1) return true;
+    for (const n of map.areas[area]!.neighbors) {
+      const other = owners.get(n);
+      if (other && [...other].some((p) => !players.has(p))) return true;
+    }
+  }
+  return false;
+}
+
+// Share of land areas settled or at their limit, in percent.
+function fullShare(session: Session): number {
+  const { state } = session;
+  const land = mapFor(state.setup).areas.filter((a) => a.kind === 'land');
+  const full = land.filter((a) => state.settlements.some((s) => s.area === a.id) || state.stacks.filter((s) => s.area === a.id).reduce((n, s) => n + s.count, 0) >= a.limit);
+  return Math.round((100 * full.length) / land.length);
 }
 
 const opt = (n: number | null) => (n === null ? '—' : String(n));
@@ -237,13 +274,16 @@ console.log(
     }),
   ),
 );
-console.log('\nPer game: settlements built, collapses, support drops, captures, fights, goods bought on the market, calamities suffered and bought off, first turn a civilization reached its token cap, turns civilizations entered a new era (first and median), the turn the endgame countdown began and the game ended, the winning score, and wonders: started, turns stalled, completed (first and last turn), races lost.\n');
+console.log('\nPer game: first contact between civilizations and the share of land then full (settled or at its limit), settlements built, collapses, support drops, captures, fights, goods bought on the market, calamities suffered and bought off, first turn a civilization reached its token cap, turns civilizations entered a new era (first and median), the turn the endgame countdown began and the game ended, the winning score, and wonders: started, turns stalled, completed (first and last turn), races lost.\n');
 console.log(
   table(
-    ['Game', 'Built', 'Collapses', 'Support drops', 'Captures', 'Fights', 'Bought', 'Calamities', 'Bought off', 'First at cap', 'New era', 'Countdown', 'Ended', 'Winner', 'Wonders', 'Stalls', 'Done', 'Lost'],
-    totals.map((t) => [t.game, String(t.built), String(t.collapses), String(t.supportDrops), String(t.captures), String(t.fights), String(t.bought), String(t.calamities), String(t.averted), t.firstAtCap === null ? '—' : String(t.firstAtCap), t.eraTurns.length === 0 ? '—' : `${t.eraTurns[0]} / ${t.eraTurns[Math.floor(t.eraTurns.length / 2)]} (${t.eraTurns.length})`, opt(t.countdown), opt(t.ended), opt(t.winnerScore), String(t.wondersStarted), String(t.wonderStalls), t.wondersDone.length === 0 ? '0' : `${t.wondersDone.length} (${t.wondersDone[0]}–${t.wondersDone[t.wondersDone.length - 1]})`, String(t.outbuilt)]),
+    ['Game', 'Contact', 'Full then', 'Built', 'Collapses', 'Support drops', 'Captures', 'Fights', 'Bought', 'Calamities', 'Bought off', 'First at cap', 'New era', 'Countdown', 'Ended', 'Winner', 'Wonders', 'Stalls', 'Done', 'Lost'],
+    totals.map((t) => [t.game, opt(t.firstContact), t.fullAtContact === null ? '—' : `${t.fullAtContact}%`, String(t.built), String(t.collapses), String(t.supportDrops), String(t.captures), String(t.fights), String(t.bought), String(t.calamities), String(t.averted), t.firstAtCap === null ? '—' : String(t.firstAtCap), t.eraTurns.length === 0 ? '—' : `${t.eraTurns[0]} / ${t.eraTurns[Math.floor(t.eraTurns.length / 2)]} (${t.eraTurns.length})`, opt(t.countdown), opt(t.ended), opt(t.winnerScore), String(t.wondersStarted), String(t.wonderStalls), t.wondersDone.length === 0 ? '0' : `${t.wondersDone.length} (${t.wondersDone[0]}–${t.wondersDone[t.wondersDone.length - 1]})`, String(t.outbuilt)]),
   ),
 );
+const fullTurns = [...new Set(totals.flatMap((t) => Object.keys(t.full).map(Number)))].sort((a, b) => a - b);
+console.log('\nLand full (settled or at its limit), share of land areas: median (min–max) across games.\n');
+console.log(table(['Turn', 'Land full %'], fullTurns.map((turn) => [String(turn), stats(totals.filter((t) => t.full[turn] !== undefined).map((t) => t.full[turn]!))])));
 const lastOf = (game: string) => Math.max(...samples.filter((s) => s.game === game).map((s) => s.turn));
 const finals = samples.filter((s) => s.turn === lastOf(s.game));
 if (finals.length > 0) {

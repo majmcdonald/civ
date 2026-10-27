@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { eras } from '../src/content/eras';
 import type { Advance, ContentBundle } from '../src/content/types';
-import { advancePoints, ARTISTS, COUNTDOWN, eraView, knowledgePoints, loadContent, mapFor, scoreOf, scores, settlementPoints, type AreaId, type Content, type Context, type Session, type SettlementTier } from '../src/engine';
+import { advancePoints, ARTISTS, COUNTDOWN, CULTURE_PROGRESS, eraView, knowledgePoints, loadContent, mapFor, scoreOf, scores, settlementPoints, type AreaId, type Content, type Context, type Session, type SettlementTier } from '../src/engine';
 import { resolveEras, runArtists } from '../src/engine/eras';
 import { endPhaseAll, eventsOfType, expectRejected, newGame, play, standIn, testContent } from './harness';
 
@@ -40,9 +40,11 @@ function reach(game: Session, advance: string, mastered: boolean, player = 'p1')
   game.state.players.find((p) => p.id === player)!.advances.push({ advance, stage: 'developed', progress: 0, adoption: mastered ? 100 : 0 });
 }
 
-// 12 knowledge points (four Mastered) and 5 settlement points (a town and three villages).
+// 16 knowledge points (five Mastered, one Developed) and 5 settlement points (a town and three
+// villages).
 function qualify(game: Session, player = 'p1'): void {
-  for (const a of ['a1', 'a2', 'a3', 'a4']) reach(game, a, true, player);
+  for (const a of ['a1', 'a2', 'a3', 'a4', 'a5']) reach(game, a, true, player);
+  reach(game, 'plain', false, player);
   settle(game, ['town', 'village', 'village', 'village'], player);
 }
 
@@ -81,7 +83,7 @@ describe('era gates (v0.26)', () => {
     expect(game.state.players.map((p) => p.era)).toEqual(['stone', 'stone']);
   });
 
-  it('enters the Bronze Age at 5 settlement and 12 knowledge points', () => {
+  it('enters the Bronze Age at 5 settlement and 16 knowledge points', () => {
     const { game, content } = scene('iron');
     qualify(game);
     for (const a of ['a1', 'a2', 'a3']) reach(game, a, true, 'ai1');
@@ -166,12 +168,13 @@ describe('endgame (v0.26)', () => {
 });
 
 describe('Artists (v0.26)', () => {
-  it('earn 1 culture point per 5 unit-turns in the Stone Age, keeping the remainder', () => {
+  it('earn 1 culture point per CULTURE_PROGRESS unit-turns in the Stone Age, keeping the remainder', () => {
     const { game, content } = scene();
     const [area] = settle(game, ['town']);
     game.state.settlements.find((s) => s.area === area)!.work = [{ resource: ARTISTS, count: 2 }];
     const ctx = ctxOf(game, content);
-    for (let i = 0; i < 3; i++) runArtists(ctx);
+    // 2 a turn: one award once progress passes CULTURE_PROGRESS, with 1 left over (15 → 8 turns).
+    for (let i = 0; i < (CULTURE_PROGRESS + 1) / 2; i++) runArtists(ctx);
     expect(game.state.players[0]!.culture).toBe(1);
     expect(game.state.players[0]!.cultureProgress).toBe(1);
     expect(eventsOfType(ctx.events, 'cultureGained')).toEqual([{ type: 'cultureGained', player: 'p1', points: 1 }]);
@@ -182,7 +185,7 @@ describe('Artists (v0.26)', () => {
     const [area] = settle(game, ['town']);
     game.state.settlements.find((s) => s.area === area)!.work = [{ resource: ARTISTS, count: 1 }];
     game.state.players[0]!.era = 'bronze';
-    game.state.players[0]!.cultureProgress = 4;
+    game.state.players[0]!.cultureProgress = CULTURE_PROGRESS - 1;
     runArtists(ctxOf(game, content));
     expect(game.state.players[0]!.culture).toBe(3);
   });

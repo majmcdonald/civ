@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadGame, mapFor, reachable, saveGame, tokensAt, type AreaId, type GameMap, type Session } from '../src/engine';
+import { GROWTH_PER_TOKEN, loadGame, mapFor, reachable, saveGame, tokensAt, type AreaId, type GameMap, type Session } from '../src/engine';
 import { endPhaseAll, eventsOfType, expectRejected, newGame, play, testContent } from './harness';
 
 function toAllocation(game: Session): void {
@@ -143,9 +143,9 @@ describe('movement', () => {
     const events = resolveTurn(game);
     expect(eventsOfType(events, 'tokensMoved')).toHaveLength(2);
     expect(game.state.orders).toEqual([]);
-    // Moved tokens then grow 0.5 each: 1 keeps ½ in progress, and 2 becomes 3.
+    // Moved tokens then grow ¼ each: 1 keeps ¼ in progress, and 2 keep ½.
     expect(tokensAt(game.state, a, 'p1')).toBe(1);
-    expect(tokensAt(game.state, b, 'p1')).toBe(3);
+    expect(tokensAt(game.state, b, 'p1')).toBe(2);
   });
 
   it('moves tokens from where they stood at the end of allocation, so a token moves only once', () => {
@@ -159,17 +159,17 @@ describe('movement', () => {
 });
 
 describe('growth', () => {
-  it('adds 0.5 per token, carrying the fraction, up to the limit', () => {
-    // Design doc §4: 1 → 1 +½ → 2 → 3 → 4 +½ → 5 (limit 5).
+  it('adds GROWTH_PER_TOKEN per token, carrying the fraction, up to the limit', () => {
+    // Design doc §4 (v0.33, ¼ a token): 1 → 1 +¼ → 1 +½ → 1 +¾ → 2 → 2 +½ → 3.
     const { game, map, start } = setup();
     const limit = map.areas[start]!.limit;
     let count = 1;
     let progress = 0;
-    for (let turn = 0; turn < 6; turn++) {
+    for (let turn = 0; turn < 8; turn++) {
       toAllocation(game);
       resolveTurn(game);
       if (count < limit) {
-        progress += count * 0.5;
+        progress += count * GROWTH_PER_TOKEN;
         const add = Math.min(Math.floor(progress), limit - count);
         progress -= Math.floor(progress);
         count += add;
@@ -180,24 +180,24 @@ describe('growth', () => {
   });
 
   it('keeps progress in a full area without adding to it, and resumes when room opens', () => {
-    // Design doc §4: limit 3 holding 3 with ½ stays at ½; after 1 leaves, 2 × 0.5 + ½ adds 1 and keeps ½.
+    // Design doc §4: limit 3 holding 3 with ¾ stays at ¾; after 1 leaves, 2 × ¼ + ¾ adds 1 and keeps ¼.
     const { game, map } = setup();
     const area = map.areas.find((a) => a.kind === 'land' && a.limit === 3 && a.neighbors.some((n) => map.areas[n]!.kind === 'land' && map.areas[n]!.limit >= 3))!;
     const out = area.neighbors.find((n) => map.areas[n]!.kind === 'land' && map.areas[n]!.limit >= 3)!;
-    game.state.stacks = [{ area: area.id, player: 'p1', count: 3, growth: 0.5 }];
+    game.state.stacks = [{ area: area.id, player: 'p1', count: 3, growth: 0.75 }];
     toAllocation(game);
     resolveTurn(game);
-    expect(game.state.stacks).toEqual([{ area: area.id, player: 'p1', count: 3, growth: 0.5 }]);
+    expect(game.state.stacks).toEqual([{ area: area.id, player: 'p1', count: 3, growth: 0.75 }]);
     toAllocation(game);
     play(game, { type: 'orderMove', player: 'p1', from: area.id, to: out, count: 1 });
     resolveTurn(game);
-    expect(game.state.stacks.find((s) => s.area === area.id)).toEqual({ area: area.id, player: 'p1', count: 3, growth: 0.5 });
+    expect(game.state.stacks.find((s) => s.area === area.id)).toEqual({ area: area.id, player: 'p1', count: 3, growth: 0.25 });
   });
 
   it('loses whole tokens beyond the room but keeps the fraction', () => {
     const { game, map } = setup();
     const area = map.areas.find((a) => a.kind === 'land' && a.limit === 5)!;
-    // 4 tokens with ½: 2.5 to add, room for 1.
+    // 4 tokens with ½: 1½ to add, room for 1.
     game.state.stacks = [{ area: area.id, player: 'p1', count: 4, growth: 0.5 }];
     toAllocation(game);
     resolveTurn(game);
@@ -208,15 +208,15 @@ describe('growth', () => {
     const { game, map, start } = setup();
     toAllocation(game);
     resolveTurn(game);
-    expect(game.state.stacks.find((s) => s.area === start)!.growth).toBe(0.5);
+    expect(game.state.stacks.find((s) => s.area === start)!.growth).toBe(0.25);
     const to = landNeighbor(map, start, 2);
     toAllocation(game);
     play(game, { type: 'orderMove', player: 'p1', from: start, to, count: 1 });
     resolveTurn(game);
-    // The ½ did not travel with the token (it would have made 2): it was lost with the stack.
+    // The ¼ did not travel with the token (it would have made ½): it was lost with the stack.
     expect(game.state.stacks).toEqual([
       ...game.state.stacks.filter((s) => s.player !== 'p1'),
-      { area: to, player: 'p1', count: 1, growth: 0.5 },
+      { area: to, player: 'p1', count: 1, growth: 0.25 },
     ].sort((a, b) => a.area - b.area));
   });
 

@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.32  
+**Version:** 0.33  
 **Date:** October 26, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -81,7 +81,7 @@ Trade waits for the Bronze Age, when the market has more to trade.
 | Spreads into rivals' land | No | No | No | No | No | Yes |
 
 All approaches mark every buy-off, buy food or luxuries when short, never sell, and put idle manpower on food.
-- **Aggression** (v0.32): it picks the rival settlement easiest to take (lowest attack threshold, then fewest of its owner's tokens in and next to it), from any rival alike, the player included. It masses tokens in the areas next to it over several turns, keeping what its own settlements need for support, and attacks once its power reaches the settlement's attack threshold. It also spreads into rivals' unsettled areas whenever it would win the fight there.
+- **Aggression** (v0.32): it picks the rival settlement easiest to take (lowest attack threshold, then fewest of its owner's tokens in and next to it), from any rival alike, the player included. Its spare tokens (not needed for support) step toward it from up to 6 moves away, through areas held by no one but itself and the target's owner, fighting the owner's tokens on the way when it outnumbers them (v0.33); they mass in the areas next to it and attack once their power reaches the settlement's attack threshold. A raid under way keeps its target. It also spreads into rivals' unsettled areas whenever it would win the fight there.
 
 ## 3. Turn structure — Decided
 
@@ -135,7 +135,7 @@ Every system has one home screen (Phase 4 step 9). Panels serve three needs, and
 | **Attention** | What needs me this turn? | 2 manpower idle in Ur |
 | **Rules** | What does it cost, and what does it give? | Stonehenge: 1 stone and 2 manpower a turn for 8 turns; +2 learning a turn |
 
-**Top bar** (on every screen): era and turn; loose tokens of the cap; settlements by tier; treasury; score with rank ("23 (2nd)"); progress to the next era's gate ("Bronze 4/5 settlement, 9/12 knowledge"); the endgame countdown once begun; and an **attention count** ("3 to address") that opens the list of items needing the player this turn.
+**Top bar** (on every screen): era and turn; loose tokens of the cap; settlements by tier; treasury; score with rank ("23 (2nd)"); progress to the next era's gate ("Bronze 4/5 settlement, 9/16 knowledge"); the endgame countdown once begun; and an **attention count** ("3 to address") that opens the list of items needing the player this turn.
 
 **Attention items** are what will be lost, wasted, or risked if the player ends the turn now; each opens the screen or area where it is fixed. Zero means nothing goes wrong by ending the turn. Opportunities (a village site ready, a wonder or advance available) and an empty study queue are not attention items; they belong on their own screens.
 
@@ -201,7 +201,7 @@ The top bar holds eight screens:
   - **Rivers** run through a chain of areas, ordered from source to sea; each area on the chain has the river feature. With ships, tokens travel several areas along the chain in one move (e.g., Highland → Valley → Delta in one turn). Rivers are not borders between areas and do not block movement.
   - The original had no terrain, only printed limits and markings (floodplains, volcanoes, coasts); terrain is added so drought and resources have something to key on and the map reads clearly.
   - A procedural generator may use hidden elevation and rainfall to place terrain sensibly; those values are not rules. Exact limit ranges per terrain are tuning.
-- **Expansion window:** by default, a civilization can expand for about 30–40 turns before its land meets a neighbor's, so the early game allows peace. Map size, area limits, and growth pace are tuned to this target.
+- **Expansion window** (v0.33, balance target): on the default map, neighbours' land **starts touching by the end of the Stone Age** (about turn 40), but the land is **not yet full**: a civilization can then choose to start conflict at once or keep filling its own area. Contact and filling are tuned separately: growth, the token cap, area limits, and map size set them, independent of the era gate.
 
 ### Procedural maps
 
@@ -231,10 +231,10 @@ The top bar holds eight screens:
   - Advances raise the cap **1–2 times per era**. Rise sizes are set when those advances are designed. Stone Age: Weaving +5 when Developed (clothing) and Agriculture +5 when Mastered (food surplus), 55 → 65 (v0.14, §8).
   - Support tokens are loose and count against the cap, so the cap also bounds the number of settlements (roughly cap ÷ 4–5 in Phase 0). Each era's expansion is paced by its cap rises.
 - **Each civilization starts with one token in its starting area**, as in the original. The Phase 0 simulation and the 30–40 turn expansion window assume this start.
-- **Growth is automatic and proportional**: each turn, an area gains **0.5 per loose token** of each civilization in it. Growth never exceeds the area's population limit or the civilization's token cap. Resources and discoveries boost the rate (e.g., +0.25 per token); boost sizes are set when those are designed.
-  - **Each area keeps its own growth progress** per civilization: fractions carry over until they make a whole token. Example: an area with 1 token shows "1 +½" after one turn and holds 2 tokens the next. The map badge shows the progress.
+- **Growth is automatic and proportional**: each turn, an area gains **¼ token per loose token** of each civilization in it (v0.33; was ½). Growth never exceeds the area's population limit or the civilization's token cap. Resources and discoveries boost the rate (e.g., +0.25 per token); boost sizes are set when those are designed.
+  - **Each area keeps its own growth progress** per civilization: fractions carry over until they make a whole token. Example: an area with 1 token shows "1 +¼" after one turn and holds 2 tokens after four. The map badge shows the progress.
   - Progress survives moves and losses while at least one of the civilization's tokens stays in the area; when its last token leaves or dies, the progress is lost. Progress is never shared between civilizations.
-  - **A full area gains no progress but keeps what it has**; growth resumes from it when room opens. When only part of a turn's growth fits (under the area limit or the token cap), whole tokens beyond the room are lost and the leftover fraction is kept. Example: hills, limit 3, holding 3 with ½ progress stays at ½; after 1 token leaves, the next turn adds 2 × 0.5 + ½ = 1.5, so 1 token and ½ carried over. As in the original, a full area simply does not grow.
+  - **A full area gains no progress but keeps what it has**; growth resumes from it when room opens. When only part of a turn's growth fits (under the area limit or the token cap), whole tokens beyond the room are lost and the leftover fraction is kept. Example: hills, limit 3, holding 3 with ¾ progress stays at ¾; after 1 token leaves, the next turn adds 2 × ¼ + ¾ = 1¼, so 1 token and ¼ carried over. As in the original, a full area simply does not grow.
   - Compared with the original's rule (+1 for 1 token, +2 for 2 or more), this is never faster at starting limits (1–5) and about half as fast at low counts; it overtakes the original only in areas holding more than 4 tokens, so boosts gain value as limits rise.
   - The 30–40 turn expansion window and token-cap pacing were tuned to the original's rule and must be re-simulated.
 - **Loose tokens produce nothing and need no support.** They have no manpower. They matter as growth, as support for settlements, as a source of new settlements, as armies, and as discoverers (occupying a resource area contributes to related discoveries).
@@ -395,7 +395,7 @@ Manpower is a settlement's labor. Every unit is spent each turn on exactly one a
 | **Production** | Farming, mining, building | One of the area's resources per unit | — |
 | **Bureaucracy** | Works for the state | Lowers instability, 1 per unit per turn: its own settlement first, then the civ-wide meter (§10) | Leader, Reformer, Diplomat |
 | **High Learning** | Schools, R&D | Adds discovery progress | Scholar, Innovator, Thinker |
-| **Artists** | Arts | Culture points (victory points): each unit adds 1 culture progress a turn, and every **5 progress is 1 culture point** in the Stone Age (v0.26). Later eras pay more per unit in step with their knowledge points (example: Bronze about 3 points per 5 progress), by the civilization's current era. No stability for now (v0.26); designed with institutions in the Bronze Age | Artist, Prophet |
+| **Artists** | Arts | Culture points (victory points): each unit adds 1 culture progress a turn, and every **15 progress is 1 culture point** in the Stone Age (v0.33; was 5, v0.26). Later eras pay more per unit in step with their knowledge points (example: Bronze about 3 points per 5 progress), by the civilization's current era. No stability for now (v0.26); designed with institutions in the Bronze Age | Artist, Prophet |
 | **Wonders** | Construction | Progress toward a wonder | — |
 
 - **Specialists** are manpower in Bureaucracy, High Learning, or Artists. Any settlement can assign them. Currency cannot fund specialists.
@@ -738,7 +738,7 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 
 | Tier | Tokens needed to attack | Defends as |
 |---|---|---|
-| Village | 7 | 6 |
+| Village | 5 (v0.33; was 7) | 4 (was 6) |
 | Town | 10 | 9 |
 | City | 15 | 14 |
 | Metropolis | 22 | 21 |
@@ -746,8 +746,8 @@ Built before most sources and stabilizers exist; the rest arrive in Phase 4. Sta
 - **Thresholds are power** (v0.14): an attacker's power, not its token count, must reach the threshold. Example: 8 archers (power 10) may attack a town; 8 plain tokens may not.
 - A settled area is fully populated (§5), so **any enemy token entering it attacks the settlement**. All tokens a civilization has in the area after movement attack together.
 - **Below the threshold**, the attackers fight the settlement's defense value and are destroyed; the settlement is unharmed.
-- **At or above the threshold**, the settlement fights as a side of tokens equal to its defense value, using the removal rule above, until one side has none left; there is no area limit to stop at. If the defense is eliminated, the attackers capture. Example: 9 attackers against a village (defends as 6): the village, weaker, removes first each round and is gone after its sixth removal, leaving 4 attackers to capture; 7 attackers capture with 2. If the last tokens on both sides fall together, no one is left to capture and the settlement holds.
-- **Reinforcements.** The defender's own tokens in the area after movement add their power to the defense. The threshold is still checked against the settlement's own value; reinforcements only strengthen the fight. Example: 8 attackers against a village reinforced by 3 fight 8 vs 9 and are destroyed. Reinforcements that survive beyond the garrison are removed as surplus (§3, step 9).
+- **At or above the threshold**, the settlement fights as a side of tokens equal to its defense value, using the removal rule above, until one side has none left; there is no area limit to stop at. If the defense is eliminated, the attackers capture. Example: 9 attackers against a village (defends as 4): the village, weaker, removes first each round and is gone after its fourth removal, leaving 6 attackers to capture; 5 attackers capture with 2. If the last tokens on both sides fall together, no one is left to capture and the settlement holds.
+- **Reinforcements.** The defender's own tokens in the area after movement add their power to the defense. The threshold is still checked against the settlement's own value; reinforcements only strengthen the fight. Example: 6 attackers against a village reinforced by 3 fight 6 vs 7 and are destroyed. Reinforcements that survive beyond the garrison are removed as surplus (§3, step 9).
 - **Several attackers.** Each attacker's threshold is checked separately; attackers below it are destroyed first. The settlement then joins the remaining attackers as one side (power = defense value plus reinforcements) in a single fight under the removal rule, weakest first, until one side is left. A surviving attacker captures. Example: village (6) attacked by A 8 and B 7 runs 8/7/6 → 7/6/5 → … → 3/2/1; in the sixth round the village falls (A 2, B 1), then B removes and A captures with 2.
 - Walls and similar advances raise these values; siege advances counter them.
 - The settlement fights at its defense value using the defender's strength multiplier, so a defender's bonus power gives it a volley too. Attacker volleys remove defense tokens.
@@ -875,9 +875,13 @@ Follows the original Archaeological Succession Table's eras and gates, extended 
 | Gate | Each era after the Stone Age opens with a **gate**: a number of **settlement points** plus a number of **knowledge points**. A civilization that meets the next era's gate in resolution step 13 enters that era |
 | Settlement points | Every settlement: **village 1, town 2, city 3, metropolis 4** (the same scale as calamity exposure, §12) |
 | Knowledge points | Per advance: **Developed 1, Mastered 3** (3 in all, not added to the 1). An advance with no adoption stage scores 1 even though it is Mastered when Developed, so 3 rewards adoption work. The starting baseline advances score nothing. Later eras' advances score more (example: a Bronze Age advance might score Developed 3, Mastered 5; set when the era is designed). Knowledge points are also victory points (§15) |
-| Bronze gate | **5 settlement points and 12 knowledge points** (starting values). The Stone Age has 15 scoring advances: 10 with adoption (up to 3 each) and 5 without (1 each), 35 points at most |
+| Bronze gate | **5 settlement points and 16 knowledge points** (v0.33; was 12). The Stone Age has 15 scoring advances: 10 with adoption (up to 3 each) and 5 without (1 each), 35 points at most |
 | No turn clock | No track and no movement per turn; sprinting is gone. Pace comes from growth itself: study and adoption time, the token cap, and calamities |
 | No regression | An era, once entered, is kept: the gate is checked only on entry, as in the original. A civilization that falls below its current era's gate suffers nothing further; the decline shows in its score through lost settlement points |
+
+**Stone Age length** (v0.33, balance target): the first civilization meets the Bronze Age gate around **turn 40** on the default setup.
+
+**Approach spread** (v0.33, balance target): no approach is an outlier; approaches' median scores may differ by up to about 50%, since some styles are simply stronger in an era.
 
 Note (batch measurement, v0.26, before tuning): with the starting values, AI civilizations reach 5 settlement points around turn 18 (16–23) and 12 knowledge points around turn 31 (24–41), so knowledge decides the Bronze gate.
 
@@ -958,9 +962,9 @@ No balance changes until the Stone Age is complete (development plan §4, Tuning
 - [ ] Instability thresholds, source and stabilizer magnitudes, partial-reset amount (first-version values in §10)
 - [ ] Calamity exposure rate and condition weights (first values v0.22: 1% per tier point, +5% per quiet turn; weights and effects in §12)
 - [ ] Figure emergence odds
-- [ ] Era gate requirements and point values (first values v0.26: settlement points village 1, town 2, city 3, metropolis 4; knowledge points Developed 1, Mastered 3; Bronze gate 5 settlement + 12 knowledge)
+- [ ] Era gate requirements and point values (first values v0.26: settlement points village 1, town 2, city 3, metropolis 4; knowledge points Developed 1, Mastered 3; Bronze gate 5 settlement + 12 knowledge; v0.33: 16 knowledge)
 - [ ] Endgame countdown length (first value v0.26: 5 turns) and scoring weights
-- [ ] Artists' culture rate (first value v0.26: 1 culture point per 5 unit-turns in the Stone Age; about twice what High Learning on Mastering earns in score, three times Developing, but with no advance effects) and per-era scaling
+- [ ] Artists' culture rate (v0.33: 1 culture point per 15 unit-turns in the Stone Age; first value v0.26: per 5; about twice what High Learning on Mastering earns in score, three times Developing, but with no advance effects) and per-era scaling
 - [ ] Discovery outliers under v0.17 (2 progress / 10 adoption per learning, doubled Developed costs and adoption): low-usage advances (Masonry +1 a turn from one hill settlement, Tallies) take 20+ turns to develop without High Learning, which makes it near-mandatory there; high-usage advances (Ritual, Chiefdom) scale with civilization size, so learning barely moves them; advances whose adoption drivers have nothing to count yet (Barter before the market, Archery without fights) can be mastered only through learning, so Barter could master before the market exists
 
 ## 18. Recommended next steps
@@ -976,6 +980,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.33 (October 26, 2026):** Balance targets (Phase 4 step 12): the first civilization meets the Bronze Age gate around turn 40 (§14); neighbours' land starts touching by the end of the Stone Age but is not yet full, leaving the choice of conflict or filling (§4). The two are tuned separately. Approaches' median scores within about 50% of each other; outliers fixed. First numbers set (§4, §6, §14): growth ¼ token per loose token (was ½), 15 Artists progress per culture point (was 5), Bronze gate 16 knowledge points (was 12). Measured (12 Stone Age games, 6 civilizations, random approaches): first gate turn 40.5 (36–48), first contact turn 32 (23–36), 22% of land full at turn 40, final median scores 19.5–31.5 by approach. Captures: about one per Stone Age game (target); village attack threshold 5 and defense 4 (was 7 and 6, §11). Aggression routes through the target owner's areas and gathers tokens from up to 6 moves away (§2). Measured with one of each approach: 12 captures in 12 games, first gate turn 39.5, first contact turn 24, final median scores 19.5–30.
 - **0.32 (October 26, 2026):** AI approaches for the Stone Age (§2; Phase 4 step 11): Balanced (the interim AI, extended), Expansion, Building, Study, Culture, and Aggression; Trade waits for the Bronze Age. Assignment is a setup option per rival, Random by default (seeded, no repeats until all are used); approaches are hidden from the player. Each approach is the Balanced pattern with its own settings (§2 table). Aggression masses tokens beside the easiest rival settlement and attacks at its threshold, any rival alike.
 - **0.31 (October 26, 2026):** Refugees decided (§5; closes the §17 tier drop question): refugees always stay their own civilization's tokens, wherever they land, as in the original; they never join a host, so there is no accept or reject choice, no effect on another civilization's cap, and no transfer of tokens by deliberate collapse. Knowledge carried by scattered populations is deferred (§8). Matches the engine as built.
 - **0.30 (October 26, 2026):** Same-turn wonder completion decided (§9; closes the §17 question): the build started last gets the wonder; builds started the same turn are decided by a seeded random draw; if the winner cannot pay its last turn, the next in order may finish. Replaces player order, which always favoured the first player.

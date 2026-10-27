@@ -57,7 +57,7 @@ import { mapFor } from './world';
 // Aggression (design doc §2, v0.32) also raids: it picks the rival settlement easiest to take
 // (lowest attack threshold, then the most of its own tokens already beside it, then fewest of its
 // owner's tokens in and next to it, lower areas first)
-// among those it can reach within RAID_REACH moves through areas no one else holds. Its spare tokens
+// among those it can reach within RAID_REACH moves through areas no one else but the owner holds. Its spare tokens
 // (not needed for support) step toward it each turn and mass in the unsettled areas next to it, up
 // to their limits, fighting
 // the owner's support tokens there when it outnumbers them, and when their power reaches the attack
@@ -68,7 +68,7 @@ const CALM_CLEAR = 6;
 const FOUND_MIN_REACH = 8;
 const BUY_CALM_WITHIN = 2;
 // Moves from a raid target's staging areas that Aggression gathers tokens from.
-const RAID_REACH = 3;
+const RAID_REACH = 6;
 
 // Each approach's settings (design doc §2, v0.32; placeholders until the tuning pass). `queue` is
 // the study queue: none, the cheapest steps first ('gate'), or advances in order. `wonders` lists
@@ -320,7 +320,7 @@ function raid(state: GameState, map: GameMap, player: PlayerId, spare: Map<strin
   const ring = (area: AreaId, owner: PlayerId) => landNeighbors(map, area).filter((n) => !settlementAt(state, n) && !state.stacks.some((s) => s.area === n && s.player !== player && s.player !== owner));
   const defenders = (area: AreaId, owner: PlayerId) => [area, ...landNeighbors(map, area)].reduce((sum, n) => sum + tokensAt(state, n, owner), 0);
   // Moves from each area toward a settlement's staging areas, through unsettled areas holding no
-  // other civilization's tokens, up to RAID_REACH.
+  // one's tokens but its own and the settlement owner's, up to RAID_REACH.
   const distances = (area: AreaId, owner: PlayerId) => {
     const dist = new Map(ring(area, owner).map((a) => [a, 0]));
     let frontier = [...dist.keys()];
@@ -328,7 +328,7 @@ function raid(state: GameState, map: GameMap, player: PlayerId, spare: Map<strin
       const next: AreaId[] = [];
       for (const a of frontier) {
         for (const n of landNeighbors(map, a)) {
-          if (dist.has(n) || n === area || settlementAt(state, n) || state.stacks.some((s) => s.area === n && s.player !== player)) continue;
+          if (dist.has(n) || n === area || settlementAt(state, n) || state.stacks.some((s) => s.area === n && s.player !== player && s.player !== owner)) continue;
           dist.set(n, d);
           next.push(n);
         }
@@ -362,7 +362,7 @@ function raid(state: GameState, map: GameMap, player: PlayerId, spare: Map<strin
         const count = Math.min(free(from), room.get(to)!);
         if (count <= 0) continue;
         // Into the owner's tokens only when it would outnumber them there.
-        if (d === 1 && mine(to) + count <= tokensAt(state, to, target.player)) continue;
+        if (mine(to) + count <= tokensAt(state, to, target.player)) continue;
         if (move(from, to, count)) room.set(to, room.get(to)! - count);
       }
     }

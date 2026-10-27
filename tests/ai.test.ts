@@ -127,7 +127,8 @@ describe('AI approaches (v0.32)', () => {
     const attacks = aiCommands(game.state, game.content, 'ai1').filter((c) => c.type === 'orderMove' && c.to === village);
     expect(attacks.reduce((n, c) => n + (c.type === 'orderMove' ? c.count : 0), 0)).toBe(7);
 
-    // One short: it masses instead of attacking.
+    // Below the village threshold (5): it masses instead of attacking.
+    game.state.stacks.find((s) => s.area === x)!.count = 2;
     game.state.stacks.find((s) => s.area === y)!.count = 2;
     expect(aiCommands(game.state, game.content, 'ai1').some((c) => c.type === 'orderMove' && c.to === village)).toBe(false);
   });

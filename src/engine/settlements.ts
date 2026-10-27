@@ -32,7 +32,7 @@ export interface TierRules {
 }
 
 export const TIERS: readonly TierRules[] = [
-  { id: 'village', name: 'Village', value: 6, support: 2, urbanGrowth: 0, attack: 7, defense: 6, manpower: 1, threshold: 8, tax: 0, spoils: 0.1 },
+  { id: 'village', name: 'Village', value: 6, support: 2, urbanGrowth: 0, attack: 5, defense: 4, manpower: 1, threshold: 8, tax: 0, spoils: 0.1 },
   { id: 'town', name: 'Town', value: 12, support: 3, urbanGrowth: 1, attack: 10, defense: 9, manpower: 2, threshold: 10, tax: 1, spoils: 0.2 },
   { id: 'city', name: 'City', value: 20, support: 4, urbanGrowth: 2, attack: 15, defense: 14, manpower: 3, threshold: 12, tax: 2, spoils: 0.3 },
   { id: 'metropolis', name: 'Metropolis', value: 30, support: 6, urbanGrowth: 3, attack: 22, defense: 21, manpower: 4, threshold: 14, tax: 3, spoils: 0.4 },
