@@ -36,7 +36,8 @@ import { mapFor } from './world';
 // 4. Wonders (design doc §9, v0.28; interim until the era's AI approaches): with no wonder in
 //    progress, it starts the first wonder it can build that no rival is building, at its largest
 //    settlement, if the engine accepts the order (a turn can be paid). On its build it puts manpower
-//    up to the wonder's need, idle first, then from High Learning; currency covers the rest. Idle
+//    up to the wonder's need: idle first, then from High Learning and Artists, then from goods the
+//    wonder does not need, food last; currency covers the rest. Idle
 //    manpower works a good the build is short of before food, and it buys the shortfall when it can
 //    trade. Progress from a race it lost becomes culture points.
 // 5. Artists, then study: while Artists or High Learning are below their share of the
@@ -101,6 +102,13 @@ export function approachOf(state: GameState, player: PlayerId): AiApproach {
 
 function landNeighbors(map: GameMap, area: AreaId): AreaId[] {
   return map.areas[area]!.neighbors.filter((n) => map.areas[n]!.kind === 'land');
+}
+
+// Which work a wonder takes manpower from first: High Learning and Artists, then other goods, food
+// last.
+function rankJob(content: Content, resource: string): number {
+  if (resource === HIGH_LEARNING || resource === ARTISTS) return 0;
+  return isFood(content, resource) ? 2 : 1;
 }
 
 // Goods (not food) the player's wonder needs a turn beyond what it holds.
@@ -223,12 +231,20 @@ export function aiCommands(state: GameState, content: Content, player: PlayerId)
   if (build) {
     const s = settlementAt(current, build.area)!;
     const on = (resource: string) => (s.work ?? []).find((w) => w.resource === resource)?.count ?? 0;
-    let gap = wonderRule(content, build.wonder)!.manpower - on(WONDER);
-    const idle = Math.min(gap, manpower(current, s) - assigned(s));
-    const studying = Math.min(gap - idle, on(HIGH_LEARNING));
-    if (studying > 0) issue({ type: 'assignWork', player, area: s.area, resource: HIGH_LEARNING, count: on(HIGH_LEARNING) - studying });
-    gap = idle + studying;
-    if (gap > 0) issue({ type: 'assignWork', player, area: s.area, resource: WONDER, count: on(WONDER) + gap });
+    const need = wonderRule(content, build.wonder)!.manpower - on(WONDER);
+    let free = Math.min(need, manpower(current, s) - assigned(s));
+    // Then from other work at the site: High Learning and Artists, then goods the wonder does not
+    // need, food last.
+    const short = wonderShort(current, content, player);
+    const takeFrom = (s.work ?? [])
+      .filter((w) => w.resource !== WONDER && w.count > 0 && !short.has(w.resource))
+      .sort((x, y) => rankJob(content, x.resource) - rankJob(content, y.resource));
+    for (const w of takeFrom) {
+      if (free >= need) break;
+      const take = Math.min(need - free, w.count);
+      if (issue({ type: 'assignWork', player, area: s.area, resource: w.resource, count: w.count - take })) free += take;
+    }
+    if (free > 0) issue({ type: 'assignWork', player, area: s.area, resource: WONDER, count: on(WONDER) + free });
   }
 
   const total = own().reduce((sum, s) => sum + manpower(current, s), 0);
