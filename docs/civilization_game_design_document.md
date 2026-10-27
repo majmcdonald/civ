@@ -1,6 +1,6 @@
 # Civilization-Inspired Strategy Game — Design Document
 
-**Version:** 0.31  
+**Version:** 0.32  
 **Date:** October 26, 2026  
 **Status:** Working draft — core systems designed; numbers untuned
 
@@ -48,6 +48,40 @@ Where a system has a clear equivalent in the original game, the default is to **
 | Advanced start | Off (default) or on. On: each civilization draws **2 advances** of its own from the first ring (advances that build only on the starting baseline, §8), granted Developed and Mastered like the baseline. Draws come from the game seed, so civilizations differ from turn 1 and a game still replays exactly |
 | Final era | Any era; e.g., end of the Iron Age for a single evening, end of the Modern era for a full campaign. Until later eras have gates, only a Stone Age game can end (v0.26) |
 | Room to expand | Land per civilization: **very crowded** (a quarter of standard, 16 land areas; v0.19), **crowded** (half of standard, 32 land areas), **standard** (default, 64), **spacious** (2×, 128). Standard targets about 30–40 turns of expansion before a civilization's land meets a neighbor's (roughly the Stone Age); crowded makes neighbors meet early, spacious keeps the early game peaceful longer. Very crowded is for fighting from the start: a civilization's land holds fewer tokens than the starting cap, so tokens press into neighbors within about 15 turns, and starts may be 3 moves apart instead of 4 so that 2–15 civilizations fit |
+| AI approaches | Each rival's approach (§2, AI approaches), or Random (default) |
+
+### AI approaches (v0.32)
+
+Each AI civilization plays one **approach**: a fixed priority pattern, not a strategy (real strategy and difficulty levels wait for development Phase 7). Approaches exist so the balance pass measures the numbers against more than one way of playing. Stone Age approaches:
+
+| Approach | Favours |
+|---|---|
+| **Balanced** | The interim AI, extended: expands, studies, calms, builds wonders, and buys what it needs, with no single emphasis |
+| **Expansion** | Founding villages early and often, spreading tokens; little study; Bureaucracy only near collapse |
+| **Building** | Towns once Chiefdom allows, steady Bureaucracy, wonders first |
+| **Study** | A large share of manpower on High Learning, queued toward the next era's gate |
+| **Culture** | Artists and culture wonders (Newgrange), accepting slower growth |
+| **Aggression** | Moving into rivals' areas and attacking weak settlements for spoils |
+
+Trade waits for the Bronze Age, when the market has more to trade.
+
+- **Assignment** (setup option): the new-game panel sets each rival's approach, or **Random** (default): a draw from the game seed without repeats until every approach has been used once. Batch runs set approaches the same way.
+- **Hidden**: the interface does not name a rival's approach; the player reads it from how the rival plays.
+- **Settings** (v0.32; placeholders, set character not balance): every approach is the Balanced pattern with different settings.
+
+| Setting | Balanced | Expansion | Building | Study | Culture | Aggression |
+|---|---|---|---|---|---|---|
+| Loose tokens before founding | 12 | 8 | 12 | 12 | 12 | 12 |
+| Founding or upgrading first | Found | Found | Upgrade | Found | Upgrade | Found |
+| Manpower on High Learning | ⅓ | 0 | ⅙ | ½ | ⅙ | ⅙ |
+| Study queue | Empty | Empty | Empty | Cheapest steps toward the next gate | Ritual, Masonry | Archery, Palisades |
+| Manpower on Artists | 0 | 0 | 0 | 0 | ⅓ | 0 |
+| Bureaucracy within N of collapse | 3 | 2 | 5 | 3 | 3 | 3 |
+| Wonders | First no rival is building | Never | Any, in turn; Göbekli Tepe and Çatalhöyük first | Stonehenge first | Newgrange first | Walls of Jericho only |
+| Spreads into rivals' land | No | No | No | No | No | Yes |
+
+All approaches mark every buy-off, buy food or luxuries when short, never sell, and put idle manpower on food.
+- **Aggression** (v0.32): it picks the rival settlement easiest to take (lowest attack threshold, then fewest of its owner's tokens in and next to it), from any rival alike, the player included. It masses tokens in the areas next to it over several turns, keeping what its own settlements need for support, and attacks once its power reaches the settlement's attack threshold. It also spreads into rivals' unsettled areas whenever it would win the fight there.
 
 ## 3. Turn structure — Decided
 
@@ -621,7 +655,7 @@ Each advance below is final for the Stone Age content (numbers still placeholder
 | Cost | Chosen when the wonder is started: its **location**, one of the builder's settlements. The wonder needs a number of **turns of work**; each turn it needs its **goods** and its **manpower**, the manpower working at that location or **covered with currency** instead: for a Stone Age wonder, **10 currency covers 1 manpower** for that turn, and manpower and currency can be mixed. Example: Stonehenge needs 3 manpower a turn: 3 manpower, 30 currency, or 2 manpower and 10 currency. **Goods cannot be replaced with currency**: a builder short of goods buys them on the market at the market price (§7). The goods can come from **anywhere in the civilization**: any of the builder's settlements or goods bought into the pool. **Support comes first**: a wonder takes only goods left after its civilization's support (§6), so a wonder never starves its people. Construction **may begin only when the first turn can be paid**. Each turn of construction is checked: if the goods and the manpower or currency are there, the wonder advances one turn of work; if not, it **stalls** at its current turn: no progress that turn, and nothing is spent. The turns already worked are kept. Each wonder needs **themed goods**; wherever it needs food, **any food good counts** (grain, fish, livestock), as for support (§6). The Stone Age wonders need stone (§6) and food. Amounts set with each wonder (v0.28; replaces paying manpower from settlements in range) |
 | Losing the site | The builder **keeps the victory points** for good. The **themed effect follows the settlement**: it works for whoever holds the wonder's settlement, passing to a captor (§11). If the settlement collapses to nothing, the effect ends; the wonder stays completed, so no one can build it again. A wonder **still being built** whose settlement is captured or collapses **loses all its progress**; the wonder is open again to anyone, the captor included, from zero. A calamity that reduces the settlement without destroying it leaves progress alone (v0.28) |
 | Stone Age costs (placeholders until the balance pass) | Göbekli Tepe: 1 stone and 1 food a turn, 5 turns, 1 manpower. Çatalhöyük: 1 food, 5 turns, 1 manpower. Walls of Jericho: 1 stone, 6 turns, 2 manpower. Newgrange: 1 stone and 1 food, 6 turns, 1 manpower. Stonehenge: 1 stone, 8 turns, 2 manpower (v0.28; reduced in the build so wonders are reachable in the Stone Age's ~30 turns) |
-| AI (interim, until the era's AI approaches) | When it can afford a wonder's goods after support, the AI starts the first wonder it can build that **no rival is building**, at its **largest settlement**. If it loses a race, it always converts its progress to culture points (v0.28) |
+| AI | By approach (§2, v0.32): Balanced starts the first wonder it can build that **no rival is building**, at its **largest settlement**; other approaches prefer their own wonders, and Expansion builds none. Earlier interim rule: when it can afford a wonder's goods after support, the AI starts the first wonder it can build that no rival is building, at its largest settlement. If it loses a race, it always converts its progress to culture points (v0.28) |
 | Build notes (v0.28, Phase 4 step 8) | Manpower on a wonder is counted in the resources phase like every assignment (§6), so a wonder started in allocation is **first worked the next turn**; the start check uses the goods held now, less what support is expected to eat. **One wonder in progress per settlement.** Food for a wonder is what is left after support and Pottery storage. Progress from a lost race that is not moved by the end of the next allocation phase **becomes culture**. Moving progress to another wonder skips the start check (the work is already done). Wonders are worked in player order, so if two builders would complete the same wonder in the same turn, the earlier player gets it (open, §17) |
 
 ## 10. Instability and collapse — Decided
@@ -942,6 +976,7 @@ See the [development plan](development_plan.md) for build phases.
 
 ## Change log
 
+- **0.32 (October 26, 2026):** AI approaches for the Stone Age (§2; Phase 4 step 11): Balanced (the interim AI, extended), Expansion, Building, Study, Culture, and Aggression; Trade waits for the Bronze Age. Assignment is a setup option per rival, Random by default (seeded, no repeats until all are used); approaches are hidden from the player. Each approach is the Balanced pattern with its own settings (§2 table). Aggression masses tokens beside the easiest rival settlement and attacks at its threshold, any rival alike.
 - **0.31 (October 26, 2026):** Refugees decided (§5; closes the §17 tier drop question): refugees always stay their own civilization's tokens, wherever they land, as in the original; they never join a host, so there is no accept or reject choice, no effect on another civilization's cap, and no transfer of tokens by deliberate collapse. Knowledge carried by scattered populations is deferred (§8). Matches the engine as built.
 - **0.30 (October 26, 2026):** Same-turn wonder completion decided (§9; closes the §17 question): the build started last gets the wonder; builds started the same turn are decided by a seeded random draw; if the winner cannot pay its last turn, the next in order may finish. Replaces player order, which always favoured the first player.
 - **0.29 (October 26, 2026):** Screens and information panels designed (§3; Phase 4 step 9). Eight screens by theme: Map, Civilization (settlements, support, manpower, calamity risks), Economy (the market, the treasury and its sources, goods and the durable stock; replaces the Market screen), Knowledge, Society (wonders, culture and Artists, instability; replaces the Wonders screen), Rivals, Chronicle, Rules (the rules reference). Panels serve three needs: state, attention, and rules; sources are not shown for their own sake. Top bar: era and turn, tokens of the cap, settlements, treasury, score with rank, next-era gate progress, the endgame countdown, and an attention count that opens the list. Attention items: idle manpower, support short at the next check, near collapse (within 2), a wonder that cannot be paid, a lost wonder race to resolve, a failing planned conversion, tokens over the cap or an area limit, a buy order the treasury cannot fill, a planned move into a fight; not opportunities or an empty study queue. Civilization · Population: tokens of the cap, one growth line (area and urban), room below the cap, a growth rule note; settlement token value dropped. Civilization · Settlements: counts by tier, the unlock named for locked tiers, and a tier table in the card; settlement points not shown. Tax lowered to town 1, city 2, metropolis 3 (§6; was 2, 3, 4). Civilization · Support: as before, plus a support rule note; village sites as a count only. Civilization · Manpower: production split by good and a job table in the card. Civilization · Calamities: chance with a rule note (the settlement and quiet-turn parts dropped), buy-off marks with each calamity's effect, risks; the calamity table on the Rules screen. A marked buy-off the treasury cannot pay is an attention item. Civilization · Settlements table: terrain goods and the settlement's wonder added; urban growth column dropped; instability stays per row. Economy · Treasury: treasury, tax, spending, expected next turn, and a currency rule note. Economy · Goods and market: one table of goods with gathered, held, needed, price, and order. Knowledge · Advance card: adds every step's cost, the wonders it opens, and its knowledge points. Knowledge · Header and queue: learning by source and a rule line. Society · Instability: meter, next turn's change with its parts, capital rule, near collapse, luxuries in stock, and a raises/lowers table. Society · Culture: points, progress with sources and turns, points per award, a rule note. Society · Wonders: adds ticked advances, total cost, this turn's forecast, and the finish turn. Rivals: as before, plus rule notes on the endgame and on score. Map · Side panel: adds the settlement's support and wonder; idle, unrest, and fight lists move to the attention list (a fight also shows in the panel for its selected area). Rules: one scrolling page with a contents list, generated from the data files and engine constants.

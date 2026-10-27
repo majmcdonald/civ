@@ -12,10 +12,16 @@ export type Phase = 'resources' | 'allocation' | 'resolution';
 export const PHASES: readonly Phase[] = ['resources', 'allocation', 'resolution'];
 export const PLAYER_PHASES: readonly Phase[] = ['allocation'];
 
+// AI approaches (design doc §2, v0.32): fixed priority patterns favouring different strategies.
+export const AI_APPROACHES = ['balanced', 'expansion', 'building', 'study', 'culture', 'aggression'] as const;
+export type AiApproach = (typeof AI_APPROACHES)[number];
+
 export interface PlayerSetup {
   id: PlayerId;
   name: string;
   kind: 'human' | 'ai';
+  // An AI player's approach; random (the default) draws one at the start of the game.
+  approach?: AiApproach | 'random';
 }
 
 // Procedural map options (design doc §2). The map uses the game seed, with one civilization per
@@ -103,6 +109,8 @@ export interface PlayerState {
   // Culture points earned, and Artists progress toward the next (design doc §6).
   culture: number;
   cultureProgress: number;
+  // An AI player's approach, fixed at the start of the game (design doc §2, v0.32).
+  approach?: AiApproach;
 }
 
 // The endgame countdown (design doc §15): it began in `began`, when `by` completed the final era,

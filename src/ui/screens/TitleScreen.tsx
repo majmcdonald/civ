@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { content } from '../../content';
-import { LAND_AREAS_PER_CIVILIZATION, MAP_TYPES, MAX_CIVILIZATIONS, ROOM_FACTOR, ROOM_TO_EXPAND, openSave, type EraId, type MapType, type RoomToExpand, type Session } from '../../engine';
+import { AI_APPROACHES, LAND_AREAS_PER_CIVILIZATION, MAP_TYPES, MAX_CIVILIZATIONS, ROOM_FACTOR, ROOM_TO_EXPAND, openSave, type AiApproach, type EraId, type MapType, type RoomToExpand, type Session } from '../../engine';
 import { AtlasBackground } from '../art/AtlasBackground';
 import { CompassRose } from '../art/CompassRose';
 import { deleteSave, downloadSave, listSaves, nameFromFile, readSave, writeSave, type SaveSlot } from '../saves';
@@ -12,6 +12,7 @@ import './TitleScreen.css';
 const MENU = ['New Game', 'Continue', 'Load Game', 'Rules Reference', 'Settings'] as const;
 
 const ERAS = [...content.eras].sort((a, b) => a.order - b.order);
+const APPROACH_NAMES: Record<AiApproach, string> = { balanced: 'Balanced', expansion: 'Expansion', building: 'Building', study: 'Study', culture: 'Culture', aggression: 'Aggression' };
 const OPPONENT_COUNTS = Array.from({ length: MAX_CIVILIZATIONS - 1 }, (_, i) => i + 1);
 
 // The seed is the player's choice, not engine randomness: the engine only sees the number.
@@ -127,6 +128,7 @@ interface NewGameSetupProps {
 // Game setup (design doc §2): opponents, map type, and room to expand, which with the number of
 // civilizations sets the map's size, and the final era.
 function NewGameSetup({ options, onChange, onStart, onBack }: NewGameSetupProps) {
+  const [showApproaches, setShowApproaches] = useState(false);
   const civilizations = options.opponents + 1;
   const land = (room: RoomToExpand) => Math.round(LAND_AREAS_PER_CIVILIZATION * ROOM_FACTOR[room] * civilizations);
   return (
@@ -197,6 +199,33 @@ function NewGameSetup({ options, onChange, onStart, onBack }: NewGameSetupProps)
           </button>
         </span>
       </label>
+      <label title="How each rival plays (design doc §2). Random draws a different approach for each rival until all have been used; the game does not show which a rival has">
+        <span>Rival approaches</span>
+        <button type="button" className="title-setup-toggle" aria-expanded={showApproaches} onClick={() => setShowApproaches(!showApproaches)}>
+          {options.approaches.slice(0, options.opponents).some((a) => a && a !== 'random') ? 'Set' : 'Random'} {showApproaches ? '▾' : '▸'}
+        </button>
+      </label>
+      {showApproaches &&
+        Array.from({ length: options.opponents }, (_, i) => (
+          <label key={i}>
+            <span>Rival {i + 1}</span>
+            <select
+              value={options.approaches[i] ?? 'random'}
+              onChange={(e) => {
+                const approaches = Array.from({ length: options.opponents }, (_, j) => options.approaches[j] ?? 'random');
+                approaches[i] = e.target.value as AiApproach | 'random';
+                onChange({ ...options, approaches });
+              }}
+            >
+              <option value="random">Random</option>
+              {AI_APPROACHES.map((a) => (
+                <option key={a} value={a}>
+                  {APPROACH_NAMES[a]}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
       <label>
         <span>Advanced start</span>
         <span className="title-setup-check">

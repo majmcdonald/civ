@@ -44,7 +44,7 @@ export function testSetup(overrides: Partial<GameSetup> = {}): GameSetup {
     seed: 12345,
     players: [
       { id: 'p1', name: 'Player', kind: 'human' },
-      { id: 'ai1', name: 'Rival', kind: 'ai' },
+      { id: 'ai1', name: 'Rival', kind: 'ai', approach: 'balanced' },
     ],
     finalEra: 'iron',
     map: { type: 'inlandSea', room: 'standard' },

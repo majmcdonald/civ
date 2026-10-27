@@ -2,6 +2,7 @@
 // reports pacing. It measures; it does not tune (no balance changes until the Stone Age is complete).
 //
 // Run: npm run batch -- [--games 5] [--civs 5] [--map inlandSea|continents|singleLandmass|all]
+//   [--approaches balanced,aggression,...] (each civilization's AI approach in turn; default random)
 //                       [--room veryCrowded|crowded|standard|spacious] [--turns 60] [--every 10]
 //                       [--final stone|bronze|…|modern] [--json out.json] [--logs dir]
 //
@@ -24,6 +25,7 @@ import {
   startSession,
   submit,
   toJsonLines,
+  type AiApproach,
   type EraId,
   type GameEvent,
   type MapType,
@@ -41,6 +43,8 @@ interface Options {
   final: EraId;
   json: string | null;
   logs: string | null;
+  // AI approaches given to civilizations in turn; empty: Random (design doc §2, v0.32).
+  approaches: (AiApproach | 'random')[];
 }
 
 function parseArgs(argv: string[]): Options {
@@ -59,6 +63,7 @@ function parseArgs(argv: string[]): Options {
     final: (get('final') ?? 'modern') as EraId,
     json: get('json') ?? null,
     logs: get('logs') ?? null,
+    approaches: (get('approaches') ?? '').split(',').filter(Boolean) as (AiApproach | 'random')[],
   };
 }
 
@@ -67,6 +72,7 @@ interface Sample {
   game: string;
   turn: number;
   civ: string;
+  approach: string;
   tokens: number;
   villages: number;
   towns: number;
@@ -114,6 +120,7 @@ function sample(session: Session, game: string): Sample[] {
       game,
       turn: state.turn,
       civ: p.id,
+      approach: p.approach ?? 'balanced',
       tokens: looseTokens(state, p.id),
       villages: own.filter((s) => s.tier === 'village').length,
       towns: own.filter((s) => s.tier === 'town').length,
@@ -154,7 +161,10 @@ function count(totals: Totals, event: GameEvent, step: string, turn: number): vo
 function playGame(options: Options, seed: number, map: MapType): { samples: Sample[]; totals: Totals; session: Session } {
   const loaded = loadContent(bundle, hooks);
   if (!loaded.ok) throw new Error(loaded.errors.join('\n'));
-  const players = Array.from({ length: options.civs }, (_, i) => ({ id: `c${i + 1}`, name: `Civ ${i + 1}`, kind: 'ai' as const }));
+  const players = Array.from({ length: options.civs }, (_, i) => {
+    const approach = options.approaches.length > 0 ? options.approaches[i % options.approaches.length] : undefined;
+    return { id: `c${i + 1}`, name: `Civ ${i + 1}`, kind: 'ai' as const, ...(approach ? { approach } : {}) };
+  });
   const session = startSession({ seed, players, finalEra: options.final, map: { type: map, room: options.room } }, loaded.content);
   const game = `${map}/${seed}`;
   const samples: Sample[] = [];
@@ -234,4 +244,21 @@ console.log(
     totals.map((t) => [t.game, String(t.built), String(t.collapses), String(t.supportDrops), String(t.captures), String(t.fights), String(t.bought), String(t.calamities), String(t.averted), t.firstAtCap === null ? '—' : String(t.firstAtCap), t.eraTurns.length === 0 ? '—' : `${t.eraTurns[0]} / ${t.eraTurns[Math.floor(t.eraTurns.length / 2)]} (${t.eraTurns.length})`, opt(t.countdown), opt(t.ended), opt(t.winnerScore), String(t.wondersStarted), String(t.wonderStalls), t.wondersDone.length === 0 ? '0' : `${t.wondersDone.length} (${t.wondersDone[0]}–${t.wondersDone[t.wondersDone.length - 1]})`, String(t.outbuilt)]),
   ),
 );
+const lastOf = (game: string) => Math.max(...samples.filter((s) => s.game === game).map((s) => s.turn));
+const finals = samples.filter((s) => s.turn === lastOf(s.game));
+if (finals.length > 0) {
+  console.log('\nBy AI approach at each game\'s last sampled turn: median (min–max); rank is by score within the game (1 is first).\n');
+  const rank = (s: Sample) => 1 + finals.filter((o) => o.game === s.game && o.score > s.score).length;
+  const approaches = [...new Set(finals.map((s) => s.approach))].sort();
+  console.log(
+    table(
+      ['Approach', 'Civs', 'Rank', 'Score', 'Knowledge pts', 'Settlement pts', 'Villages', 'Towns', 'Loose tokens', 'Civ-wide instability'],
+      approaches.map((a) => {
+        const at = finals.filter((s) => s.approach === a);
+        const col = (f: (s: Sample) => number) => stats(at.map(f));
+        return [a, String(at.length), col(rank), col((s) => s.score), col((s) => s.knowledge), col((s) => s.settlementPoints), col((s) => s.villages), col((s) => s.towns), col((s) => s.tokens), col((s) => s.instability)];
+      }),
+    ),
+  );
+}
 if (options.json) fs.writeFileSync(options.json, JSON.stringify({ options, samples, totals }, null, 2));

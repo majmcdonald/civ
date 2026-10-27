@@ -64,6 +64,7 @@ import {
   wonderViews,
   forecastWork,
   type AreaId,
+  type AiApproach,
   type ConflictEvent,
   type Content,
   type ConversionPreview,
@@ -126,9 +127,11 @@ export interface NewGameOptions {
   advancedStart: boolean;
   // Completing it starts the endgame countdown (design doc §15). Stone until later eras have gates.
   finalEra: EraId;
+  // Each rival's AI approach in order, Random when missing (design doc §2, AI approaches).
+  approaches: (AiApproach | 'random')[];
 }
 
-export const DEFAULT_GAME: NewGameOptions = { name: '', seed: 1, opponents: 4, map: { type: 'inlandSea', room: 'standard' }, advancedStart: false, finalEra: 'stone' };
+export const DEFAULT_GAME: NewGameOptions = { name: '', seed: 1, opponents: 4, map: { type: 'inlandSea', room: 'standard' }, advancedStart: false, finalEra: 'stone', approaches: [] };
 
 export function gameContent(): Content {
   const loaded = loadContent(contentBundle, hooks);
@@ -138,7 +141,7 @@ export function gameContent(): Content {
 
 export function newSession(options: NewGameOptions): Session {
   const players: PlayerSetup[] = Array.from({ length: options.opponents + 1 }, (_, i) =>
-    i === HUMAN ? { id: 'p1', name: 'Your people', kind: 'human' } : { id: `ai${i}`, name: `Rival ${i}`, kind: 'ai' },
+    i === HUMAN ? { id: 'p1', name: 'Your people', kind: 'human' } : { id: `ai${i}`, name: `Rival ${i}`, kind: 'ai', approach: options.approaches[i - 1] ?? 'random' },
   );
   // Towns are open from the start until the advance that unlocks them exists (design doc §5).
   const name = options.name.trim() || 'Untitled game';

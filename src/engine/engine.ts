@@ -8,12 +8,14 @@ import { runResolution, runResourcesPhase } from './phases';
 import { BASE_MOVEMENT, setMoveOrder, STARTING_TOKEN_CAP, validateMoveOrder } from './population';
 import { setWork, validateWork } from './resources';
 import { nameSettlement, setConversionOrder, TIERS, validateConversionOrder, validateName } from './settlements';
-import { createRng } from './rng';
+import { createRng, stepRng } from './rng';
 import { mapFor, validateMap } from './world';
 import { redirectWonder, startWonder, validateRedirect, validateStart } from './wonders';
 import {
+  AI_APPROACHES,
   PHASES,
   PLAYER_PHASES,
+  type AiApproach,
   type ApplyResult,
   type Command,
   type Context,
@@ -22,7 +24,7 @@ import {
   type Phase,
 } from './types';
 
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 18;
 
 interface CommandHandler<C extends Command> {
   validate(ctx: Pick<Context, 'state' | 'map' | 'content'>, command: C): string | null;
@@ -133,6 +135,7 @@ export function validateSetup(setup: GameSetup, content: Content): string | null
   if (setup.players.filter((p) => p.kind === 'human').length > 1) return 'Version 1 allows at most one human player';
   if (!content.eras.some((e) => e.id === setup.finalEra)) return `Unknown final era "${setup.finalEra}"`;
   if ((setup.unlockedTiers ?? []).some((t) => !TIERS.some((rule) => rule.id === t))) return 'Unlocked tiers must be known tiers';
+  if (setup.players.some((p) => p.approach !== undefined && p.approach !== 'random' && (p.kind !== 'ai' || !AI_APPROACHES.includes(p.approach)))) return 'Approaches are for AI players and must be known';
   // Also checks the player count against the civilizations a map supports (2–15).
   return validateMap(setup);
 }
@@ -166,11 +169,39 @@ export function createGame(setup: GameSetup, content: Content): ApplyResult {
   };
   const ctx: Context = { state, content, map, events: [], refugees: [] };
   emit(ctx, { type: 'gameStarted', seed: setup.seed, players: setup.players.map((p) => p.id) });
+  assignApproaches(ctx);
   grantStartingKnowledge(ctx);
   emit(ctx, { type: 'turnStarted', turn: 1 });
   emit(ctx, { type: 'phaseStarted', phase: 'resources' });
   runUntilPlayerInput(ctx);
   return { ok: true, state: ctx.state, events: ctx.events };
+}
+
+// AI approaches (design doc §2, v0.32): a set approach is kept; Random draws one from the seed,
+// without repeats until every approach has been used once (set ones count as used). The draws use
+// their own stream from the seed, so the game's main sequence is the same with any approaches.
+const APPROACH_STREAM = 0x5eed;
+
+function assignApproaches(ctx: Context): void {
+  const { state } = ctx;
+  let rng = createRng(state.setup.seed ^ APPROACH_STREAM);
+  const draw = (label: string, n: number) => {
+    const [value, next] = stepRng(rng);
+    rng = next;
+    emit(ctx, { type: 'randomDraw', label, value });
+    return Math.floor(value * n);
+  };
+  let pool: AiApproach[] = AI_APPROACHES.filter((a) => !state.setup.players.some((p) => p.approach === a));
+  for (const [i, p] of state.setup.players.entries()) {
+    if (p.kind !== 'ai') continue;
+    if (p.approach !== undefined && p.approach !== 'random') {
+      state.players[i]!.approach = p.approach;
+      continue;
+    }
+    if (pool.length === 0) pool = [...AI_APPROACHES];
+    const [pick] = pool.splice(draw(`approach ${p.id}`, pool.length), 1);
+    state.players[i]!.approach = pick!;
+  }
 }
 
 // The single entry point for the player, the AI, tests, and replays. Never mutates `state`.

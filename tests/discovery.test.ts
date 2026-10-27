@@ -105,7 +105,7 @@ describe('starting knowledge', () => {
       for (const x of drawn) expect(x).toMatchObject({ stage: 'developed', adoption: 100 });
       for (const x of drawn) expect(['settle', 'mysticism', 'farming']).toContain(x.advance);
     }
-    const draws = a.log.filter((l) => l.kind === 'event' && (l.data as { type: string }).type === 'randomDraw');
+    const draws = a.log.filter((l) => l.kind === 'event' && (l.data as { type: string; label?: string }).type === 'randomDraw' && (l.data as { label: string }).label.startsWith('advanced start'));
     expect(draws).toHaveLength(4);
   });
 });
